@@ -9,7 +9,7 @@ mod core {
     const E:f64 = 2.7182818284f64;
 
     const DEFAULT_EVALUTATION_DATA:f64 = 0.1f64;//`(x * examples.len() as f64) as usize` of `testing_data` is split_off into `evaluation_data`
-    const DEFAULT_HALT_CONDITION:u64 = 60u64;//Duration(x,0). x seconds
+    const DEFAULT_HALT_CONDITION:u64 = 60u64;//Duration::new(x,0). x seconds
     const DEFAULT_BATCH_SIZE:f64 = 0.002f64;//(x * examples.len() as f64).ceil() as usize. batch_size = x% of training data
     const DEFAULT_LEARNING_RATE:f64 = 0.3f64;
     const DEFAULT_LAMBDA:f64 = 0.1f64;//lambda = (x * examples.len() as f64). lambda = x% of training data. lambda = regularization parameter
@@ -459,6 +459,7 @@ mod tests {
     // Tests network to learn an XOR gate.
     #[test]
     fn train_xor() {
+        let mut total_accuracy = 0u32;
         for _ in 0..(10 * TEST_RERUN_MULTIPLIER) {
             let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,4,2]);
             let mut training_data = vec![
@@ -472,7 +473,7 @@ mod tests {
 
             neural_network.train(&training_data)
                 .halt_condition(crate::core::MeasuredCondition::Iteration(4000u32))
-                .log_interval(crate::core::MeasuredCondition::Iteration(400u32))
+                // .log_interval(crate::core::MeasuredCondition::Iteration(400u32))
                 .batch_size(4usize)
                 .learning_rate(2f64)
                 .evaluation_data(crate::core::EvaluationData::Actual(testing_data.clone()))
@@ -481,14 +482,16 @@ mod tests {
 
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
+
+            total_accuracy += evaluation.1;
         }
-        
-        //assert!(false);
+        println!("average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
     }
 
     // Tests network to recognize handwritten digits of 28x28 pixels
     #[test]
     fn train_digits() {
+        let mut total_accuracy = 0u32;
         for _ in 0..TEST_RERUN_MULTIPLIER {
             let mut neural_network = crate::core::NeuralNetwork::new(&[784,100,10]);
 
@@ -497,20 +500,22 @@ mod tests {
 
             //neural_network.train(&mut training_data, 30u32, 1u32, 10usize, 0.5f64, &validation_data,5f64,10u32);
             neural_network.train(&training_data)
-                .halt_condition(crate::core::MeasuredCondition::Iteration(40u32))
-                .log_interval(crate::core::MeasuredCondition::Iteration(1u32))
+                .halt_condition(crate::core::MeasuredCondition::Iteration(30u32))
+                // .log_interval(crate::core::MeasuredCondition::Iteration(1u32))
                 .batch_size(10usize)
                 .learning_rate(0.5f64)
                 .evaluation_data(crate::core::EvaluationData::Scaler(10000usize))
                 .lambda(5f64)
-                .early_stopping_condition(crate::core::MeasuredCondition::Iteration(10u32))
+                // .early_stopping_condition(crate::core::MeasuredCondition::Iteration(10u32))
                 .go();
 
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
 
-            assert!(false);
+            total_accuracy += evaluation.1;
         }
+        println!("average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+
         fn get_examples(testing:bool) -> Vec<(Vec<f64>,Vec<f64>)> {
                 
                 let (images,labels) = if testing {
