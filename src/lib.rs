@@ -151,7 +151,9 @@ mod core {
             batch_size: usize,
             learning_rate: f64,
             lambda: f64,
-            early_stopping_n: Option<MeasuredCondition>) -> () {
+            early_stopping_n: Option<MeasuredCondition>
+        ) -> () {
+
             let mut rng = rand::thread_rng();
             let start_instant = Instant::now();
             let mut iterations_elapsed = 0u32;
@@ -163,15 +165,18 @@ mod core {
             let mut best_accuracy = 0u32;
 
             let mut evaluation = self.evaluate(evaluation_data);
+            
+            
             println!("Iteration: {}, Time: {}s, Cost: {:.7}, Classified: {}/{} ({:.4}%)",iterations_elapsed,start_instant.elapsed().as_secs(),evaluation.0,evaluation.1,evaluation_data.len(), (evaluation.1 as f64)/(evaluation_data.len() as f64) * 100f64);
+            
 
             let starting_evaluation = evaluation;
-
             let mut last_logged_instant = Instant::now();
+
             loop {
                 match halt_condition {
-                    MeasuredCondition::Iteration(iteration) => if iterations_elapsed == iteration { break; }
-                    MeasuredCondition::Duration(duration) => if start_instant.elapsed() >= duration { break; }
+                    MeasuredCondition::Iteration(iteration) => if iterations_elapsed == iteration { break; },
+                    MeasuredCondition::Duration(duration) => if start_instant.elapsed() >= duration { break; },
                 }
 
                 training_data.shuffle(&mut rng);
@@ -193,26 +198,28 @@ mod core {
                 match log_interval {
                     Some(MeasuredCondition::Iteration(iteration_interval)) => if iterations_elapsed % iteration_interval == 0 { 
                          println!("Iteration: {}, Time: {}, Cost: {:.7}, Classified: {}/{} ({:.4}%)",iterations_elapsed,start_instant.elapsed().as_secs(),evaluation.0,evaluation.1,evaluation_data.len(), (evaluation.1 as f64)/(evaluation_data.len() as f64) * 100f64);
-                    }
+                    },
                     Some(MeasuredCondition::Duration(duration_interval)) => if last_logged_instant.elapsed() >= duration_interval { 
                         println!("Iteration: {}, Time: {}, Cost: {:.7}, Classified: {}/{} ({:.4}%)",iterations_elapsed,start_instant.elapsed().as_secs(),evaluation.0,evaluation.1,evaluation_data.len(), (evaluation.1 as f64)/(evaluation_data.len() as f64) * 100f64);
                         last_logged_instant = Instant::now();
-                    }
-                    _ => {}
+                    },
+                    _ => {},
                 }
 
                 match early_stopping_n {
-                    Some(MeasuredCondition::Iteration(stopping_iteration)) =>  if iterations_elapsed - best_accuracy_iteration == stopping_iteration { println!("---------------\nEarly stoppage!\n---------------"); break; }
-                    Some(MeasuredCondition::Duration(stopping_duration)) => if best_accuracy_instant.elapsed() >= stopping_duration { println!("---------------\nEarly stoppage!\n---------------"); break; }
-                    _ => {}
+                    Some(MeasuredCondition::Iteration(stopping_iteration)) =>  if iterations_elapsed - best_accuracy_iteration == stopping_iteration { println!("---------------\nEarly stoppage!\n---------------"); break; },
+                    Some(MeasuredCondition::Duration(stopping_duration)) => if best_accuracy_instant.elapsed() >= stopping_duration { println!("---------------\nEarly stoppage!\n---------------"); break; },
+                    _ => {},
                 }
             }
             let new_percent = (evaluation.1 as f64)/(evaluation_data.len() as f64) * 100f64;
             let starting_percent = (starting_evaluation.1 as f64)/(evaluation_data.len() as f64) * 100f64;
+            println!();
             println!("Cost: {:.7} -> {:.7}",starting_evaluation.0,evaluation.0);
             println!("Classified: {} ({:.4}%) -> {} ({:.4}%)",starting_evaluation.1,starting_percent,evaluation.1,new_percent);
             println!("Cost: {:.6}",evaluation.0-starting_evaluation.0);
             println!("Classified: +{} (+{:.4}%)",evaluation.1-starting_evaluation.1,new_percent - starting_percent);
+            println!();
 
             fn get_batches(examples:&[(Vec<f64>,Vec<f64>)], batch_size: usize) -> Vec<&[(Vec<f64>,Vec<f64>)]> {
                 let mut batches = Vec::new(); // TODO Look into if 'Vec::with_capacity(ceil(examples.len() / batch_size))' is more efficient
@@ -393,10 +400,9 @@ mod tests {
     extern crate nalgebra;
     use std::fs::File;
     use std::io::{Read};
-    use std::time::{Instant};
 
     // TODO Figure out better name for this
-    const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be >= 1)
+    const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be >= 0)
     // TODO Figure out better name for this
     const TESTING_MIN_ACCURACY:f64 = 0.95f64; // approx 5% min inaccuracy
     fn required_accuracy(test_data:&[(Vec<f64>,Vec<f64>)]) -> u32 {
@@ -458,47 +464,97 @@ mod tests {
 
     // Tests network to learn an XOR gate.
     #[test]
-    fn train_xor() {
+    fn train_xor_0() {
         let mut total_accuracy = 0u32;
         for _ in 0..(10 * TEST_RERUN_MULTIPLIER) {
-            let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,4,2]);
-            let mut training_data = vec![
+            //Setup
+            let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,2]);
+            let training_data = vec![
                 (vec![0f64,0f64],vec![0f64,1f64]),
                 (vec![1f64,0f64],vec![1f64,0f64]),
                 (vec![0f64,1f64],vec![1f64,0f64]),
                 (vec![1f64,1f64],vec![0f64,1f64])
             ];
             let testing_data = training_data.clone();
-            //neural_network.train(&mut training_data,4000u32,400u32,4usize,2f64,&testing_data,0f64,2000u32);
-
+            //Execution
             neural_network.train(&training_data)
                 .halt_condition(crate::core::MeasuredCondition::Iteration(4000u32))
-                // .log_interval(crate::core::MeasuredCondition::Iteration(400u32))
                 .batch_size(4usize)
                 .learning_rate(2f64)
                 .evaluation_data(crate::core::EvaluationData::Actual(testing_data.clone()))
                 .lambda(0f64)
-                .go();
-
+            .go();
+            //Evaluation
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
 
+            println!("accuracy: {}",evaluation.1);
+            println!();
             total_accuracy += evaluation.1;
         }
-        println!("average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+        println!("train_xor_0: average accuracy: {}",total_accuracy / (10 * TEST_RERUN_MULTIPLIER));
+    }
+    #[test]
+    fn train_xor_1() {
+        let mut total_accuracy = 0u32;
+        for _ in 0..(10 * TEST_RERUN_MULTIPLIER) {
+            //Setup
+            let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,4,2]);
+            let training_data = vec![
+                (vec![0f64,0f64],vec![0f64,1f64]),
+                (vec![1f64,0f64],vec![1f64,0f64]),
+                (vec![0f64,1f64],vec![1f64,0f64]),
+                (vec![1f64,1f64],vec![0f64,1f64])
+            ];
+            let testing_data = training_data.clone();
+            //Execution
+            neural_network.train(&training_data)
+                .halt_condition(crate::core::MeasuredCondition::Iteration(4000u32))
+                .batch_size(4usize)
+                .learning_rate(2f64)
+                .evaluation_data(crate::core::EvaluationData::Actual(testing_data.clone()))
+                .lambda(0f64)
+            .go();
+            //Evaluation
+            let evaluation = neural_network.evaluate(&testing_data);
+            assert!(evaluation.1 >= required_accuracy(&testing_data));
+
+            println!("accuracy: {}",evaluation.1);
+            println!();
+            total_accuracy += evaluation.1;
+        }
+        println!("train_xor_1: average accuracy: {}",total_accuracy / (10 * TEST_RERUN_MULTIPLIER));
     }
 
     // Tests network to recognize handwritten digits of 28x28 pixels
     #[test]
-    fn train_digits() {
+    fn train_digits_0() {
         let mut total_accuracy = 0u32;
         for _ in 0..TEST_RERUN_MULTIPLIER {
+            //Setup
             let mut neural_network = crate::core::NeuralNetwork::new(&[784,100,10]);
+            let training_data = train_digits_get_examples(false);
+            //Execution
+            neural_network.train(&training_data).go();
+            //Evaluation
+            let testing_data = train_digits_get_examples(true);
+            let evaluation = neural_network.evaluate(&testing_data);
+            assert!(evaluation.1 >= required_accuracy(&testing_data));
 
-            let mut training_data = get_examples(false);
-            let testing_data = get_examples(true);
-
-            //neural_network.train(&mut training_data, 30u32, 1u32, 10usize, 0.5f64, &validation_data,5f64,10u32);
+            println!("accuracy: {}",evaluation.1);
+            println!();
+            total_accuracy += evaluation.1;
+        }
+        println!("train_digits_0: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+    }
+    #[test]
+    fn train_digits_1() {
+        let mut total_accuracy = 0u32;
+        for _ in 0..TEST_RERUN_MULTIPLIER {
+            //Setup
+            let mut neural_network = crate::core::NeuralNetwork::new(&[784,100,10]);
+            let training_data = train_digits_get_examples(false);
+            //Execution
             neural_network.train(&training_data)
                 .halt_condition(crate::core::MeasuredCondition::Iteration(30u32))
                 // .log_interval(crate::core::MeasuredCondition::Iteration(1u32))
@@ -507,69 +563,71 @@ mod tests {
                 .evaluation_data(crate::core::EvaluationData::Scaler(10000usize))
                 .lambda(5f64)
                 // .early_stopping_condition(crate::core::MeasuredCondition::Iteration(10u32))
-                .go();
-
+            .go();
+            //Evaluation
+            let testing_data = train_digits_get_examples(true);
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
 
+            println!("accuracy: {}",evaluation.1);
+            println!();
             total_accuracy += evaluation.1;
         }
-        println!("average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
-
-        fn get_examples(testing:bool) -> Vec<(Vec<f64>,Vec<f64>)> {
-                
-                let (images,labels) = if testing {
-                    (get_images("data/MNIST/t10k-images.idx3-ubyte"),get_labels("data/MNIST/t10k-labels.idx1-ubyte"))
-                }
-                else {
-                    (get_images("data/MNIST/train-images.idx3-ubyte"),get_labels("data/MNIST/train-labels.idx1-ubyte"))
-                };
-
-                let iterator = images.iter().zip(labels.iter());
-                let mut examples = Vec::new();
-                let set_output_layer = |label:u8| -> Vec<f64> { let mut temp = vec!(0f64;10); temp[label as usize] = 1f64; temp};
-                for (image,label) in iterator {
-                    examples.push(
-                        (
-                            image.clone(),
-                            set_output_layer(*label)
-                        )
-                    );
-                }
-                return examples;
-
-                fn get_labels(path:&str) -> Vec<u8> {
-                    let mut file = File::open(path).unwrap();
-                    let mut label_buffer = Vec::new();
-                    file.read_to_end(&mut label_buffer).expect("Couldn't read MNIST labels");
-
-                    // TODO Look into better ways to remove the 1st 7 elements
-                    return label_buffer.drain(8..).collect();
-                }
-
-                fn get_images(path:&str) -> Vec<Vec<f64>> {
-                    let mut file = File::open(path).unwrap();
-                    let mut image_buffer_u8 = Vec::new();
-                    file.read_to_end(&mut image_buffer_u8).expect("Couldn't read MNIST images");
-                    // Removes 1st 16 bytes of meta data
-                    image_buffer_u8 = image_buffer_u8.drain(16..).collect();
-
-                    // Converts from u8 to f64
-                    let mut image_buffer_f64 = Vec::new();
-                    for pixel in image_buffer_u8 {
-                        image_buffer_f64.push(pixel as f64 / 255f64);
-                    }
-
-                    // Splits buffer into vectors for each image
-                    let mut images_vector = Vec::new();
-                    for i in (0..image_buffer_f64.len() / (28 * 28)).rev() {
-                        images_vector.push(image_buffer_f64.split_off(i * 28 * 28));
-                    }
-                    // Does splitting in reverse order due to how '.split_off' works, so reverses back to original order.
-                    images_vector.reverse();
-                    return images_vector;
-                }
-            }
-        
+        println!("train_digits_1: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
     }
+    fn train_digits_get_examples(testing:bool) -> Vec<(Vec<f64>,Vec<f64>)> {
+                
+            let (images,labels) = if testing {
+                (get_images("data/MNIST/t10k-images.idx3-ubyte"),get_labels("data/MNIST/t10k-labels.idx1-ubyte"))
+            }
+            else {
+                (get_images("data/MNIST/train-images.idx3-ubyte"),get_labels("data/MNIST/train-labels.idx1-ubyte"))
+            };
+
+            let iterator = images.iter().zip(labels.iter());
+            let mut examples = Vec::new();
+            let set_output_layer = |label:u8| -> Vec<f64> { let mut temp = vec!(0f64;10); temp[label as usize] = 1f64; temp};
+            for (image,label) in iterator {
+                examples.push(
+                    (
+                        image.clone(),
+                        set_output_layer(*label)
+                    )
+                );
+            }
+            return examples;
+
+            fn get_labels(path:&str) -> Vec<u8> {
+                let mut file = File::open(path).unwrap();
+                let mut label_buffer = Vec::new();
+                file.read_to_end(&mut label_buffer).expect("Couldn't read MNIST labels");
+
+                // TODO Look into better ways to remove the 1st 7 elements
+                return label_buffer.drain(8..).collect();
+            }
+
+            fn get_images(path:&str) -> Vec<Vec<f64>> {
+                let mut file = File::open(path).unwrap();
+                let mut image_buffer_u8 = Vec::new();
+                file.read_to_end(&mut image_buffer_u8).expect("Couldn't read MNIST images");
+                // Removes 1st 16 bytes of meta data
+                image_buffer_u8 = image_buffer_u8.drain(16..).collect();
+
+                // Converts from u8 to f64
+                let mut image_buffer_f64 = Vec::new();
+                for pixel in image_buffer_u8 {
+                    image_buffer_f64.push(pixel as f64 / 255f64);
+                }
+
+                // Splits buffer into vectors for each image
+                let mut images_vector = Vec::new();
+                for i in (0..image_buffer_f64.len() / (28 * 28)).rev() {
+                    images_vector.push(image_buffer_f64.split_off(i * 28 * 28));
+                }
+                // Does splitting in reverse order due to how '.split_off' works, so reverses back to original order.
+                images_vector.reverse();
+                return images_vector;
+            }
+        }
+    
 }
