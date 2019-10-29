@@ -169,7 +169,7 @@ mod core {
             if let Some(_) = log_interval {
                 println!("Iteration: {}, Time: {}s, Cost: {:.7}, Classified: {}/{} ({:.4}%)",iterations_elapsed,start_instant.elapsed().as_secs(),evaluation.0,evaluation.1,evaluation_data.len(), (evaluation.1 as f64)/(evaluation_data.len() as f64) * 100f64);
             }
-            
+
             let starting_evaluation = evaluation;
             let mut last_logged_instant = Instant::now();
 
@@ -219,6 +219,7 @@ mod core {
             println!("Classified: {} ({:.4}%) -> {} ({:.4}%)",starting_evaluation.1,starting_percent,evaluation.1,new_percent);
             println!("Cost: {:.6}",evaluation.0-starting_evaluation.0);
             println!("Classified: +{} (+{:.4}%)",evaluation.1-starting_evaluation.1,new_percent - starting_percent);
+            println!("Time: {}",start_instant.elapsed().as_secs());
             println!();
 
             fn get_batches(examples:&[(Vec<f64>,Vec<f64>)], batch_size: usize) -> Vec<&[(Vec<f64>,Vec<f64>)]> {
