@@ -401,6 +401,7 @@ mod tests {
     extern crate nalgebra;
     use std::fs::File;
     use std::io::{Read};
+    use std::time::Duration;
 
     // TODO Figure out better name for this
     const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be >= 0)
@@ -536,7 +537,7 @@ mod tests {
             let mut neural_network = crate::core::NeuralNetwork::new(&[784,100,10]);
             let training_data = train_digits_get_examples(false);
             //Execution
-            neural_network.train(&training_data).go();
+            neural_network.train(&training_data).log_interval(crate::core::MeasuredCondition::Duration(Duration::new(10,0))).go();
             //Evaluation
             let testing_data = train_digits_get_examples(true);
             let evaluation = neural_network.evaluate(&testing_data);
