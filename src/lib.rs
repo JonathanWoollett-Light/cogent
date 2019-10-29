@@ -166,10 +166,10 @@ mod core {
 
             let mut evaluation = self.evaluate(evaluation_data);
             
+            if let Some(_) = log_interval {
+                println!("Iteration: {}, Time: {}s, Cost: {:.7}, Classified: {}/{} ({:.4}%)",iterations_elapsed,start_instant.elapsed().as_secs(),evaluation.0,evaluation.1,evaluation_data.len(), (evaluation.1 as f64)/(evaluation_data.len() as f64) * 100f64);
+            }
             
-            println!("Iteration: {}, Time: {}s, Cost: {:.7}, Classified: {}/{} ({:.4}%)",iterations_elapsed,start_instant.elapsed().as_secs(),evaluation.0,evaluation.1,evaluation_data.len(), (evaluation.1 as f64)/(evaluation_data.len() as f64) * 100f64);
-            
-
             let starting_evaluation = evaluation;
             let mut last_logged_instant = Instant::now();
 
