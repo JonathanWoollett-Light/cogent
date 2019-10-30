@@ -490,7 +490,7 @@ mod tests {
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
 
-            println!("accuracy: {}",evaluation.1);
+            println!("train_xor_0: accuracy: {}",evaluation.1);
             println!();
             total_accuracy += evaluation.1;
         }
@@ -521,7 +521,7 @@ mod tests {
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
 
-            println!("accuracy: {}",evaluation.1);
+            println!("train_xor_1: accuracy: {}",evaluation.1);
             println!();
             total_accuracy += evaluation.1;
         }
@@ -543,7 +543,7 @@ mod tests {
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
 
-            println!("accuracy: {}",evaluation.1);
+            println!("train_digits_0: accuracy: {}",evaluation.1);
             println!();
             total_accuracy += evaluation.1;
         }
@@ -571,7 +571,7 @@ mod tests {
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
 
-            println!("accuracy: {}",evaluation.1);
+            println!("train_digits_1: accuracy: {}",evaluation.1);
             println!();
             total_accuracy += evaluation.1;
         }
