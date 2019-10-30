@@ -485,7 +485,7 @@ mod tests {
                 .learning_rate(2f64)
                 .evaluation_data(crate::core::EvaluationData::Actual(testing_data.clone()))
                 .lambda(0f64)
-            .go();
+                .go();
             //Evaluation
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
@@ -516,7 +516,7 @@ mod tests {
                 .learning_rate(2f64)
                 .evaluation_data(crate::core::EvaluationData::Actual(testing_data.clone()))
                 .lambda(0f64)
-            .go();
+                .go();
             //Evaluation
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
@@ -565,7 +565,7 @@ mod tests {
                 .evaluation_data(crate::core::EvaluationData::Scaler(10000usize))
                 .lambda(5f64)
                 // .early_stopping_condition(crate::core::MeasuredCondition::Iteration(10u32))
-            .go();
+                .go();
             //Evaluation
             let testing_data = train_digits_get_examples(true);
             let evaluation = neural_network.evaluate(&testing_data);
