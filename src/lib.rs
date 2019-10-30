@@ -577,6 +577,29 @@ mod tests {
         }
         println!("train_digits_1: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
     }
+    #[test]
+    fn train_digits_2() {
+        let mut total_accuracy = 0u32;
+        for _ in 0..TEST_RERUN_MULTIPLIER {
+            //Setup
+            let mut neural_network = crate::core::NeuralNetwork::new(&[784,200,100,50,10]);
+            let training_data = train_digits_get_examples(false);
+            //Execution
+            neural_network.train(&training_data)
+                .log_interval(crate::core::MeasuredCondition::Duration(Duration::new(10,0)))
+                .halt_condition(crate::core::MeasuredCondition::Duration(Duration::new(120,0)))
+                .go();
+            //Evaluation
+            let testing_data = train_digits_get_examples(true);
+            let evaluation = neural_network.evaluate(&testing_data);
+            assert!(evaluation.1 >= required_accuracy(&testing_data));
+
+            println!("train_digits_2: accuracy: {}",evaluation.1);
+            println!();
+            total_accuracy += evaluation.1;
+        }
+        println!("train_digits_2: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+    }
     fn train_digits_get_examples(testing:bool) -> Vec<(Vec<f64>,Vec<f64>)> {
                 
             let (images,labels) = if testing {
