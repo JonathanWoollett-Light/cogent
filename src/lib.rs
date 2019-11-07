@@ -259,8 +259,11 @@ mod core {
             // TODO Look into a better way to setup 'bias_nabla' and 'weight_nabla'
             // TODO Better understand what 'nabla' means
 
+            // Clones, `self.neurons` with every value set to `0f64`
+            // TODO Look into changing this to clone `self.biases` to make following line obselete.
             let mut clone_holder_b:Vec<DVector<f64>> = self.neurons.clone().iter().map(|x| x.map(|_y| -> f64 { 0f64 }) ).collect();
             clone_holder_b.remove(0);
+            // Clones, `self.connections` with every value set to `0f64`
             let clone_holder_w:Vec<DMatrix<f64>> = self.connections.clone().iter().map(|x| x.map(|_y| -> f64 { 0f64 }) ).collect();
             let mut nabla_b:Vec<DVector<f64>> = clone_holder_b.clone();
             let mut nabla_w:Vec<DMatrix<f64>> = clone_holder_w.clone();
@@ -270,7 +273,7 @@ mod core {
                     self.backpropagate(example,clone_holder_w.clone(),clone_holder_b.clone());
 
                 
-                nabla_w = nabla_w.iter().zip(delta_nabla_w).map(|(x,y)|x + y).collect();
+                nabla_w = nabla_w.iter().zip(delta_nabla_w).map(|(x,y)| x + y).collect();
                 nabla_b = nabla_b.iter().zip(delta_nabla_b).map(|(x,y)| x + y).collect();
             }
 
@@ -535,11 +538,11 @@ mod tests {
         for _ in 0..TEST_RERUN_MULTIPLIER {
             //Setup
             let mut neural_network = crate::core::NeuralNetwork::new(&[784,100,10]);
-            let training_data = train_digits_get_examples(false);
+            let training_data = get_mnist_dataset(false);
             //Execution
             neural_network.train(&training_data).log_interval(crate::core::MeasuredCondition::Duration(Duration::new(10,0))).go();
             //Evaluation
-            let testing_data = train_digits_get_examples(true);
+            let testing_data = get_mnist_dataset(true);
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
 
@@ -555,7 +558,7 @@ mod tests {
         for _ in 0..TEST_RERUN_MULTIPLIER {
             //Setup
             let mut neural_network = crate::core::NeuralNetwork::new(&[784,100,10]);
-            let training_data = train_digits_get_examples(false);
+            let training_data = get_mnist_dataset(false);
             //Execution
             neural_network.train(&training_data)
                 .halt_condition(crate::core::MeasuredCondition::Iteration(30u32))
@@ -567,7 +570,7 @@ mod tests {
                 // .early_stopping_condition(crate::core::MeasuredCondition::Iteration(10u32))
                 .go();
             //Evaluation
-            let testing_data = train_digits_get_examples(true);
+            let testing_data = get_mnist_dataset(true);
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
 
@@ -583,14 +586,14 @@ mod tests {
         for _ in 0..TEST_RERUN_MULTIPLIER {
             //Setup
             let mut neural_network = crate::core::NeuralNetwork::new(&[784,200,100,50,10]);
-            let training_data = train_digits_get_examples(false);
+            let training_data = get_mnist_dataset(false);
             //Execution
             neural_network.train(&training_data)
                 .log_interval(crate::core::MeasuredCondition::Duration(Duration::new(10,0)))
                 .halt_condition(crate::core::MeasuredCondition::Duration(Duration::new(120,0)))
                 .go();
             //Evaluation
-            let testing_data = train_digits_get_examples(true);
+            let testing_data = get_mnist_dataset(true);
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
 
@@ -600,59 +603,59 @@ mod tests {
         }
         println!("train_digits_2: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
     }
-    fn train_digits_get_examples(testing:bool) -> Vec<(Vec<f64>,Vec<f64>)> {
+    fn get_mnist_dataset(testing:bool) -> Vec<(Vec<f64>,Vec<f64>)> {
                 
-            let (images,labels) = if testing {
-                (get_images("data/MNIST/t10k-images.idx3-ubyte"),get_labels("data/MNIST/t10k-labels.idx1-ubyte"))
-            }
-            else {
-                (get_images("data/MNIST/train-images.idx3-ubyte"),get_labels("data/MNIST/train-labels.idx1-ubyte"))
-            };
-
-            let iterator = images.iter().zip(labels.iter());
-            let mut examples = Vec::new();
-            let set_output_layer = |label:u8| -> Vec<f64> { let mut temp = vec!(0f64;10); temp[label as usize] = 1f64; temp};
-            for (image,label) in iterator {
-                examples.push(
-                    (
-                        image.clone(),
-                        set_output_layer(*label)
-                    )
-                );
-            }
-            return examples;
-
-            fn get_labels(path:&str) -> Vec<u8> {
-                let mut file = File::open(path).unwrap();
-                let mut label_buffer = Vec::new();
-                file.read_to_end(&mut label_buffer).expect("Couldn't read MNIST labels");
-
-                // TODO Look into better ways to remove the 1st 7 elements
-                return label_buffer.drain(8..).collect();
-            }
-
-            fn get_images(path:&str) -> Vec<Vec<f64>> {
-                let mut file = File::open(path).unwrap();
-                let mut image_buffer_u8 = Vec::new();
-                file.read_to_end(&mut image_buffer_u8).expect("Couldn't read MNIST images");
-                // Removes 1st 16 bytes of meta data
-                image_buffer_u8 = image_buffer_u8.drain(16..).collect();
-
-                // Converts from u8 to f64
-                let mut image_buffer_f64 = Vec::new();
-                for pixel in image_buffer_u8 {
-                    image_buffer_f64.push(pixel as f64 / 255f64);
-                }
-
-                // Splits buffer into vectors for each image
-                let mut images_vector = Vec::new();
-                for i in (0..image_buffer_f64.len() / (28 * 28)).rev() {
-                    images_vector.push(image_buffer_f64.split_off(i * 28 * 28));
-                }
-                // Does splitting in reverse order due to how '.split_off' works, so reverses back to original order.
-                images_vector.reverse();
-                return images_vector;
-            }
+        let (images,labels) = if testing {
+            (get_images("data/MNIST/t10k-images.idx3-ubyte"),get_labels("data/MNIST/t10k-labels.idx1-ubyte"))
         }
+        else {
+            (get_images("data/MNIST/train-images.idx3-ubyte"),get_labels("data/MNIST/train-labels.idx1-ubyte"))
+        };
+
+        let iterator = images.iter().zip(labels.iter());
+        let mut examples = Vec::new();
+        let set_output_layer = |label:u8| -> Vec<f64> { let mut temp = vec!(0f64;10); temp[label as usize] = 1f64; temp};
+        for (image,label) in iterator {
+            examples.push(
+                (
+                    image.clone(),
+                    set_output_layer(*label)
+                )
+            );
+        }
+        return examples;
+
+        fn get_labels(path:&str) -> Vec<u8> {
+            let mut file = File::open(path).unwrap();
+            let mut label_buffer = Vec::new();
+            file.read_to_end(&mut label_buffer).expect("Couldn't read MNIST labels");
+
+            // TODO Look into better ways to remove the 1st 7 elements
+            return label_buffer.drain(8..).collect();
+        }
+
+        fn get_images(path:&str) -> Vec<Vec<f64>> {
+            let mut file = File::open(path).unwrap();
+            let mut image_buffer_u8 = Vec::new();
+            file.read_to_end(&mut image_buffer_u8).expect("Couldn't read MNIST images");
+            // Removes 1st 16 bytes of meta data
+            image_buffer_u8 = image_buffer_u8.drain(16..).collect();
+
+            // Converts from u8 to f64
+            let mut image_buffer_f64 = Vec::new();
+            for pixel in image_buffer_u8 {
+                image_buffer_f64.push(pixel as f64 / 255f64);
+            }
+
+            // Splits buffer into vectors for each image
+            let mut images_vector = Vec::new();
+            for i in (0..image_buffer_f64.len() / (28 * 28)).rev() {
+                images_vector.push(image_buffer_f64.split_off(i * 28 * 28));
+            }
+            // Does splitting in reverse order due to how '.split_off' works, so reverses back to original order.
+            images_vector.reverse();
+            return images_vector;
+        }
+    }
     
 }
