@@ -9,7 +9,7 @@ mod core {
     const E:f64 = 2.7182818284f64;
 
     const DEFAULT_EVALUTATION_DATA:f64 = 0.1f64;//`(x * examples.len() as f64) as usize` of `testing_data` is split_off into `evaluation_data`
-    const DEFAULT_HALT_CONDITION:u64 = 60u64;//Duration::new(x,0). x seconds
+    const DEFAULT_HALT_CONDITION:u64 = 180u64;//Duration::new(x,0). x seconds
     const DEFAULT_BATCH_SIZE:f64 = 0.002f64;//(x * examples.len() as f64).ceil() as usize. batch_size = x% of training data
     const DEFAULT_LEARNING_RATE:f64 = 0.3f64;
     const DEFAULT_LAMBDA:f64 = 0.1f64;//lambda = (x * examples.len() as f64). lambda = x% of training data. lambda = regularization parameter
@@ -99,6 +99,7 @@ mod core {
 
     impl NeuralNetwork {
 
+        // Constructs network of given layers
         pub fn new(layers: &[usize]) -> NeuralNetwork {
             if layers.len() < 2 {
                 panic!("Requires >1 layers");
@@ -122,6 +123,17 @@ mod core {
             }
             NeuralNetwork{ neurons, biases, connections }
         }
+        // Constructs and trains network for given dataset
+        pub fn build(training_data:&Vec<(Vec<f64>,Vec<f64>)>) -> NeuralNetwork {
+            let avg_size:usize = (training_data[0].0.len() + training_data[0].1.len()) / 2;
+            let layers:&[usize] = &[training_data[0].0.len(),avg_size,training_data[0].1.len()];
+            let mut network = NeuralNetwork::new(layers);
+
+            network.train(training_data).go();
+
+            return network;
+        }
+
         // Feeds forward through network
         pub fn run(&mut self, inputs:&[f64]) -> &DVector<f64> {
 
@@ -157,7 +169,6 @@ mod core {
             let mut rng = rand::thread_rng();
             let start_instant = Instant::now();
             let mut iterations_elapsed = 0u32;
-
             
             let mut best_accuracy_iteration = 0u32;// Iteration of best accuracy
             let mut best_accuracy_instant = Instant::now();// Instant of best accuracy
@@ -387,7 +398,7 @@ mod core {
                 }
             }
             // Regularized costs not included since this would require passing an addition parameter through `evaluation(...)` and the functions are functionalty useless anyway, only useful for learning.
-        } 
+        }
         
         fn sigmoid(&self,y: f64) -> f64 {
             1f64 / (1f64 + (-y).exp())
@@ -562,12 +573,12 @@ mod tests {
             //Execution
             neural_network.train(&training_data)
                 .halt_condition(crate::core::MeasuredCondition::Iteration(30u32))
-                // .log_interval(crate::core::MeasuredCondition::Iteration(1u32))
+                .log_interval(crate::core::MeasuredCondition::Iteration(1u32))
                 .batch_size(10usize)
                 .learning_rate(0.5f64)
                 .evaluation_data(crate::core::EvaluationData::Scaler(10000usize))
                 .lambda(5f64)
-                // .early_stopping_condition(crate::core::MeasuredCondition::Iteration(10u32))
+                .early_stopping_condition(crate::core::MeasuredCondition::Iteration(10u32))
                 .go();
             //Evaluation
             let testing_data = get_mnist_dataset(true);
@@ -580,28 +591,48 @@ mod tests {
         }
         println!("train_digits_1: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
     }
+    // #[test]
+    // fn train_digits_2() {
+    //     let mut total_accuracy = 0u32;
+    //     for _ in 0..TEST_RERUN_MULTIPLIER {
+    //         //Setup
+    //         let mut neural_network = crate::core::NeuralNetwork::new(&[784,200,100,50,10]);
+    //         let training_data = get_mnist_dataset(false);
+    //         //Execution
+    //         neural_network.train(&training_data)
+    //             .log_interval(crate::core::MeasuredCondition::Duration(Duration::new(10,0)))
+    //             .halt_condition(crate::core::MeasuredCondition::Duration(Duration::new(240,0)))
+    //             .learning_rate(0.1f64)
+    //             .go();
+    //         //Evaluation
+    //         let testing_data = get_mnist_dataset(true);
+    //         let evaluation = neural_network.evaluate(&testing_data);
+    //         assert!(evaluation.1 >= required_accuracy(&testing_data));
+
+    //         println!("train_digits_2: accuracy: {}",evaluation.1);
+    //         println!();
+    //         total_accuracy += evaluation.1;
+    //     }
+    //     println!("train_digits_2: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+    // }
     #[test]
-    fn train_digits_2() {
+    fn train_digits_3() {
         let mut total_accuracy = 0u32;
         for _ in 0..TEST_RERUN_MULTIPLIER {
             //Setup
-            let mut neural_network = crate::core::NeuralNetwork::new(&[784,200,100,50,10]);
             let training_data = get_mnist_dataset(false);
             //Execution
-            neural_network.train(&training_data)
-                .log_interval(crate::core::MeasuredCondition::Duration(Duration::new(10,0)))
-                .halt_condition(crate::core::MeasuredCondition::Duration(Duration::new(120,0)))
-                .go();
+            let mut neural_network = crate::core::NeuralNetwork::build(&training_data);
             //Evaluation
             let testing_data = get_mnist_dataset(true);
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
 
-            println!("train_digits_2: accuracy: {}",evaluation.1);
+            println!("train_digits_3: accuracy: {}",evaluation.1);
             println!();
             total_accuracy += evaluation.1;
         }
-        println!("train_digits_2: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+        println!("train_digits_3: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
     }
     fn get_mnist_dataset(testing:bool) -> Vec<(Vec<f64>,Vec<f64>)> {
                 
