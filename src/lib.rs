@@ -416,6 +416,7 @@ mod tests {
     use std::fs::File;
     use std::io::{Read};
     use std::time::Duration;
+    use crate::core::{EvaluationData,MeasuredCondition,NeuralNetwork};
 
     // TODO Figure out better name for this
     const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be >= 0)
@@ -548,10 +549,10 @@ mod tests {
         let mut total_accuracy = 0u32;
         for _ in 0..TEST_RERUN_MULTIPLIER {
             //Setup
-            let mut neural_network = crate::core::NeuralNetwork::new(&[784,100,10]);
+            let mut neural_network = NeuralNetwork::new(&[784,100,10]);
             let training_data = get_mnist_dataset(false);
             //Execution
-            neural_network.train(&training_data).log_interval(crate::core::MeasuredCondition::Duration(Duration::new(10,0))).go();
+            neural_network.train(&training_data).log_interval(MeasuredCondition::Duration(Duration::new(10,0))).go();
             //Evaluation
             let testing_data = get_mnist_dataset(true);
             let evaluation = neural_network.evaluate(&testing_data);
@@ -568,17 +569,17 @@ mod tests {
         let mut total_accuracy = 0u32;
         for _ in 0..TEST_RERUN_MULTIPLIER {
             //Setup
-            let mut neural_network = crate::core::NeuralNetwork::new(&[784,100,10]);
+            let mut neural_network = NeuralNetwork::new(&[784,100,10]);
             let training_data = get_mnist_dataset(false);
             //Execution
             neural_network.train(&training_data)
-                .halt_condition(crate::core::MeasuredCondition::Iteration(30u32))
-                .log_interval(crate::core::MeasuredCondition::Iteration(1u32))
+                .halt_condition(MeasuredCondition::Iteration(30u32))
+                .log_interval(MeasuredCondition::Iteration(1u32))
                 .batch_size(10usize)
                 .learning_rate(0.5f64)
-                .evaluation_data(crate::core::EvaluationData::Scaler(10000usize))
+                .evaluation_data(EvaluationData::Scaler(10000usize))
                 .lambda(5f64)
-                .early_stopping_condition(crate::core::MeasuredCondition::Iteration(10u32))
+                .early_stopping_condition(MeasuredCondition::Iteration(10u32))
                 .go();
             //Evaluation
             let testing_data = get_mnist_dataset(true);
@@ -622,7 +623,7 @@ mod tests {
             //Setup
             let training_data = get_mnist_dataset(false);
             //Execution
-            let mut neural_network = crate::core::NeuralNetwork::build(&training_data);
+            let mut neural_network = NeuralNetwork::build(&training_data);
             //Evaluation
             let testing_data = get_mnist_dataset(true);
             let evaluation = neural_network.evaluate(&testing_data);
