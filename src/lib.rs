@@ -143,7 +143,7 @@ mod core {
 
             self.neurons[0] = DVector::from_vec(inputs.to_vec()); // TODO Look into improving this
             for i in 0..self.connections.len() {
-                let temp = (&self.connections[i] * &self.neurons[i])+ &self.biases[i];
+                let temp = (&self.connections[i] * &self.neurons[i]) + &self.biases[i];
                 self.neurons[i+1] = sigmoid_mapping(self,&temp);
             }
 
@@ -355,7 +355,7 @@ mod core {
             for example in test_data {
                 let out = self.run(&example.0);
                 let expected = DVector::from_vec(example.1.clone());
-                return_cost += my_simple_cost(out,&expected);// Adjust this to what ever cost function you would prefer to see
+                return_cost += linear_cost(out,&expected);// Adjust this to what ever cost function you would prefer to see
             
                 if get_max_index(out) == get_max_index(&expected) {
                     correctly_classified += 1u32;
@@ -374,7 +374,7 @@ mod core {
                 return max_index;
             }
 
-            fn my_simple_cost(outputs: &DVector<f64>, targets: &DVector<f64>) -> f64 {
+            fn linear_cost(outputs: &DVector<f64>, targets: &DVector<f64>) -> f64 {
                 (targets - outputs).abs().sum()
             }
             //Returns average squared difference between `outputs` and `targets`
@@ -382,7 +382,7 @@ mod core {
                 // TODO This could probably be 1 line, look into that
                 let error_vector = targets - outputs;
                 let cost_vector = error_vector.component_mul(&error_vector);
-                return cost_vector.mean();
+                return cost_vector.sum() / cost_vector.len() as f64;
             }
             fn cross_entropy_cost(outputs: &DVector<f64>, targets: &DVector<f64>) -> f64 {
                 // TODO This could probably be 1 line, look into that
