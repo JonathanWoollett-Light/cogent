@@ -298,42 +298,42 @@ mod core {
                     b - ((eta / batch.len() as f32)) * nb
             ).collect();
         }
-        
-        // Todo Make better name for 'zs' it is just all the neuron values without being put through the sigmoid function
+
+        // Runs backpropagation
+        // Returns weight and bias gradients
         fn backpropagate(&mut self, example:&(Vec<f32>,Vec<f32>), mut nabla_w:Vec<DMatrix<f32>>, mut nabla_b:Vec<DVector<f32>>) -> (Vec<DMatrix<f32>>,Vec<DVector<f32>>) {
+            
+            // Feeds forward
+            // --------------
 
-            let target = DVector::from_vec(example.1.clone());
-            let last_index = self.connections.len()-1; // = nabla_b.len()-1 = nabla_w.len()-1 = self.neurons.len()-2 = self.connections.len()-1
-
-            // TODO 
-            let mut zs = nabla_b.clone();
-            // Runs input through network
-            self.neurons[0] = DVector::from_vec(example.0.to_vec());
+            let mut zs = nabla_b.clone(); // Name more intuitively
+            self.neurons[0] = DVector::from_vec(example.0.to_vec()); // TODO Do I need `to.vec()` here?
             for i in 0..self.connections.len() {
                 zs[i] = (&self.connections[i] * &self.neurons[i])+ &self.biases[i];
                 self.neurons[i+1] = sigmoid_mapping(self,&zs[i]);
             }
 
+            // Backpropagates
+            // --------------
 
+            let target = DVector::from_vec(example.1.clone());
+            let last_index = self.connections.len()-1; // = nabla_b.len()-1 = nabla_w.len()-1 = self.neurons.len()-2 = self.connections.len()-1
             let mut delta:DVector<f32> = cross_entropy_delta(&self.neurons[last_index+1],&target);
 
             nabla_b[last_index] = delta.clone();
             nabla_w[last_index] = delta.clone() * self.neurons[last_index].transpose();
 
             for i in (1..self.neurons.len()-1).rev() {
-
-                //println!("z[{}]: {}",(i as i32)-1-(zs.len() as i32),zs[i-1]);
-                //println!("z siged: {}",self.sigmoid_prime_mapping(&zs[i-1]));
-
+                // Calculates error
                 delta = sigmoid_prime_mapping(self,&zs[i-1]).component_mul(
                     &(self.connections[i].transpose() * delta)
                 );
 
+                // Sets gradients
                 nabla_b[i-1] = delta.clone();
-                // TODO Look into using `delta.clone()` vs `&delta` here
-                nabla_w[i-1] = delta.clone() * self.neurons[i-1].transpose();
+                nabla_w[i-1] = delta.clone() * self.neurons[i-1].transpose();// TODO Look into using `delta.clone()` vs `&delta` here
             }
-
+            // Returns gradients
             return (nabla_w,nabla_b);
 
             // Returns new vector of `output-target`
@@ -382,7 +382,7 @@ mod core {
                 // TODO This could probably be 1 line, look into that
                 let error_vector = targets - outputs;
                 let cost_vector = error_vector.component_mul(&error_vector);
-                return cost_vector.sum() / cost_vector.len() as f32;
+                return cost_vector.sum() / (2f32 * cost_vector.len() as f32);
             }
             fn cross_entropy_cost(outputs: &DVector<f32>, targets: &DVector<f32>) -> f32 {
                 // TODO This could probably be 1 line, look into that
@@ -397,7 +397,6 @@ mod core {
                     return y.map(|x| -> f32 { x.log(E) })
                 }
             }
-            // Regularized costs not included since this would require passing an addition parameter through `evaluation(...)` and the functions are functionalty useless anyway, only useful for learning.
         }
         
         fn sigmoid(&self,y: f32) -> f32 {
