@@ -118,8 +118,6 @@ mod core {
                 neurons.push(DVector::repeat(layers[i],0f32));
                 connections.push(DMatrix::new_random(layers[i],layers[i-1])/(layers[i-1] as f32).sqrt());//TODO Double check this is right
                 biases.push(DVector::new_random(layers[i]));
-                // connections.push(DMatrix::repeat(layers[i],layers[i-1],0.5f32));
-                // biases.push(DVector::repeat(layers[i],0.5f32));
             }
             NeuralNetwork{ neurons, biases, connections }
         }
@@ -270,7 +268,7 @@ mod core {
             // TODO Look into a better way to setup 'bias_nabla' and 'weight_nabla'
             // TODO Better understand what 'nabla' means
 
-            // Clones, `self.neurons` with every value set to `0f32`
+            // Clones `self.neurons` with every value set to `0f32`
             // TODO Look into changing this to clone `self.biases` to make following line obselete.
             let mut clone_holder_b:Vec<DVector<f32>> = self.neurons.clone().iter().map(|x| x.map(|_y| -> f32 { 0f32 }) ).collect();
             clone_holder_b.remove(0);
@@ -288,7 +286,7 @@ mod core {
                 nabla_b = nabla_b.iter().zip(delta_nabla_b).map(|(x,y)| x + y).collect();
             }
 
-            
+            // TODO Look into removing `.clone()`s here
             self.connections = self.connections.iter().zip(nabla_w.clone()).map(
                 | (w,nw) |
                     (1f32-eta*(lambda/n))*w - ((eta / batch.len() as f32)) * nw
