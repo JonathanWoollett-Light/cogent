@@ -316,20 +316,21 @@ mod core {
 
             let target = DVector::from_vec(example.1.clone());
             let last_index = self.connections.len()-1; // = nabla_b.len()-1 = nabla_w.len()-1 = self.neurons.len()-2 = self.connections.len()-1
-            let mut delta:DVector<f32> = cross_entropy_delta(&self.neurons[last_index+1],&target);
+            let mut error:DVector<f32> = cross_entropy_delta(&self.neurons[last_index+1],&target);
 
-            nabla_b[last_index] = delta.clone();
-            nabla_w[last_index] = delta.clone() * self.neurons[last_index].transpose();
-
+            nabla_b[last_index] = error.clone();
+            nabla_w[last_index] = error.clone() * self.neurons[last_index].transpose();
+            // self.neurons.len()-2 -> 1 (inclusive)
+            // With input layer self.neurons.len()-1 is last nueron layer, but without self.neurons.len()-2 is last neuron layer
             for i in (1..self.neurons.len()-1).rev() {
                 // Calculates error
-                delta = sigmoid_prime_mapping(self,&zs[i-1]).component_mul(
-                    &(self.connections[i].transpose() * delta)
+                error = sigmoid_prime_mapping(self,&zs[i-1]).component_mul(
+                    &(self.connections[i].transpose() * error)
                 );
 
                 // Sets gradients
-                nabla_b[i-1] = delta.clone();
-                nabla_w[i-1] = delta.clone() * self.neurons[i-1].transpose();// TODO Look into using `delta.clone()` vs `&delta` here
+                nabla_b[i-1] = error.clone();
+                nabla_w[i-1] = error.clone() * self.neurons[i-1].transpose();// TODO Look into using `error.clone()` vs `&error` here
             }
             // Returns gradients
             return (nabla_w,nabla_b);
