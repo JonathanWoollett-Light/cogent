@@ -267,19 +267,12 @@ mod core {
             // Copies structure of self.neurons and self.connections with values of 0f32
             // TODO Look into a better way to setup 'bias_nabla' and 'weight_nabla'
             // TODO Better understand what 'nabla' means
-
-            // Clones `self.neurons` with every value set to `0f32`
-            // TODO Look into changing this to clone `self.biases` to make following line obselete.
-            let mut clone_holder_b:Vec<DVector<f32>> = self.neurons.clone().iter().map(|x| x.map(|_y| -> f32 { 0f32 }) ).collect();
-            clone_holder_b.remove(0);
-            // Clones, `self.connections` with every value set to `0f32`
-            let clone_holder_w:Vec<DMatrix<f32>> = self.connections.clone().iter().map(|x| x.map(|_y| -> f32 { 0f32 }) ).collect();
-            let mut nabla_b:Vec<DVector<f32>> = clone_holder_b.clone();
-            let mut nabla_w:Vec<DMatrix<f32>> = clone_holder_w.clone();
+            let mut nabla_b:Vec<DVector<f32>> = self.biases.clone().iter().map(|x| x.map(|_y| -> f32 { 0f32 }) ).collect();
+            let mut nabla_w:Vec<DMatrix<f32>> = self.connections.clone().iter().map(|x| x.map(|_y| -> f32 { 0f32 }) ).collect();
 
             for example in batch {
                 let (delta_nabla_w,delta_nabla_b):(Vec<DMatrix<f32>>,Vec<DVector<f32>>) =
-                    self.backpropagate(example,clone_holder_w.clone(),clone_holder_b.clone());
+                    self.backpropagate(example);
 
                 
                 nabla_w = nabla_w.iter().zip(delta_nabla_w).map(|(x,y)| x + y).collect();
@@ -296,15 +289,17 @@ mod core {
                     b - ((eta / batch.len() as f32)) * nb
             ).collect();
         }
-
+        
         // Runs backpropagation
         // Returns weight and bias gradients
-        fn backpropagate(&mut self, example:&(Vec<f32>,Vec<f32>), mut nabla_w:Vec<DMatrix<f32>>, mut nabla_b:Vec<DVector<f32>>) -> (Vec<DMatrix<f32>>,Vec<DVector<f32>>) {
+        // TODO Implement fully matrix based approach for batches (run all examples in batch at once).
+        //      This will likely require changing from using `nalgebra` to a library which supports n-dimensional arrays.
+        fn backpropagate(&mut self, example:&(Vec<f32>,Vec<f32>)) -> (Vec<DMatrix<f32>>,Vec<DVector<f32>>) {
             
             // Feeds forward
             // --------------
 
-            let mut zs = nabla_b.clone(); // Name more intuitively
+            let mut zs = self.biases.clone(); // Name more intuitively
             self.neurons[0] = DVector::from_vec(example.0.to_vec()); // TODO Do I need `to.vec()` here?
             for i in 0..self.connections.len() {
                 zs[i] = (&self.connections[i] * &self.neurons[i])+ &self.biases[i];
@@ -318,6 +313,11 @@ mod core {
             let last_index = self.connections.len()-1; // = nabla_b.len()-1 = nabla_w.len()-1 = self.neurons.len()-2 = self.connections.len()-1
             let mut error:DVector<f32> = cross_entropy_delta(&self.neurons[last_index+1],&target);
 
+            // Gradients of biases and weights.
+            let mut nabla_b = self.biases.clone();
+            let mut nabla_w = self.connections.clone();
+
+            // Sets gradients in output layer
             nabla_b[last_index] = error.clone();
             nabla_w[last_index] = error.clone() * self.neurons[last_index].transpose();
             // self.neurons.len()-2 -> 1 (inclusive)
