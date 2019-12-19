@@ -293,7 +293,8 @@ mod core {
         // Runs backpropagation
         // Returns weight and bias gradients
         // TODO Implement fully matrix based approach for batches (run all examples in batch at once).
-        //      This will likely require changing from using `nalgebra` to a library which supports n-dimensional arrays.
+        //  This will likely require changing from using `nalgebra` to a library which supports n-dimensional arrays.
+        //  This would be needed for gradients of weights for each example.
         fn backpropagate(&mut self, example:&(Vec<f32>,Vec<f32>)) -> (Vec<DMatrix<f32>>,Vec<DVector<f32>>) {
             
             // Feeds forward
@@ -321,7 +322,7 @@ mod core {
             nabla_b[last_index] = error.clone();
             nabla_w[last_index] = error.clone() * self.neurons[last_index].transpose();
             // self.neurons.len()-2 -> 1 (inclusive)
-            // With input layer self.neurons.len()-1 is last nueron layer, but without self.neurons.len()-2 is last neuron layer
+            // With input layer, self.neurons.len()-1 is last nueron layer, but without, self.neurons.len()-2 is last neuron layer
             for i in (1..self.neurons.len()-1).rev() {
                 // Calculates error
                 error = sigmoid_prime_mapping(self,&zs[i-1]).component_mul(
@@ -625,10 +626,12 @@ mod tests {
             //Evaluation
             let testing_data = get_mnist_dataset(true);
             let evaluation = neural_network.evaluate(&testing_data);
-            assert!(evaluation.1 >= required_accuracy(&testing_data));
 
             println!("train_digits_3: accuracy: {}",evaluation.1);
             println!();
+
+            assert!(evaluation.1 >= required_accuracy(&testing_data));
+
             total_accuracy += evaluation.1;
         }
         println!("train_digits_3: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
