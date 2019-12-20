@@ -8,11 +8,14 @@ mod core {
     //Defining euler's constant
     const E:f32 = 2.718281f32;
 
-    const DEFAULT_EVALUTATION_DATA:f32 = 0.1f32;//`(x * examples.len() as f32) as usize` of `testing_data` is split_off into `evaluation_data`
-    const DEFAULT_HALT_CONDITION:u64 = 180u64;//Duration::new(x,0). x seconds
-    const DEFAULT_BATCH_SIZE:f32 = 0.002f32;//(x * examples.len() as f32).ceil() as usize. batch_size = x% of training data
+    const DEFAULT_EVALUTATION_DATA:f32 = 0.1f32; //`(x * examples.len() as f32) as usize` of `testing_data` is split_off into `evaluation_data`
+    const DEFAULT_HALT_CONDITION:u64 = 180u64; // Duration::new(x,0). x seconds
+    const DEFAULT_BATCH_SIZE:f32 = 0.002f32; //(x * examples.len() as f32).ceil() as usize. batch_size = x% of training data
     const DEFAULT_LEARNING_RATE:f32 = 0.3f32;
-    const DEFAULT_LAMBDA:f32 = 0.1f32;//lambda = (x * examples.len() as f32). lambda = x% of training data. lambda = regularization parameter
+    const DEFAULT_LAMBDA:f32 = 0.1f32; // lambda = (x * examples.len() as f32). lambda = x% of training data. lambda = regularization parameter
+    const DEFAULT_EARLY_STOPPING:u64 = 60u64; // Duration::new(x,0). x seconds
+    const DEFAULT_LEARNING_RATE_DECAY:f32 = 0.5f32;
+    const DEFAULT_LEARNING_RATE_INTERVAL:u64 = 30u64; // Duration::new(x,0). x seconds
 
     pub enum EvaluationData {
         Scaler(usize),
@@ -40,6 +43,8 @@ mod core {
         lambda: f32, // Regularization parameter
         // Can stop after no cost improvement over a certain number of iterations, a certain duration, or not at all.
         early_stopping_condition: MeasuredCondition,
+        learning_rate_decay: f32,
+        learning_rate_interval: MeasuredCondition,
         neural_network: &'a mut NeuralNetwork
     }
 
@@ -76,6 +81,14 @@ mod core {
             self.early_stopping_condition = early_stopping_condition;
             return self;
         }
+        pub fn learning_rate_decay(&mut self, learning_rate_decay:f32) -> &mut Trainer<'a> {
+            self.learning_rate_decay = learning_rate_decay;
+            return self;
+        }
+        pub fn learning_rate_interval(&mut self, learning_rate_interval:MeasuredCondition) -> &mut Trainer<'a> {
+            self.learning_rate_interval = learning_rate_interval;
+            return self;
+        }
         pub fn go(&mut self) -> () {
             self.neural_network.train_details(
                 &mut self.training_data,
@@ -85,7 +98,9 @@ mod core {
                 self.batch_size,
                 self.learning_rate,
                 self.lambda,
-                self.early_stopping_condition
+                self.early_stopping_condition,
+                self.learning_rate_decay,
+                self.learning_rate_interval
             );
         }
     }
@@ -160,9 +175,11 @@ mod core {
             halt_condition: MeasuredCondition,
             log_interval: Option<MeasuredCondition>,
             batch_size: usize,
-            learning_rate: f32,
+            mut learning_rate: f32,
             lambda: f32,
-            early_stopping_n: MeasuredCondition
+            early_stopping_n: MeasuredCondition,
+            learning_rate_decay: f32,
+            learning_rate_interval: MeasuredCondition
         ) -> () {
 
             let mut rng = rand::thread_rng();
@@ -196,7 +213,6 @@ mod core {
                     self.update_batch(batch,learning_rate,lambda,training_data.len() as f32);
                 }
                 iterations_elapsed += 1;
-
                 evaluation = self.evaluate(evaluation_data);
 
                 if evaluation.1 > best_accuracy { 
@@ -219,6 +235,11 @@ mod core {
                 match early_stopping_n {
                     MeasuredCondition::Iteration(stopping_iteration) =>  if iterations_elapsed - best_accuracy_iteration == stopping_iteration { println!("---------------\nEarly stoppage!\n---------------"); break; },
                     MeasuredCondition::Duration(stopping_duration) => if best_accuracy_instant.elapsed() >= stopping_duration { println!("---------------\nEarly stoppage!\n---------------"); break; }
+                }
+
+                match learning_rate_interval {
+                    MeasuredCondition::Iteration(interval_iteration) =>  if iterations_elapsed - best_accuracy_iteration == interval_iteration { learning_rate *= learning_rate_decay },
+                    MeasuredCondition::Duration(interval_duration) => if best_accuracy_instant.elapsed() >= interval_duration { learning_rate *= learning_rate_decay }
                 }
             }
             let new_percent = (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32;
@@ -258,7 +279,9 @@ mod core {
                 batch_size: (DEFAULT_BATCH_SIZE * training_data.len() as f32).ceil() as usize,
                 learning_rate: DEFAULT_LEARNING_RATE,
                 lambda: DEFAULT_LAMBDA,
-                early_stopping_condition: MeasuredCondition::Iteration(10u32),
+                early_stopping_condition: MeasuredCondition::Duration(Duration::new(DEFAULT_EARLY_STOPPING,0)),
+                learning_rate_decay: DEFAULT_LEARNING_RATE_DECAY,
+                learning_rate_interval: MeasuredCondition::Duration(Duration::new(DEFAULT_LEARNING_RATE_INTERVAL,0)),
                 neural_network:self
             };
         }
@@ -541,6 +564,30 @@ mod tests {
         }
         println!("train_xor_1: average accuracy: {}",total_accuracy / (10 * TEST_RERUN_MULTIPLIER));
     }
+    #[test]
+    fn train_xor_2() {
+        let mut total_accuracy = 0u32;
+        for _ in 0..(10 * TEST_RERUN_MULTIPLIER) {
+            //Setup
+            let training_data = vec![
+                (vec![0f32,0f32],vec![0f32,1f32]),
+                (vec![1f32,0f32],vec![1f32,0f32]),
+                (vec![0f32,1f32],vec![1f32,0f32]),
+                (vec![1f32,1f32],vec![0f32,1f32])
+            ];
+            let testing_data = training_data.clone();
+            //Execution
+            let mut neural_network = NeuralNetwork::build(&training_data);
+            //Evaluation
+            let evaluation = neural_network.evaluate(&testing_data);
+            assert!(evaluation.1 >= required_accuracy(&testing_data));
+
+            println!("train_xor_1: accuracy: {}",evaluation.1);
+            println!();
+            total_accuracy += evaluation.1;
+        }
+        println!("train_xor_1: average accuracy: {}",total_accuracy / (10 * TEST_RERUN_MULTIPLIER));
+    }
 
     // Tests network to recognize handwritten digits of 28x28 pixels
     #[test]
@@ -591,32 +638,8 @@ mod tests {
         }
         println!("train_digits_1: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
     }
-    // #[test]
-    // fn train_digits_2() {
-    //     let mut total_accuracy = 0u32;
-    //     for _ in 0..TEST_RERUN_MULTIPLIER {
-    //         //Setup
-    //         let mut neural_network = crate::core::NeuralNetwork::new(&[784,200,100,50,10]);
-    //         let training_data = get_mnist_dataset(false);
-    //         //Execution
-    //         neural_network.train(&training_data)
-    //             .log_interval(crate::core::MeasuredCondition::Duration(Duration::new(10,0)))
-    //             .halt_condition(crate::core::MeasuredCondition::Duration(Duration::new(240,0)))
-    //             .learning_rate(0.1f32)
-    //             .go();
-    //         //Evaluation
-    //         let testing_data = get_mnist_dataset(true);
-    //         let evaluation = neural_network.evaluate(&testing_data);
-    //         assert!(evaluation.1 >= required_accuracy(&testing_data));
-
-    //         println!("train_digits_2: accuracy: {}",evaluation.1);
-    //         println!();
-    //         total_accuracy += evaluation.1;
-    //     }
-    //     println!("train_digits_2: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
-    // }
     #[test]
-    fn train_digits_3() {
+    fn train_digits_2() {
         let mut total_accuracy = 0u32;
         for _ in 0..TEST_RERUN_MULTIPLIER {
             //Setup
