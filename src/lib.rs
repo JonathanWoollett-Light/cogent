@@ -39,7 +39,7 @@ mod core {
         learning_rate: f32, // Reffered to as `ETA` in `NeuralNetwork`.
         lambda: f32, // Regularization parameter
         // Can stop after no cost improvement over a certain number of iterations, a certain duration, or not at all.
-        early_stopping_condition: Option<MeasuredCondition>,
+        early_stopping_condition: MeasuredCondition,
         neural_network: &'a mut NeuralNetwork
     }
 
@@ -73,7 +73,7 @@ mod core {
             return self;
         }
         pub fn early_stopping_condition(&mut self, early_stopping_condition:MeasuredCondition) -> &mut Trainer<'a> {
-            self.early_stopping_condition = Some(early_stopping_condition);
+            self.early_stopping_condition = early_stopping_condition;
             return self;
         }
         pub fn go(&mut self) -> () {
@@ -91,6 +91,7 @@ mod core {
     }
 
     // A simple stochastic/incremental descent neural network.
+    // Implementing cross-entropy cost function and L2 regularization.
     pub struct NeuralNetwork {
         neurons: Vec<DVector<f32>>,
         biases: Vec<DVector<f32>>,
@@ -161,7 +162,7 @@ mod core {
             batch_size: usize,
             learning_rate: f32,
             lambda: f32,
-            early_stopping_n: Option<MeasuredCondition>
+            early_stopping_n: MeasuredCondition
         ) -> () {
 
             let mut rng = rand::thread_rng();
@@ -216,9 +217,8 @@ mod core {
                 }
 
                 match early_stopping_n {
-                    Some(MeasuredCondition::Iteration(stopping_iteration)) =>  if iterations_elapsed - best_accuracy_iteration == stopping_iteration { println!("---------------\nEarly stoppage!\n---------------"); break; },
-                    Some(MeasuredCondition::Duration(stopping_duration)) => if best_accuracy_instant.elapsed() >= stopping_duration { println!("---------------\nEarly stoppage!\n---------------"); break; },
-                    _ => {},
+                    MeasuredCondition::Iteration(stopping_iteration) =>  if iterations_elapsed - best_accuracy_iteration == stopping_iteration { println!("---------------\nEarly stoppage!\n---------------"); break; },
+                    MeasuredCondition::Duration(stopping_duration) => if best_accuracy_instant.elapsed() >= stopping_duration { println!("---------------\nEarly stoppage!\n---------------"); break; }
                 }
             }
             let new_percent = (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32;
@@ -258,7 +258,7 @@ mod core {
                 batch_size: (DEFAULT_BATCH_SIZE * training_data.len() as f32).ceil() as usize,
                 learning_rate: DEFAULT_LEARNING_RATE,
                 lambda: DEFAULT_LAMBDA,
-                early_stopping_condition: None,
+                early_stopping_condition: MeasuredCondition::Iteration(10u32),
                 neural_network:self
             };
         }
