@@ -139,7 +139,7 @@ mod core {
         }
         // Constructs and trains network for given dataset
         pub fn build(training_data:&Vec<(Vec<f32>,Vec<f32>)>) -> NeuralNetwork {
-            let avg_size:usize = ((training_data[0].0.len() + training_data[0].1.len()) as f32 * 0.8f32) as usize;
+            let avg_size:usize = (((training_data[0].0.len() + training_data[0].1.len()) as f32 / 2f32) + 1f32) as usize;
             let layers:&[usize] = &[training_data[0].0.len(),avg_size,training_data[0].1.len()];
             let mut network = NeuralNetwork::new(layers);
 
@@ -194,7 +194,7 @@ mod core {
             let mut evaluation = self.evaluate(evaluation_data);
             
             if let Some(_) = log_interval {
-                println!("Iteration: {}, Time: {}s, Cost: {:.7}, Classified: {}/{} ({:.4}%)",iterations_elapsed,start_instant.elapsed().as_secs(),evaluation.0,evaluation.1,evaluation_data.len(), (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32);
+                println!("Iteration: {}, Time: {}, Cost: {:.7}, Classified: {}/{} ({:.4}%)",iterations_elapsed,start_instant.elapsed().as_secs(),evaluation.0,evaluation.1,evaluation_data.len(), (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32);
             }
 
             let starting_evaluation = evaluation;
@@ -614,11 +614,10 @@ mod tests {
             total_accuracy += evaluation.1;
         }
         println!("train_digits_1: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
-
-        assert!(false);
     }
     #[test]
     fn train_digits_2() {
+        // TODO IMPORTANT Why does each iteration take soo much longer than `train_digits_1`?
         let mut total_accuracy = 0u32;
         for _ in 0..TEST_RERUN_MULTIPLIER {
             //Setup
@@ -637,6 +636,35 @@ mod tests {
             total_accuracy += evaluation.1;
         }
         println!("train_digits_2: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+    }
+    #[test]
+    fn train_digits_3() {
+        let mut total_accuracy = 0u32;
+        for _ in 0..TEST_RERUN_MULTIPLIER {
+            //Setup
+            let mut neural_network = NeuralNetwork::new(&[784,398,10]);
+            let training_data = get_mnist_dataset(false);
+            let testing_data = get_mnist_dataset(true);
+            //Execution
+            neural_network.train(&training_data)
+                .halt_condition(MeasuredCondition::Iteration(30u32))
+                .log_interval(MeasuredCondition::Iteration(1u32))
+                .batch_size(10usize)
+                .learning_rate(0.5f32)
+                .evaluation_data(EvaluationData::Actual(testing_data.clone()))
+                .lambda(5f32)
+                .early_stopping_condition(MeasuredCondition::Iteration(10u32))
+                .go();
+            //Evaluation
+            
+            let evaluation = neural_network.evaluate(&testing_data);
+            assert!(evaluation.1 >= required_accuracy(&testing_data));
+
+            println!("train_digits_3: accuracy: {}",evaluation.1);
+            println!();
+            total_accuracy += evaluation.1;
+        }
+        println!("train_digits_3: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
     }
     fn get_mnist_dataset(testing:bool) -> Vec<(Vec<f32>,Vec<f32>)> {
                 
