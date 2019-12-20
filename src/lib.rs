@@ -517,7 +517,7 @@ mod tests {
             let testing_data = training_data.clone();
             //Execution
             neural_network.train(&training_data)
-                .halt_condition(crate::core::MeasuredCondition::Iteration(4000u32))
+                .halt_condition(crate::core::MeasuredCondition::Iteration(5000u32))
                 .batch_size(4usize)
                 .learning_rate(2f32)
                 .evaluation_data(crate::core::EvaluationData::Actual(testing_data.clone()))
@@ -548,7 +548,7 @@ mod tests {
             let testing_data = training_data.clone();
             //Execution
             neural_network.train(&training_data)
-                .halt_condition(crate::core::MeasuredCondition::Iteration(4000u32))
+                .halt_condition(crate::core::MeasuredCondition::Iteration(5000u32))
                 .batch_size(4usize)
                 .learning_rate(2f32)
                 .evaluation_data(crate::core::EvaluationData::Actual(testing_data.clone()))
