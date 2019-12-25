@@ -4,18 +4,23 @@ mod core {
     use nalgebra::{DMatrix, DVector};
     use rand::prelude::SliceRandom;
     use std::time::{Duration,Instant};
+    use std::thread;
+    extern crate scoped_threadpool;
+    use scoped_threadpool::Pool;
+
+    const THREAD_COUNT:usize = 12usize;
 
     //Defining euler's constant
     const E:f32 = 2.718281f32;
 
     const DEFAULT_EVALUTATION_DATA:f32 = 0.1f32; //`(x * examples.len() as f32) as usize` of `testing_data` is split_off into `evaluation_data`
-    const DEFAULT_HALT_CONDITION:u64 = 300u64; // Duration::new(x,0). x seconds
+    const DEFAULT_HALT_CONDITION:f32 = 0.00005f32; // Duration::new(examples[0].0.len()*examples.len()*x,0). (MNIST is approx 15 mins)
     const DEFAULT_BATCH_SIZE:f32 = 0.002f32; //(x * examples.len() as f32).ceil() as usize. batch_size = x% of training data
-    const DEFAULT_LEARNING_RATE:f32 = 0.3f32;
+    const DEFAULT_LEARNING_RATE:f32 = 0.01f32;
     const DEFAULT_LAMBDA:f32 = 0.1f32; // lambda = (x * examples.len() as f32). lambda = x% of training data. lambda = regularization parameter
-    const DEFAULT_EARLY_STOPPING:u64 = 60u64; // Duration::new(x,0). x seconds
+    const DEFAULT_EARLY_STOPPING:f32 = 0.000005f32; // Duration::new(examples[0].0.len()*examples.len()*x,0). (MNIST is approx 4 mins)
     const DEFAULT_LEARNING_RATE_DECAY:f32 = 0.5f32;
-    const DEFAULT_LEARNING_RATE_INTERVAL:u64 = 30u64; // Duration::new(x,0). x seconds
+    const DEFAULT_LEARNING_RATE_INTERVAL:f32 = 0.000001f32; // Duration::new(examples[0].0.len()*examples.len()*x,0). (MNIST is approx 48 secs)
 
     pub enum EvaluationData {
         Scaler(usize),
@@ -139,29 +144,25 @@ mod core {
         }
         // Constructs and trains network for given dataset
         pub fn build(training_data:&Vec<(Vec<f32>,Vec<f32>)>) -> NeuralNetwork {
+            println!("Building");
             let avg_size:usize = (((training_data[0].0.len() + training_data[0].1.len()) as f32 / 2f32) + 1f32) as usize;
             let layers:&[usize] = &[training_data[0].0.len(),avg_size,training_data[0].1.len()];
             let mut network = NeuralNetwork::new(layers);
-
-            network.train(training_data).log_interval(MeasuredCondition::Duration(Duration::new(10,0))).go();
-
+            network.train(training_data).log_interval(MeasuredCondition::Duration(Duration::new(600,0))).go();
+            println!("Built");
             return network;
         }
 
         // Feeds forward through network
-        pub fn run(&mut self, inputs:&[f32]) -> &DVector<f32> {
+        pub fn run(&self, inputs:&[f32]) -> DVector<f32> {
 
-            if inputs.len() != self.neurons[0].len() {
-                panic!("Wrong number of inputs: {} given, {} required",inputs.len(),self.neurons[0].len());
-            }
-
-            self.neurons[0] = DVector::from_vec(inputs.to_vec()); // TODO Look into improving this
+            let mut z = DVector::from_vec(inputs.to_vec());
             for i in 0..self.connections.len() {
-                let temp = (&self.connections[i] * &self.neurons[i]) + &self.biases[i];
-                self.neurons[i+1] = sigmoid_mapping(self,&temp);
+                let a = (&self.connections[i] * z) + &self.biases[i];
+                z = sigmoid_mapping(self,&a);
             }
 
-            return &self.neurons[self.neurons.len() - 1]; // TODO Look into removing this
+            return z; // TODO Look into removing this
 
             // Returns new vector with sigmoid function applied component-wise
             fn sigmoid_mapping(net:&NeuralNetwork,y: &DVector<f32>) -> DVector<f32>{
@@ -190,8 +191,10 @@ mod core {
             let mut best_accuracy_instant = Instant::now();// Instant of best accuracy
 
             let mut best_accuracy = 0u32;
-
+            println!("Evaluating");
+            let eval_start_instant = Instant::now();
             let mut evaluation = self.evaluate(evaluation_data);
+            println!("Evaluated: {:.2} mins",eval_start_instant.elapsed().as_secs() as f32 / 60f32);
             
             if let Some(_) = log_interval {
                 println!("Iteration: {}, Time: {}, Cost: {:.7}, Classified: {}/{} ({:.4}%)",iterations_elapsed,start_instant.elapsed().as_secs(),evaluation.0,evaluation.1,evaluation_data.len(), (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32);
@@ -206,11 +209,19 @@ mod core {
                     MeasuredCondition::Duration(duration) => if start_instant.elapsed() >= duration { break; },
                 }
 
+                println!("Shuffling");
                 training_data.shuffle(&mut rng);
+                println!("Shuffled");
                 let batches = get_batches(training_data,batch_size);
 
+                //println!("Batch coverage");
+                let mut percentage:f32 = 0f32;
+                let percent_change:f32 = training_data.len() as f32 / batch_size as f32;
                 for batch in batches {
+                    println!("{:.2}%",percentage);
                     self.update_batch(batch,learning_rate,lambda,training_data.len() as f32);
+                    percentage += percent_change;
+                    
                 }
                 iterations_elapsed += 1;
                 evaluation = self.evaluate(evaluation_data);
@@ -254,34 +265,49 @@ mod core {
 
             fn get_batches(examples:&[(Vec<f32>,Vec<f32>)], batch_size: usize) -> Vec<&[(Vec<f32>,Vec<f32>)]> {
                 let mut batches = Vec::new(); // TODO Look into if 'Vec::with_capacity(ceil(examples.len() / batch_size))' is more efficient
-
+                
                 let mut lower_bound = 0usize;
                 let mut upper_bound = batch_size;
+
+                println!("Batch creation");
+
                 while upper_bound < examples.len() {
                     batches.push(&examples[lower_bound..upper_bound]);
                     lower_bound = upper_bound;
                     // TODO Improve this to remove last unnecessary addition to 'upper_bound'
                     upper_bound += batch_size;
+
+                    //println!("{}",batches.len() as f32 * batch_size as f32 / examples.len() as f32);
                 }
                 // Accounts for last batch possibly being under 'batch_size'
                 batches.push(&examples[lower_bound..examples.len()]);
+
+                println!("Batches created");
                 batches
             }
         }
         pub fn train(&mut self,training_data:&Vec<(Vec<f32>,Vec<f32>)>) -> Trainer {
+            let mut rng = rand::thread_rng();
             let mut temp_training_data = training_data.clone();
+            temp_training_data.shuffle(&mut rng);
             let temp_evaluation_data = temp_training_data.split_off(training_data.len() - (training_data.len() as f32 * DEFAULT_EVALUTATION_DATA) as usize);
+
+            let multiplier:f32 = training_data[0].0.len() as f32 * training_data.len() as f32;
+            let halt_condition = Duration::new((multiplier * DEFAULT_HALT_CONDITION) as u64,0);
+            let early_stopping_condition = Duration::new((multiplier * DEFAULT_EARLY_STOPPING) as u64,0);
+            let learning_rate_interval = Duration::new((multiplier * DEFAULT_LEARNING_RATE_INTERVAL) as u64,0);
+            
             return Trainer {
                 training_data: temp_training_data,
                 evaluation_data: temp_evaluation_data,
-                halt_condition: MeasuredCondition::Duration(Duration::new(DEFAULT_HALT_CONDITION,0)),
+                halt_condition: MeasuredCondition::Duration(halt_condition),
                 log_interval: None,
                 batch_size: (DEFAULT_BATCH_SIZE * training_data.len() as f32).ceil() as usize,
                 learning_rate: DEFAULT_LEARNING_RATE,
                 lambda: DEFAULT_LAMBDA,
-                early_stopping_condition: MeasuredCondition::Duration(Duration::new(DEFAULT_EARLY_STOPPING,0)),
+                early_stopping_condition: MeasuredCondition::Duration(early_stopping_condition),
                 learning_rate_decay: DEFAULT_LEARNING_RATE_DECAY,
-                learning_rate_interval: MeasuredCondition::Duration(Duration::new(DEFAULT_LEARNING_RATE_INTERVAL,0)),
+                learning_rate_interval: MeasuredCondition::Duration(learning_rate_interval),
                 neural_network:self
             };
         }
@@ -372,18 +398,37 @@ mod core {
         }
 
         // Returns tuple (average cost, number of examples correctly identified)
-        pub fn evaluate(&mut self, test_data:&[(Vec<f32>,Vec<f32>)]) -> (f32,u32) {
+        pub fn evaluate(&self, test_data:&[(Vec<f32>,Vec<f32>)]) -> (f32,u32) {
             let mut correctly_classified = 0u32;
             let mut return_cost = 0f32;
-            for example in test_data {
-                let out = self.run(&example.0);
-                let expected = DVector::from_vec(example.1.clone());
-                return_cost += linear_cost(out,&expected);// Adjust this to what ever cost function you would prefer to see
             
-                if get_max_index(out) == get_max_index(&expected) {
-                    correctly_classified += 1u32;
+            let mut chunks:Vec<_> = test_data.chunks(test_data.len() / THREAD_COUNT).collect(); // Specify type further
+            let mut pool = Pool::new(chunks.len() as u32);
+            pool.scoped(|scope| {
+                // Create references to each element in the vector ...
+                for chunk in chunks {
+                    // ... and add 1 to it in a seperate thread
+                    scope.execute(move || {
+                        //let mut last_logged = Instant::now();
+                        for i in 0..chunk.len() {
+                            let example = &chunk[i];
+                            let out = self.run(&example.0);
+                            let expected = DVector::from_vec(example.1.clone());
+                            return_cost += linear_cost(&out,&expected);// Adjust this to what ever cost function you would prefer to see
+                            
+                            if get_max_index(&out) == get_max_index(&expected) {
+                                correctly_classified += 1u32;
+                            }
+            
+                            // if last_logged.elapsed().as_secs() > 10 {
+                            //     println!("thread: {} {:.4}% ({}/{})",index,i as f32 / chunk.len() as f32,i,chunk.len());
+                            //     last_logged = Instant::now();
+                            // }
+                        }
+                    });
                 }
-            }
+            });
+            
             return (return_cost / test_data.len() as f32, correctly_classified);
 
             // Returns index of max value
@@ -422,6 +467,27 @@ mod core {
             }
         }
         
+        // TODO Lot of stuff could be done to improve this function
+        // Gets average output for every input
+        pub fn evaluate_outputs(&mut self, test_data:&[(Vec<f32>,Vec<f32>)]) -> DMatrix<f32> {
+            let input_len:usize = test_data[0].0.len();
+            let output_len:usize = test_data[0].1.len();
+
+            let mut similarities: Vec<DVector<f32>> = vec!(DVector::repeat(output_len,0f32);input_len);
+            let mut count:DVector<f32> = DVector::repeat(input_len,0f32);
+
+            for example in test_data {
+                let index = example.0.iter().position(|&x|x==1f32).unwrap();
+                similarities[index] += self.run(&example.0);
+                count[index] += 1f32;
+            }
+            // TODO Look at turning this loop into a mapping
+            for i in 0..similarities.len() {
+                similarities[i] = similarities[i].map(|x| -> f32 { x / count[i] }); // TODO Do I need `similarities[i] = ` ?
+            }
+            return DMatrix::from_columns(&similarities);
+        }
+        
         fn sigmoid(&self,y: f32) -> f32 {
             1f32 / (1f32 + (-y).exp())
         }
@@ -437,7 +503,8 @@ mod tests {
     extern crate nalgebra;
     use std::fs::File;
     use std::io::{Read};
-    use std::time::Duration;
+    use std::time::{Instant,Duration};
+    use std::process::{Command, Stdio};
     use crate::core::{EvaluationData,MeasuredCondition,NeuralNetwork};
 
     // TODO Figure out better name for this
@@ -448,277 +515,330 @@ mod tests {
         ((test_data.len() as f32) * TESTING_MIN_ACCURACY).ceil() as u32
     }
 
-    #[test]
-    fn new() {
-        crate::core::NeuralNetwork::new(&[2,3,1]);
-    }
-    #[test]
-    #[should_panic(expected="Requires >1 layers")]
-    fn new_few_layers() {
-        crate::core::NeuralNetwork::new(&[2]);
-    }
-    #[test]
-    #[should_panic(expected="All layer sizes must be >0")]
-    fn new_small_layers_0() {
-        crate::core::NeuralNetwork::new(&[0,3,1]);
-    }
-    #[test]
-    #[should_panic(expected="All layer sizes must be >0")]
-    fn new_small_layers_1() {
-        crate::core::NeuralNetwork::new(&[2,0,1]);
-    }
-    #[test]
-    #[should_panic(expected="All layer sizes must be >0")]
-    fn new_small_layers_2() {
-        crate::core::NeuralNetwork::new(&[2,3,0]);
-    }
+    // #[test]
+    // fn new() {
+    //     crate::core::NeuralNetwork::new(&[2,3,1]);
+    // }
+    // #[test]
+    // #[should_panic(expected="Requires >1 layers")]
+    // fn new_few_layers() {
+    //     crate::core::NeuralNetwork::new(&[2]);
+    // }
+    // #[test]
+    // #[should_panic(expected="All layer sizes must be >0")]
+    // fn new_small_layers_0() {
+    //     crate::core::NeuralNetwork::new(&[0,3,1]);
+    // }
+    // #[test]
+    // #[should_panic(expected="All layer sizes must be >0")]
+    // fn new_small_layers_1() {
+    //     crate::core::NeuralNetwork::new(&[2,0,1]);
+    // }
+    // #[test]
+    // #[should_panic(expected="All layer sizes must be >0")]
+    // fn new_small_layers_2() {
+    //     crate::core::NeuralNetwork::new(&[2,3,0]);
+    // }
 
-    #[test]
-    fn run_0() {
-        let mut neural_network = crate::core::NeuralNetwork::new(&[1,1]);
-        assert_eq!(neural_network.run(&vec![1f32]).len(),1usize);
-    }
-    #[test]
-    fn run_1() {
-        let mut neural_network = crate::core::NeuralNetwork::new(&[2,3]);
-        assert_eq!(neural_network.run(&vec![1f32,0f32]).len(),3usize);
-    }
-    #[test]
-    fn run_2() {
-        let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,1]);
-        assert_eq!(neural_network.run(&vec![1f32,0f32]).len(),1usize);
-    }
-    #[test]
-    #[should_panic(expected="Wrong number of inputs: 1 given, 2 required")]
-    fn run_inputs_wrong_0() {
-        let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,1]);
-        neural_network.run(&vec![1f32]);
-    }
-    #[test]
-    #[should_panic(expected="Wrong number of inputs: 3 given, 2 required")]
-    fn run_inputs_wrong_1() {
-        let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,1]);
-        neural_network.run(&vec![1f32,1f32,0f32]);
-    }
+    // #[test]
+    // fn run_0() {
+    //     let mut neural_network = crate::core::NeuralNetwork::new(&[1,1]);
+    //     assert_eq!(neural_network.run(&vec![1f32]).len(),1usize);
+    // }
+    // #[test]
+    // fn run_1() {
+    //     let mut neural_network = crate::core::NeuralNetwork::new(&[2,3]);
+    //     assert_eq!(neural_network.run(&vec![1f32,0f32]).len(),3usize);
+    // }
+    // #[test]
+    // fn run_2() {
+    //     let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,1]);
+    //     assert_eq!(neural_network.run(&vec![1f32,0f32]).len(),1usize);
+    // }
+    // #[test]
+    // #[should_panic(expected="Wrong number of inputs: 1 given, 2 required")]
+    // fn run_inputs_wrong_0() {
+    //     let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,1]);
+    //     neural_network.run(&vec![1f32]);
+    // }
+    // #[test]
+    // #[should_panic(expected="Wrong number of inputs: 3 given, 2 required")]
+    // fn run_inputs_wrong_1() {
+    //     let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,1]);
+    //     neural_network.run(&vec![1f32,1f32,0f32]);
+    // }
 
-    // Tests network to learn an XOR gate.
-    #[test]
-    fn train_xor_0() {
-        let mut total_accuracy = 0u32;
-        for _ in 0..(10 * TEST_RERUN_MULTIPLIER) {
-            //Setup
-            let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,2]);
-            let training_data = vec![
-                (vec![0f32,0f32],vec![0f32,1f32]),
-                (vec![1f32,0f32],vec![1f32,0f32]),
-                (vec![0f32,1f32],vec![1f32,0f32]),
-                (vec![1f32,1f32],vec![0f32,1f32])
-            ];
-            let testing_data = training_data.clone();
-            //Execution
-            neural_network.train(&training_data)
-                .halt_condition(crate::core::MeasuredCondition::Iteration(5000u32))
-                .batch_size(4usize)
-                .learning_rate(2f32)
-                .evaluation_data(crate::core::EvaluationData::Actual(testing_data.clone()))
-                .lambda(0f32)
-                .go();
-            //Evaluation
-            let evaluation = neural_network.evaluate(&testing_data);
-            assert!(evaluation.1 >= required_accuracy(&testing_data));
+    // // Tests network to learn an XOR gate.
+    // #[test]
+    // fn train_xor_0() {
+    //     let mut total_accuracy = 0u32;
+    //     for _ in 0..(10 * TEST_RERUN_MULTIPLIER) {
+    //         //Setup
+    //         let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,2]);
+    //         let training_data = vec![
+    //             (vec![0f32,0f32],vec![0f32,1f32]),
+    //             (vec![1f32,0f32],vec![1f32,0f32]),
+    //             (vec![0f32,1f32],vec![1f32,0f32]),
+    //             (vec![1f32,1f32],vec![0f32,1f32])
+    //         ];
+    //         let testing_data = training_data.clone();
+    //         //Execution
+    //         neural_network.train(&training_data)
+    //             .halt_condition(crate::core::MeasuredCondition::Iteration(5000u32))
+    //             .batch_size(4usize)
+    //             .learning_rate(2f32)
+    //             .evaluation_data(crate::core::EvaluationData::Actual(testing_data.clone()))
+    //             .lambda(0f32)
+    //             .go();
+    //         //Evaluation
+    //         let evaluation = neural_network.evaluate(&testing_data);
+    //         assert!(evaluation.1 >= required_accuracy(&testing_data));
 
-            println!("train_xor_0: accuracy: {}",evaluation.1);
-            println!();
-            total_accuracy += evaluation.1;
-        }
-        println!("train_xor_0: average accuracy: {}",total_accuracy / (10 * TEST_RERUN_MULTIPLIER));
-    }
-    #[test]
-    fn train_xor_1() {
-        let mut total_accuracy = 0u32;
-        for _ in 0..(10 * TEST_RERUN_MULTIPLIER) {
-            //Setup
-            let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,4,2]);
-            let training_data = vec![
-                (vec![0f32,0f32],vec![0f32,1f32]),
-                (vec![1f32,0f32],vec![1f32,0f32]),
-                (vec![0f32,1f32],vec![1f32,0f32]),
-                (vec![1f32,1f32],vec![0f32,1f32])
-            ];
-            let testing_data = training_data.clone();
-            //Execution
-            neural_network.train(&training_data)
-                .halt_condition(crate::core::MeasuredCondition::Iteration(5000u32))
-                .batch_size(4usize)
-                .learning_rate(2f32)
-                .evaluation_data(crate::core::EvaluationData::Actual(testing_data.clone()))
-                .lambda(0f32)
-                .go();
-            //Evaluation
-            let evaluation = neural_network.evaluate(&testing_data);
-            assert!(evaluation.1 >= required_accuracy(&testing_data));
+    //         println!("train_xor_0: accuracy: {}",evaluation.1);
+    //         println!();
+    //         total_accuracy += evaluation.1;
+    //     }
+    //     println!("train_xor_0: average accuracy: {}",total_accuracy / (10 * TEST_RERUN_MULTIPLIER));
+    // }
+    // #[test]
+    // fn train_xor_1() {
+    //     let mut total_accuracy = 0u32;
+    //     for _ in 0..(10 * TEST_RERUN_MULTIPLIER) {
+    //         //Setup
+    //         let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,4,2]);
+    //         let training_data = vec![
+    //             (vec![0f32,0f32],vec![0f32,1f32]),
+    //             (vec![1f32,0f32],vec![1f32,0f32]),
+    //             (vec![0f32,1f32],vec![1f32,0f32]),
+    //             (vec![1f32,1f32],vec![0f32,1f32])
+    //         ];
+    //         let testing_data = training_data.clone();
+    //         //Execution
+    //         neural_network.train(&training_data)
+    //             .halt_condition(crate::core::MeasuredCondition::Iteration(5000u32))
+    //             .batch_size(4usize)
+    //             .learning_rate(2f32)
+    //             .evaluation_data(crate::core::EvaluationData::Actual(testing_data.clone()))
+    //             .lambda(0f32)
+    //             .go();
+    //         //Evaluation
+    //         let evaluation = neural_network.evaluate(&testing_data);
+    //         assert!(evaluation.1 >= required_accuracy(&testing_data));
 
-            println!("train_xor_1: accuracy: {}",evaluation.1);
-            println!();
-            total_accuracy += evaluation.1;
-        }
-        println!("train_xor_1: average accuracy: {}",total_accuracy / (10 * TEST_RERUN_MULTIPLIER));
-    }
+    //         println!("train_xor_1: accuracy: {}",evaluation.1);
+    //         println!();
+    //         total_accuracy += evaluation.1;
+    //     }
+    //     println!("train_xor_1: average accuracy: {}",total_accuracy / (10 * TEST_RERUN_MULTIPLIER));
+    // }
 
-    // Tests network to recognize handwritten digits of 28x28 pixels
-    #[test]
-    fn train_digits_0() {
-        let mut total_accuracy = 0u32;
-        for _ in 0..TEST_RERUN_MULTIPLIER {
-            //Setup
-            let mut neural_network = NeuralNetwork::new(&[784,100,10]);
-            let training_data = get_mnist_dataset(false);
-            //Execution
-            neural_network.train(&training_data).log_interval(MeasuredCondition::Duration(Duration::new(10,0))).go();
-            //Evaluation
-            let testing_data = get_mnist_dataset(true);
-            let evaluation = neural_network.evaluate(&testing_data);
-            assert!(evaluation.1 >= required_accuracy(&testing_data));
+    // // Tests network to recognize handwritten digits of 28x28 pixels
+    // #[test]
+    // fn train_digits_0() {
+    //     let mut total_accuracy = 0u32;
+    //     for _ in 0..TEST_RERUN_MULTIPLIER {
+    //         //Setup
+    //         let mut neural_network = NeuralNetwork::new(&[784,100,10]);
+    //         let training_data = get_mnist_dataset(false);
+    //         //Execution
+    //         neural_network.train(&training_data).log_interval(MeasuredCondition::Duration(Duration::new(10,0))).go();
+    //         //Evaluation
+    //         let testing_data = get_mnist_dataset(true);
+    //         let evaluation = neural_network.evaluate(&testing_data);
+    //         assert!(evaluation.1 >= required_accuracy(&testing_data));
 
-            println!("train_digits_0: accuracy: {}",evaluation.1);
-            println!();
-            total_accuracy += evaluation.1;
-        }
-        println!("train_digits_0: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
-    }
-    #[test]
-    fn train_digits_1() {
-        let mut total_accuracy = 0u32;
-        for _ in 0..TEST_RERUN_MULTIPLIER {
-            //Setup
-            let mut neural_network = NeuralNetwork::new(&[784,100,10]);
-            let training_data = get_mnist_dataset(false);
-            let testing_data = get_mnist_dataset(true);
-            //Execution
-            neural_network.train(&training_data)
-                .halt_condition(MeasuredCondition::Iteration(30u32))
-                .log_interval(MeasuredCondition::Iteration(1u32))
-                .batch_size(10usize)
-                .learning_rate(0.5f32)
-                .evaluation_data(EvaluationData::Actual(testing_data.clone()))
-                .lambda(5f32)
-                .early_stopping_condition(MeasuredCondition::Iteration(10u32))
-                .go();
-            //Evaluation
+    //         println!("train_digits_0: accuracy: {}",evaluation.1);
+    //         println!();
+    //         total_accuracy += evaluation.1;
+    //     }
+    //     println!("train_digits_0: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+    // }
+    // #[test]
+    // fn train_digits_1() {
+    //     let mut total_accuracy = 0u32;
+    //     for _ in 0..TEST_RERUN_MULTIPLIER {
+    //         //Setup
+    //         let mut neural_network = NeuralNetwork::new(&[784,100,10]);
+    //         let training_data = get_mnist_dataset(false);
+    //         let testing_data = get_mnist_dataset(true);
+    //         //Execution
+    //         neural_network.train(&training_data)
+    //             .halt_condition(MeasuredCondition::Iteration(30u32))
+    //             .log_interval(MeasuredCondition::Iteration(1u32))
+    //             .batch_size(10usize)
+    //             .learning_rate(0.5f32)
+    //             .evaluation_data(EvaluationData::Actual(testing_data.clone()))
+    //             .lambda(5f32)
+    //             .early_stopping_condition(MeasuredCondition::Iteration(10u32))
+    //             .go();
+    //         //Evaluation
             
-            let evaluation = neural_network.evaluate(&testing_data);
-            assert!(evaluation.1 >= required_accuracy(&testing_data));
+    //         let evaluation = neural_network.evaluate(&testing_data);
+    //         assert!(evaluation.1 >= required_accuracy(&testing_data));
 
-            println!("train_digits_1: accuracy: {}",evaluation.1);
-            println!();
-            total_accuracy += evaluation.1;
-        }
-        println!("train_digits_1: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
-    }
+    //         println!("train_digits_1: accuracy: {}",evaluation.1);
+    //         println!();
+    //         total_accuracy += evaluation.1;
+    //     }
+    //     println!("train_digits_1: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+    // }
+    // #[test]
+    // fn train_digits_2() {
+    //     // TODO IMPORTANT Why does each iteration take soo much longer than `train_digits_1`?
+    //     let mut total_accuracy = 0u32;
+    //     for _ in 0..TEST_RERUN_MULTIPLIER {
+    //         //Setup
+    //         let training_data = get_mnist_dataset(false);
+    //         //Execution
+    //         let mut neural_network = NeuralNetwork::build(&training_data);
+    //         //Evaluation
+    //         let testing_data = get_mnist_dataset(true);
+    //         let evaluation = neural_network.evaluate(&testing_data);
+
+    //         println!("train_digits_2: accuracy: {}",evaluation.1);
+    //         println!();
+
+    //         assert!(evaluation.1 >= required_accuracy(&testing_data));
+
+    //         total_accuracy += evaluation.1;
+    //     }
+    //     println!("train_digits_2: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+    // }
+    // #[test]
+    // fn train_digits_3() {
+    //     let mut total_accuracy = 0u32;
+    //     for _ in 0..TEST_RERUN_MULTIPLIER {
+    //         //Setup
+    //         let mut neural_network = NeuralNetwork::new(&[784,398,10]);
+    //         let training_data = get_mnist_dataset(false);
+    //         let testing_data = get_mnist_dataset(true);
+    //         //Execution
+    //         neural_network.train(&training_data)
+    //             .halt_condition(MeasuredCondition::Iteration(30u32))
+    //             .log_interval(MeasuredCondition::Iteration(1u32))
+    //             .batch_size(10usize)
+    //             .learning_rate(0.5f32)
+    //             .evaluation_data(EvaluationData::Actual(testing_data.clone()))
+    //             .lambda(5f32)
+    //             .early_stopping_condition(MeasuredCondition::Iteration(10u32))
+    //             .go();
+    //         //Evaluation
+            
+    //         let evaluation = neural_network.evaluate(&testing_data);
+    //         assert!(evaluation.1 >= required_accuracy(&testing_data));
+
+    //         println!("train_digits_3: accuracy: {}",evaluation.1);
+    //         println!();
+    //         total_accuracy += evaluation.1;
+    //     }
+    //     println!("train_digits_3: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+    // }
+    // fn get_mnist_dataset(testing:bool) -> Vec<(Vec<f32>,Vec<f32>)> {
+                
+    //     let (images,labels) = if testing {
+    //         (get_images("data/MNIST/t10k-images.idx3-ubyte"),get_labels("data/MNIST/t10k-labels.idx1-ubyte"))
+    //     }
+    //     else {
+    //         (get_images("data/MNIST/train-images.idx3-ubyte"),get_labels("data/MNIST/train-labels.idx1-ubyte"))
+    //     };
+
+    //     let iterator = images.iter().zip(labels.iter());
+    //     let mut examples = Vec::new();
+    //     let set_output_layer = |label:u8| -> Vec<f32> { let mut temp = vec!(0f32;10); temp[label as usize] = 1f32; temp};
+    //     for (image,label) in iterator {
+    //         examples.push(
+    //             (
+    //                 image.clone(),
+    //                 set_output_layer(*label)
+    //             )
+    //         );
+    //     }
+    //     return examples;
+
+    //     fn get_labels(path:&str) -> Vec<u8> {
+    //         let mut file = File::open(path).unwrap();
+    //         let mut label_buffer = Vec::new();
+    //         file.read_to_end(&mut label_buffer).expect("Couldn't read MNIST labels");
+
+    //         // TODO Look into better ways to remove the 1st 7 elements
+    //         return label_buffer.drain(8..).collect();
+    //     }
+
+    //     fn get_images(path:&str) -> Vec<Vec<f32>> {
+    //         let mut file = File::open(path).unwrap();
+    //         let mut image_buffer_u8 = Vec::new();
+    //         file.read_to_end(&mut image_buffer_u8).expect("Couldn't read MNIST images");
+    //         // Removes 1st 16 bytes of meta data
+    //         image_buffer_u8 = image_buffer_u8.drain(16..).collect();
+
+    //         // Converts from u8 to f32
+    //         let mut image_buffer_f32 = Vec::new();
+    //         for pixel in image_buffer_u8 {
+    //             image_buffer_f32.push(pixel as f32 / 255f32);
+    //         }
+
+    //         // Splits buffer into vectors for each image
+    //         let mut images_vector = Vec::new();
+    //         for i in (0..image_buffer_f32.len() / (28 * 28)).rev() {
+    //             images_vector.push(image_buffer_f32.split_off(i * 28 * 28));
+    //         }
+    //         // Does splitting in reverse order due to how '.split_off' works, so reverses back to original order.
+    //         images_vector.reverse();
+    //         return images_vector;
+    //     }
+    // }
+    
     #[test]
-    fn train_digits_2() {
-        // TODO IMPORTANT Why does each iteration take soo much longer than `train_digits_1`?
+    fn train_full() {
+        println!("test start");
         let mut total_accuracy = 0u32;
         for _ in 0..TEST_RERUN_MULTIPLIER {
             //Setup
-            let training_data = get_mnist_dataset(false);
+            println!("Loading dataset");
+            let training_data = get_combined("/home/jonathan/Projects/dataset_constructor/combined_dataset");
+            println!("Loaded dataset");
             //Execution
             let mut neural_network = NeuralNetwork::build(&training_data);
             //Evaluation
-            let testing_data = get_mnist_dataset(true);
-            let evaluation = neural_network.evaluate(&testing_data);
+            //let evaluation = neural_network.evaluate(&testing_data);
 
-            println!("train_digits_2: accuracy: {}",evaluation.1);
-            println!();
-
-            assert!(evaluation.1 >= required_accuracy(&testing_data));
-
-            total_accuracy += evaluation.1;
+            //assert!(evaluation.1 >= required_accuracy(&testing_data));
+            // println!("train_full: accuracy: {}",evaluation.1);
+            // println!();
+            // total_accuracy += evaluation.1;
         }
-        println!("train_digits_2: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+        println!("train_full: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+        assert!(false);
     }
-    #[test]
-    fn train_digits_3() {
-        let mut total_accuracy = 0u32;
-        for _ in 0..TEST_RERUN_MULTIPLIER {
-            //Setup
-            let mut neural_network = NeuralNetwork::new(&[784,398,10]);
-            let training_data = get_mnist_dataset(false);
-            let testing_data = get_mnist_dataset(true);
-            //Execution
-            neural_network.train(&training_data)
-                .halt_condition(MeasuredCondition::Iteration(30u32))
-                .log_interval(MeasuredCondition::Iteration(1u32))
-                .batch_size(10usize)
-                .learning_rate(0.5f32)
-                .evaluation_data(EvaluationData::Actual(testing_data.clone()))
-                .lambda(5f32)
-                .early_stopping_condition(MeasuredCondition::Iteration(10u32))
-                .go();
-            //Evaluation
+    fn get_combined(path:&str) -> Vec<(Vec<f32>,Vec<f32>)> {
+        let mut file = File::open(path).unwrap();
+        let mut combined_buffer = Vec::new();
+        file.read_to_end(&mut combined_buffer).expect("Couldn't read combined");
+
+        let mut combined_vec = Vec::new();
+        let multiplier:usize = (45*45)+1;
+        let length = combined_buffer.len() / ((45*45)+1);
+        println!("length: {}",length);
+        let mut last_logged = Instant::now();
+        for i in (0..length).rev() {
+            let image_index = i * multiplier;
+            let label_index = image_index + multiplier -1;
+
+            let label:u8 = combined_buffer.split_off(label_index)[0]; // Array is only 1 element regardless
+            let mut label_vec:Vec<f32> = vec!(0f32;95usize);
+            label_vec[label as usize] = 1f32;
+
+            let image:Vec<u8> = combined_buffer.split_off(image_index);
+            let image_f32 = image.iter().map(|&x| x as f32).collect();
+
+            combined_vec.push((image_f32,label_vec));
+
             
-            let evaluation = neural_network.evaluate(&testing_data);
-            assert!(evaluation.1 >= required_accuracy(&testing_data));
-
-            println!("train_digits_3: accuracy: {}",evaluation.1);
-            println!();
-            total_accuracy += evaluation.1;
-        }
-        println!("train_digits_3: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
-    }
-    fn get_mnist_dataset(testing:bool) -> Vec<(Vec<f32>,Vec<f32>)> {
-                
-        let (images,labels) = if testing {
-            (get_images("data/MNIST/t10k-images.idx3-ubyte"),get_labels("data/MNIST/t10k-labels.idx1-ubyte"))
-        }
-        else {
-            (get_images("data/MNIST/train-images.idx3-ubyte"),get_labels("data/MNIST/train-labels.idx1-ubyte"))
-        };
-
-        let iterator = images.iter().zip(labels.iter());
-        let mut examples = Vec::new();
-        let set_output_layer = |label:u8| -> Vec<f32> { let mut temp = vec!(0f32;10); temp[label as usize] = 1f32; temp};
-        for (image,label) in iterator {
-            examples.push(
-                (
-                    image.clone(),
-                    set_output_layer(*label)
-                )
-            );
-        }
-        return examples;
-
-        fn get_labels(path:&str) -> Vec<u8> {
-            let mut file = File::open(path).unwrap();
-            let mut label_buffer = Vec::new();
-            file.read_to_end(&mut label_buffer).expect("Couldn't read MNIST labels");
-
-            // TODO Look into better ways to remove the 1st 7 elements
-            return label_buffer.drain(8..).collect();
-        }
-
-        fn get_images(path:&str) -> Vec<Vec<f32>> {
-            let mut file = File::open(path).unwrap();
-            let mut image_buffer_u8 = Vec::new();
-            file.read_to_end(&mut image_buffer_u8).expect("Couldn't read MNIST images");
-            // Removes 1st 16 bytes of meta data
-            image_buffer_u8 = image_buffer_u8.drain(16..).collect();
-
-            // Converts from u8 to f32
-            let mut image_buffer_f32 = Vec::new();
-            for pixel in image_buffer_u8 {
-                image_buffer_f32.push(pixel as f32 / 255f32);
+            if last_logged.elapsed().as_secs() > 5 {
+                println!("{:.2}%",((length-i) as f32 / length as f32 *100f32));
+                last_logged = Instant::now();
             }
-
-            // Splits buffer into vectors for each image
-            let mut images_vector = Vec::new();
-            for i in (0..image_buffer_f32.len() / (28 * 28)).rev() {
-                images_vector.push(image_buffer_f32.split_off(i * 28 * 28));
-            }
-            // Does splitting in reverse order due to how '.split_off' works, so reverses back to original order.
-            images_vector.reverse();
-            return images_vector;
         }
+        return combined_vec;
     }
-    
 }

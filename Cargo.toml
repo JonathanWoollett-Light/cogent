@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 nalgebra = "0.18"
 rand = "0.7"
+scoped_threadpool = "0.1.*"
