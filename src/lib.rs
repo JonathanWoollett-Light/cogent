@@ -4,7 +4,6 @@ mod core {
     use nalgebra::{DMatrix, DVector};
     use rand::prelude::SliceRandom;
     use std::time::{Duration,Instant};
-    use std::thread;
     use itertools::izip;
     extern crate scoped_threadpool;
     use scoped_threadpool::Pool;
@@ -218,30 +217,22 @@ mod core {
                 }
 
                 //println!("Setting batches");
-                let batch_start_instant = Instant::now();
+                //let batch_start_instant = Instant::now();
                 training_data.shuffle(&mut rng);
                 let batches = get_batches(training_data,batch_size);
                 //println!("Set batches: {:.2} millis",batch_start_instant.elapsed().as_millis());
 
                 //println!("Backpropagating");
-                let backprop_start_instant = Instant::now();
-                let mut percentage:f32 = 0f32;
+                //let backprop_start_instant = Instant::now();
+                //let mut percentage:f32 = 0f32;
                 //println!("{:.3} = {} / {}",batch_size as f32 / training_data.len() as f32,training_data.len(),batch_size);
-                let percent_change:f32 = batch_size as f32 / training_data.len() as f32;
+                //let percent_change:f32 = batch_size as f32 / training_data.len() as f32;
                 for batch in batches {
                     //println!("{:.3}%",percentage);
-
                     let (new_connections,new_biases) = self.update_batch(batch,learning_rate,lambda,training_data.len() as f32);
                     self.connections = new_connections;
-                    // println!("Connections");
-                    // for layer in &self.connections {
-                    //     println!("{}",&layer);
-                    // }
-                    // if second { return; }
-                    // else {second = true; }
                     self.biases = new_biases;
-
-                    percentage += percent_change;
+                    //percentage += percent_change;
                 }
                 //println!("Backpropagated: {:.3} mins",backprop_start_instant.elapsed().as_secs() as f32 / 60f32);
 
@@ -351,7 +342,7 @@ mod core {
 
             
             let chunks_length:usize = if batch.len() < THREAD_COUNT { batch.len() } else { batch.len() / THREAD_COUNT };
-            let mut chunks:Vec<_> = batch.chunks(chunks_length).collect(); // Specify type further
+            let chunks:Vec<_> = batch.chunks(chunks_length).collect(); // Specify type further
             let mut pool = Pool::new(chunks.len() as u32);
 
             let mut out_nabla_b:Vec<Vec<DVector<f32>>> = vec!(nabla_b_zeros.clone();chunks.len());
@@ -460,7 +451,7 @@ mod core {
         // Returns tuple (average cost, number of examples correctly identified)
         pub fn evaluate(&self, test_data:&[(Vec<f32>,Vec<f32>)]) -> (f32,u32) {
             let chunks_length:usize = if test_data.len() < THREAD_COUNT { test_data.len() } else { test_data.len() / THREAD_COUNT };
-            let mut chunks:Vec<_> = test_data.chunks(chunks_length).collect(); // Specify type further
+            let chunks:Vec<_> = test_data.chunks(chunks_length).collect(); // Specify type further
             let mut pool = Pool::new(chunks.len() as u32);
 
             let mut cost_vec = vec!(0f32;chunks.len());
@@ -567,7 +558,6 @@ mod tests {
     use std::fs::File;
     use std::io::{Read};
     use std::time::{Instant,Duration};
-    use std::process::{Command, Stdio};
     use crate::core::{EvaluationData,MeasuredCondition,NeuralNetwork};
 
     // TODO Figure out better name for this
