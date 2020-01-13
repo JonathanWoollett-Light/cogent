@@ -224,15 +224,15 @@ mod core {
 
                 //println!("Backpropagating");
                 //let backprop_start_instant = Instant::now();
-                //let mut percentage:f32 = 0f32;
+                let mut percentage:f32 = 0f32;
                 //println!("{:.3} = {} / {}",batch_size as f32 / training_data.len() as f32,training_data.len(),batch_size);
-                //let percent_change:f32 = batch_size as f32 / training_data.len() as f32;
+                let percent_change:f32 = batch_size as f32 / training_data.len() as f32;
                 for batch in batches {
-                    //println!("{:.3}%",percentage);
+                    println!("{:.3}%",percentage);
                     let (new_connections,new_biases) = self.update_batch(batch,learning_rate,lambda,training_data.len() as f32);
                     self.connections = new_connections;
                     self.biases = new_biases;
-                    //percentage += percent_change;
+                    percentage += percent_change;
                 }
                 //println!("Backpropagated: {:.3} mins",backprop_start_instant.elapsed().as_secs() as f32 / 60f32);
 
@@ -316,7 +316,12 @@ mod core {
             let halt_condition = Duration::new((multiplier * DEFAULT_HALT_CONDITION) as u64,0);
             let early_stopping_condition = Duration::new((multiplier * DEFAULT_EARLY_STOPPING) as u64,0);
             let learning_rate_interval:u32 = (DEFAULT_LEARNING_RATE_INTERVAL as f32 * training_data[0].0.len() as f32 / training_data.len() as f32) as u32;
-            println!("halt_condition: {} secs, early_stopping_condition: {} secs, learning_rate_interval: {} ints",halt_condition.as_secs(),early_stopping_condition.as_secs(),learning_rate_interval);
+            println!(
+                "halt_condition: {:.2} mins ({:.2} hours), early_stopping_condition: {:.2} secs ({:.2} hours), learning_rate_interval: {} ints",
+                halt_condition.as_secs() as f32 / 60f32,halt_condition.as_secs() as f32 / 3600f32,
+                early_stopping_condition.as_secs() as f32 / 60f32,early_stopping_condition.as_secs() as f32 / 3600f32,
+                learning_rate_interval
+            );
             
             return Trainer {
                 training_data: temp_training_data,
@@ -352,8 +357,7 @@ mod core {
                 for (chunk,nabla_w,nabla_b) in izip!(chunks,&mut out_nabla_w,&mut out_nabla_b) {
                     scope.execute(move || {
                         for example in chunk {
-                            let (delta_nabla_w,delta_nabla_b):(Vec<DMatrix<f32>>,Vec<DVector<f32>>) =
-                                self.backpropagate(example);
+                            let (delta_nabla_w,delta_nabla_b):(Vec<DMatrix<f32>>,Vec<DVector<f32>>) = self.backpropagate(example);
 
                             *nabla_w = nabla_w.iter().zip(delta_nabla_w).map(|(x,y)| x + y).collect();
                             *nabla_b = nabla_b.iter().zip(delta_nabla_b).map(|(x,y)| x + y).collect();
@@ -363,6 +367,7 @@ mod core {
             });
 
             // TODO Look at turning these into iterator folds and maps, had issues trying it 1st time
+            //      nabla_b is sum of out_nabla_b, nabla_w is sum of out_nabla_w
             let mut nabla_b = nabla_b_zeros.clone();
             for example in &out_nabla_b {
                 for i in 0..example.len() {
@@ -378,12 +383,10 @@ mod core {
 
             // TODO Look into removing `.clone()`s here
             let return_connections:Vec<DMatrix<f32>> = self.connections.iter().zip(nabla_w).map(
-                | (w,nw) |
-                    (1f32-eta*(lambda/n))*w - ((eta / batch.len() as f32)) * nw
+                | (w,nw) | (1f32-eta*(lambda/n))*w - ((eta / batch.len() as f32)) * nw
             ).collect();
             let return_biases:Vec<DVector<f32>> = self.biases.iter().zip(nabla_b).map(
-                | (b,nb) |
-                    b - ((eta / batch.len() as f32)) * nb
+                | (b,nb) | b - ((eta / batch.len() as f32)) * nb
             ).collect();
 
             return (return_connections,return_biases);
@@ -556,9 +559,16 @@ mod tests {
     
     extern crate nalgebra;
     use std::fs::File;
-    use std::io::{Read};
     use std::time::{Instant,Duration};
     use crate::core::{EvaluationData,MeasuredCondition,NeuralNetwork};
+    use std::io;
+    use std::fs::read_dir;
+    use std::io::{Read,Result};
+    use std::path::Path;
+    use std::io::prelude::*;
+    use std::io::IoSlice;
+    use std::io::BufReader;
+    use std::fs::OpenOptions;
 
     // TODO Figure out better name for this
     const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be >= 0)
@@ -566,6 +576,16 @@ mod tests {
     const TESTING_MIN_ACCURACY:f32 = 0.925f32; // approx 5% min inaccuracy
     fn required_accuracy(test_data:&[(Vec<f32>,Vec<f32>)]) -> u32 {
         ((test_data.len() as f32) * TESTING_MIN_ACCURACY).ceil() as u32
+    }
+    fn export_result(test:&str,runs:u32,dataset_length:u32,total_time:u64,total_accuracy:u32,) -> () {
+        let avg_time = (total_time / runs as u64) as f32 / 60f32;
+        let avg_accuracy = total_accuracy / runs;
+        let avg_accuracy_percent = 100f32 * avg_accuracy as f32 / dataset_length as f32;
+        let file = OpenOptions::new().append(true).open("test_report.txt");
+        let result = format!("{} : {} * {:.2} mins, {}%, {}/{}\n",test,runs,avg_time,avg_accuracy_percent,avg_accuracy,dataset_length);
+        
+        file.unwrap().write_all(result.as_bytes());
+        //writeln!(file,&result_literal);
     }
 
     #[test]
@@ -597,7 +617,10 @@ mod tests {
     #[test]
     fn train_xor_0() {
         let mut total_accuracy = 0u32;
-        for _ in 0..(10 * TEST_RERUN_MULTIPLIER) {
+        let mut total_time = 0u64;
+        let runs = 10 * TEST_RERUN_MULTIPLIER;
+        for _ in 0..runs {
+            let start = Instant::now();
             //Setup
             let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,2]);
             let training_data = vec![
@@ -618,20 +641,22 @@ mod tests {
                 .lambda(0f32)
                 .log_interval(MeasuredCondition::Iteration(500u32))
                 .go();
+
             //Evaluation
+            total_time += start.elapsed().as_secs();
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
-
-            println!("train_xor_0: accuracy: {}",evaluation.1);
-            println!();
             total_accuracy += evaluation.1;
         }
-        println!("train_xor_0: average accuracy: {}",total_accuracy / (10 * TEST_RERUN_MULTIPLIER));
+        export_result("train_xor_0",runs,4u32,total_time,total_accuracy);
     }
     #[test]
     fn train_xor_1() {
         let mut total_accuracy = 0u32;
+        let mut total_time = 0u64;
+        let runs = 10 * TEST_RERUN_MULTIPLIER;
         for _ in 0..(10 * TEST_RERUN_MULTIPLIER) {
+            let start = Instant::now();
             //Setup
             let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,4,2]);
             let training_data = vec![
@@ -652,42 +677,45 @@ mod tests {
                 .lambda(0f32)
                 .log_interval(MeasuredCondition::Iteration(1000u32))
                 .go();
+
             //Evaluation
+            total_time += start.elapsed().as_secs();
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
-
-            println!("train_xor_1: accuracy: {}",evaluation.1);
-            println!();
             total_accuracy += evaluation.1;
         }
-        println!("train_xor_1: average accuracy: {}",total_accuracy / (10 * TEST_RERUN_MULTIPLIER));
+        export_result("train_xor_1",runs,4u32,total_time,total_accuracy);
     }
 
     //Tests network to recognize handwritten digits of 28x28 pixels
     #[test]
     fn train_digits_0() {
         let mut total_accuracy = 0u32;
-        for _ in 0..TEST_RERUN_MULTIPLIER {
+        let mut total_time = 0u64;
+        let runs = TEST_RERUN_MULTIPLIER;
+        for _ in 0..runs {
+            let start = Instant::now();
             //Setup
             let mut neural_network = NeuralNetwork::new(&[784,100,10]);
             let training_data = get_mnist_dataset(false);
             //Execution
             neural_network.train(&training_data).log_interval(MeasuredCondition::Duration(Duration::new(10,0))).go();
             //Evaluation
+            total_time += start.elapsed().as_secs();
             let testing_data = get_mnist_dataset(true);
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
-
-            println!("train_digits_0: accuracy: {}",evaluation.1);
-            println!();
             total_accuracy += evaluation.1;
         }
-        println!("train_digits_0: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+        export_result("train_digits_0",runs,10000u32,total_time,total_accuracy);
     }
     #[test]
     fn train_digits_1() {
         let mut total_accuracy = 0u32;
-        for _ in 0..TEST_RERUN_MULTIPLIER {
+        let mut total_time = 0u64;
+        let runs = TEST_RERUN_MULTIPLIER;
+        for _ in 0..runs {
+            let start = Instant::now();
             //Setup
             let mut neural_network = NeuralNetwork::new(&[784,100,10]);
             let training_data = get_mnist_dataset(false);
@@ -703,37 +731,32 @@ mod tests {
                 .early_stopping_condition(MeasuredCondition::Iteration(10u32))
                 .go();
             //Evaluation
-            
+            total_time += start.elapsed().as_secs();
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
-
-            println!("train_digits_1: accuracy: {}",evaluation.1);
-            println!();
             total_accuracy += evaluation.1;
         }
-        println!("train_digits_1: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+        export_result("train_digits_1",runs,10000u32,total_time,total_accuracy);
     }
     #[test]
     fn train_digits_2() {
-        // TODO IMPORTANT Why does each iteration take soo much longer than `train_digits_1`?
         let mut total_accuracy = 0u32;
-        for _ in 0..TEST_RERUN_MULTIPLIER {
+        let mut total_time = 0u64;
+        let runs = TEST_RERUN_MULTIPLIER;
+        for _ in 0..runs {
+            let start = Instant::now();
             //Setup
             let training_data = get_mnist_dataset(false);
             //Execution
-            let mut neural_network = NeuralNetwork::build(&training_data);
+            let neural_network = NeuralNetwork::build(&training_data);
             //Evaluation
+            total_time += start.elapsed().as_secs();
             let testing_data = get_mnist_dataset(true);
             let evaluation = neural_network.evaluate(&testing_data);
-
-            println!("train_digits_2: accuracy: {}",evaluation.1);
-            println!();
-
             assert!(evaluation.1 >= required_accuracy(&testing_data));
-
             total_accuracy += evaluation.1;
         }
-        println!("train_digits_2: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+        export_result("train_digits_2",runs,10000u32,total_time,total_accuracy);
     }
     fn get_mnist_dataset(testing:bool) -> Vec<(Vec<f32>,Vec<f32>)> {
                 
