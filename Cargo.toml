@@ -7,7 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nalgebra = "0.18"
 rand = "0.7"
 scoped_threadpool = "0.1.*"
 itertools = "0.8.2"
+ndarray = "0.12.0"
+ndarray_einsum_beta = "0.4.4"
+ndarray-rand = "0.10.0"
