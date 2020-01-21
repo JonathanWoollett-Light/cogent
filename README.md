@@ -1,4 +1,6 @@
 A basic neural network in Rust.
 =======
 
-This is extremely basic, I am extremely nooby, pls be kind.
+An implementation of a stochastic gradient descent neural network.
+
+I am nooby, pls be kind.

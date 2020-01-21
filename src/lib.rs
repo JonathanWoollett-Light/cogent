@@ -34,7 +34,6 @@ mod core {
         Percent(f32),
         Actual(Vec<(Vec<f32>,Vec<f32>)>)
     }
-
     #[derive(Clone,Copy)]
     pub enum MeasuredCondition {
         Iteration(u32),
@@ -128,6 +127,7 @@ mod core {
     impl NeuralNetwork {
 
         // Constructs network of given layers
+        // Returns constructed network.
         pub fn new(layers: &[usize]) -> NeuralNetwork {
             if layers.len() < 2 {
                 panic!("Requires >1 layers");
@@ -154,6 +154,7 @@ mod core {
             NeuralNetwork{ neurons, biases, connections }
         }
         // Constructs and trains network for given dataset
+        // Returns trained network.
         pub fn build(training_data:&Vec<(Vec<f32>,Vec<f32>)>) -> NeuralNetwork {
             println!("Building");
             let avg_size:usize = (((training_data[0].0.len() + training_data[0].1.len()) as f32 / 2f32) + 1f32) as usize;
@@ -175,7 +176,40 @@ mod core {
             }
             return activations;
         }
+        // Called to begin training with specified hyperparameters
+        pub fn train(&mut self,training_data:&Vec<(Vec<f32>,Vec<f32>)>) -> Trainer {
+            let mut rng = rand::thread_rng();
+            let mut temp_training_data = training_data.clone();
+            temp_training_data.shuffle(&mut rng);
+            let temp_evaluation_data = temp_training_data.split_off(training_data.len() - (training_data.len() as f32 * DEFAULT_EVALUTATION_DATA) as usize);
 
+            let multiplier:f32 = training_data[0].0.len() as f32 * training_data.len() as f32;
+            let halt_condition = Duration::new((multiplier * DEFAULT_HALT_CONDITION) as u64,0);
+            let early_stopping_condition = Duration::new((multiplier * DEFAULT_EARLY_STOPPING) as u64,0);
+            let learning_rate_interval:u32 = (DEFAULT_LEARNING_RATE_INTERVAL as f32 * training_data[0].0.len() as f32 / training_data.len() as f32) as u32;
+            println!(
+                "halt_condition: {:.2} mins ({:.2} hours), early_stopping_condition: {:.2} mins ({:.2} hours), learning_rate_interval: {} ints",
+                halt_condition.as_secs() as f32 / 60f32,halt_condition.as_secs() as f32 / 3600f32,
+                early_stopping_condition.as_secs() as f32 / 60f32,early_stopping_condition.as_secs() as f32 / 3600f32,
+                learning_rate_interval
+            );
+            
+            return Trainer {
+                training_data: temp_training_data,
+                evaluation_data: temp_evaluation_data,
+                halt_condition: MeasuredCondition::Duration(halt_condition),
+                log_interval: None,
+                batch_size: (DEFAULT_BATCH_SIZE * training_data.len() as f32).ceil() as usize,
+                learning_rate: DEFAULT_LEARNING_RATE,
+                lambda: DEFAULT_LAMBDA,
+                early_stopping_condition: MeasuredCondition::Duration(early_stopping_condition),
+                learning_rate_decay: DEFAULT_LEARNING_RATE_DECAY,
+                learning_rate_interval: MeasuredCondition::Iteration(learning_rate_interval),
+                neural_network:self
+            };
+        }
+
+        // Begins trainings
         fn train_details(&mut self,
             training_data: &mut [(Vec<f32>,Vec<f32>)], // TODO Look into `&[(Vec<f32>,Vec<f32>)]` vs `&Vec<(Vec<f32>,Vec<f32>)>`
             evaluation_data: &[(Vec<f32>,Vec<f32>)],
@@ -313,37 +347,7 @@ mod core {
                 return batches;
             }
         }
-        pub fn train(&mut self,training_data:&Vec<(Vec<f32>,Vec<f32>)>) -> Trainer {
-            let mut rng = rand::thread_rng();
-            let mut temp_training_data = training_data.clone();
-            temp_training_data.shuffle(&mut rng);
-            let temp_evaluation_data = temp_training_data.split_off(training_data.len() - (training_data.len() as f32 * DEFAULT_EVALUTATION_DATA) as usize);
-
-            let multiplier:f32 = training_data[0].0.len() as f32 * training_data.len() as f32;
-            let halt_condition = Duration::new((multiplier * DEFAULT_HALT_CONDITION) as u64,0);
-            let early_stopping_condition = Duration::new((multiplier * DEFAULT_EARLY_STOPPING) as u64,0);
-            let learning_rate_interval:u32 = (DEFAULT_LEARNING_RATE_INTERVAL as f32 * training_data[0].0.len() as f32 / training_data.len() as f32) as u32;
-            println!(
-                "halt_condition: {:.2} mins ({:.2} hours), early_stopping_condition: {:.2} mins ({:.2} hours), learning_rate_interval: {} ints",
-                halt_condition.as_secs() as f32 / 60f32,halt_condition.as_secs() as f32 / 3600f32,
-                early_stopping_condition.as_secs() as f32 / 60f32,early_stopping_condition.as_secs() as f32 / 3600f32,
-                learning_rate_interval
-            );
-            
-            return Trainer {
-                training_data: temp_training_data,
-                evaluation_data: temp_evaluation_data,
-                halt_condition: MeasuredCondition::Duration(halt_condition),
-                log_interval: None,
-                batch_size: (DEFAULT_BATCH_SIZE * training_data.len() as f32).ceil() as usize,
-                learning_rate: DEFAULT_LEARNING_RATE,
-                lambda: DEFAULT_LAMBDA,
-                early_stopping_condition: MeasuredCondition::Duration(early_stopping_condition),
-                learning_rate_decay: DEFAULT_LEARNING_RATE_DECAY,
-                learning_rate_interval: MeasuredCondition::Iteration(learning_rate_interval),
-                neural_network:self
-            };
-        }
+        // Updates weights and biases based off batch.
         fn update_batch(&self, batch: &[(Vec<f32>, Vec<f32>)], eta: f32, lambda:f32, n:f32) -> (Vec<Array2<f32>>,Vec<Array2<f32>>) {
             
             // TODO Look into a better way to setup 'bias_nabla' and 'weight_nabla'
@@ -412,7 +416,6 @@ mod core {
 
             return (return_connections,return_biases);
         }
-        
         // Runs backpropagation
         // Returns weight and bias gradients
         fn backpropagate(&self, example:(Array2<f32>,Array2<f32>)) -> (Vec<Array2<f32>>,Vec<Array2<f32>>) {
@@ -493,6 +496,7 @@ mod core {
             fn cross_entropy_delta(output:&Array2<f32>,target:&Array2<f32>) -> Array2<f32> {
                 output - target
             }
+            // Applies sigmoid prime function to every value in Array2<f32>`
             fn sigmoid_prime_mapping(y: &Array2<f32>) -> Array2<f32> {   
                 y.mapv(|x| -> f32 { NeuralNetwork::sigmoid(x) * (1f32 - NeuralNetwork::sigmoid(x)) })
             }
@@ -517,10 +521,7 @@ mod core {
                 return arr2;
             }
         }
-        fn sigmoid_mapping(y: &Array2<f32>) -> Array2<f32>{
-            return y.mapv(|x| NeuralNetwork::sigmoid(x));
-        }
-
+        
         // Returns tuple (average cost, number of examples correctly identified)
         pub fn evaluate(&self, test_data:&[(Vec<f32>,Vec<f32>)]) -> (f32,u32) {
             //println!("Evaluating");
@@ -596,25 +597,6 @@ mod core {
             //     }
             // }
         }
-        // Converts `[(Vec<f32>,Vec<f32>)]`->`(Array2<f32>,Array2<f32>)`
-        fn matrixify(examples:&[(Vec<f32>,Vec<f32>)]) -> (Array2<f32>,Array2<f32>) {
-            let input_len = examples[0].0.len();
-            let output_len = examples[0].1.len();
-            let example_len = examples.len();
-        
-            let mut input_vec:Vec<f32> = Vec::with_capacity(example_len * examples[0].0.len());
-            let mut output_vec:Vec<f32> = Vec::with_capacity(example_len * examples[0].1.len());
-            for example in examples {
-                // TODO Remove the `.clone()`s here,
-                input_vec.append(&mut example.0.clone());
-                output_vec.append(&mut example.1.clone());
-            }
-            // TODO Look inot better way to do this
-            let input:Array2<f32> = Array2::from_shape_vec((example_len,input_len),input_vec).unwrap();
-            let output:Array2<f32>  = Array2::from_shape_vec((example_len,output_len),output_vec).unwrap();
-        
-            return (input,output);
-        }
         // TODO Lot of stuff could be done to improve this function
         // Requires ordered test_data;
         // Returns confusion matrix of percentages percentages.
@@ -670,9 +652,34 @@ mod core {
             }
         }
 
+        // Converts `[(Vec<f32>,Vec<f32>)]`->`(Array2<f32>,Array2<f32>)`
+        fn matrixify(examples:&[(Vec<f32>,Vec<f32>)]) -> (Array2<f32>,Array2<f32>) {
+            let input_len = examples[0].0.len();
+            let output_len = examples[0].1.len();
+            let example_len = examples.len();
+        
+            let mut input_vec:Vec<f32> = Vec::with_capacity(example_len * examples[0].0.len());
+            let mut output_vec:Vec<f32> = Vec::with_capacity(example_len * examples[0].1.len());
+            for example in examples {
+                // TODO Remove the `.clone()`s here,
+                input_vec.append(&mut example.0.clone());
+                output_vec.append(&mut example.1.clone());
+            }
+            // TODO Look inot better way to do this
+            let input:Array2<f32> = Array2::from_shape_vec((example_len,input_len),input_vec).unwrap();
+            let output:Array2<f32>  = Array2::from_shape_vec((example_len,output_len),output_vec).unwrap();
+        
+            return (input,output);
+        }
+
+        // Applies 
+        fn sigmoid_mapping(y: &Array2<f32>) -> Array2<f32>{
+            return y.mapv(|x| NeuralNetwork::sigmoid(x));
+        }
         fn sigmoid(y: f32) -> f32 {
             1f32 / (1f32 + (-y).exp())
         }
+
         pub fn f32_2d_prt(ndarray_param:&Array2<f32>) -> () {
 
             println!();
@@ -745,17 +752,11 @@ mod core {
 #[cfg(test)]
 mod tests {
     
-    extern crate nalgebra;
     use std::fs::File;
     use std::time::{Instant,Duration};
     use crate::core::{EvaluationData,MeasuredCondition,NeuralNetwork};
-    use std::io;
-    use std::fs::read_dir;
-    use std::io::{Read,Result};
-    use std::path::Path;
+    use std::io::Read;
     use std::io::prelude::*;
-    use std::io::IoSlice;
-    use std::io::BufReader;
     use std::fs::OpenOptions;
 
     // TODO Figure out better name for this
@@ -1008,8 +1009,9 @@ mod tests {
     #[test]
     fn train_full() {
         println!("test start");
+        let runs = 1 * TEST_RERUN_MULTIPLIER;
         let mut total_accuracy = 0u32;
-        for _ in 0..TEST_RERUN_MULTIPLIER {
+        for _ in 0..runs {
             //Setup
             println!("Loading dataset");
             let training_data = get_combined("/home/jonathan/Projects/dataset_constructor/combined_dataset");
@@ -1017,14 +1019,14 @@ mod tests {
             //Execution
             let mut neural_network = NeuralNetwork::build(&training_data);
             //Evaluation
-            //let evaluation = neural_network.evaluate(&testing_data);
+            // let evaluation = neural_network.evaluate(&testing_data);
 
-            //assert!(evaluation.1 >= required_accuracy(&testing_data));
+            // assert!(evaluation.1 >= required_accuracy(&testing_data));
             // println!("train_full: accuracy: {}",evaluation.1);
             // println!();
             // total_accuracy += evaluation.1;
         }
-        println!("train_full: average accuracy: {}",total_accuracy / TEST_RERUN_MULTIPLIER);
+        //export_result("train_full",runs,10000u32,total_time,total_accuracy);
         assert!(false);
     }
     fn get_combined(path:&str) -> Vec<(Vec<f32>,Vec<f32>)> {
