@@ -176,7 +176,8 @@ mod core {
             }
             return activations;
         }
-        // Called to begin training with specified hyperparameters
+        // Begin training with specified hyperparameters
+        // Returns internal `Trainer` struct used to specify hyperparameters
         pub fn train(&mut self,training_data:&Vec<(Vec<f32>,Vec<f32>)>) -> Trainer {
             let mut rng = rand::thread_rng();
             let mut temp_training_data = training_data.clone();
@@ -347,7 +348,8 @@ mod core {
                 return batches;
             }
         }
-        // Updates weights and biases based off batch.
+        // Runs batch through network to calculate weight and bias gradients.
+        // Returns new weights and biases values.
         fn update_batch(&self, batch: &[(Vec<f32>, Vec<f32>)], eta: f32, lambda:f32, n:f32) -> (Vec<Array2<f32>>,Vec<Array2<f32>>) {
             
             // TODO Look into a better way to setup 'bias_nabla' and 'weight_nabla'
@@ -416,8 +418,8 @@ mod core {
 
             return (return_connections,return_biases);
         }
-        // Runs backpropagation
-        // Returns weight and bias gradients
+        // Runs backpropgation on chunk of batch.
+        // Returns weight and bias partial derivatives (errors).
         fn backpropagate(&self, example:(Array2<f32>,Array2<f32>)) -> (Vec<Array2<f32>>,Vec<Array2<f32>>) {
 
             // Feeds forward
@@ -522,7 +524,7 @@ mod core {
             }
         }
         
-        // Returns tuple (average cost, number of examples correctly identified)
+        // Returns tuple (average cost, number of examples correctly classified)
         pub fn evaluate(&self, test_data:&[(Vec<f32>,Vec<f32>)]) -> (f32,u32) {
             //println!("Evaluating");
             //let eval_start_instant = Instant::now();
@@ -599,7 +601,7 @@ mod core {
         }
         // TODO Lot of stuff could be done to improve this function
         // Requires ordered test_data;
-        // Returns confusion matrix of percentages percentages.
+        // Returns confusion matrix with percentages.
         pub fn evaluate_outputs(&self, test_data:&[(Vec<f32>,Vec<f32>)],alphabet_size:usize) -> Vec<Array1<f32>> {
             let chunks = symbol_chunks(test_data,alphabet_size);
             let mut pool = Pool::new(chunks.len() as u32);
@@ -652,7 +654,7 @@ mod core {
             }
         }
 
-        // Converts `[(Vec<f32>,Vec<f32>)]`->`(Array2<f32>,Array2<f32>)`
+        // Converts `[(Vec<f32>,Vec<f32>)]` to `(Array2<f32>,Array2<f32>)`.
         fn matrixify(examples:&[(Vec<f32>,Vec<f32>)]) -> (Array2<f32>,Array2<f32>) {
             let input_len = examples[0].0.len();
             let output_len = examples[0].1.len();
@@ -672,14 +674,16 @@ mod core {
             return (input,output);
         }
 
-        // Applies 
+        // Applies siogmoid function to every value in Array2.
         fn sigmoid_mapping(y: &Array2<f32>) -> Array2<f32>{
             return y.mapv(|x| NeuralNetwork::sigmoid(x));
         }
+        // Applies sigmoid function to value.
         fn sigmoid(y: f32) -> f32 {
             1f32 / (1f32 + (-y).exp())
         }
 
+        // Nicely prints Array2<f32>
         pub fn f32_2d_prt(ndarray_param:&Array2<f32>) -> () {
 
             println!();
@@ -700,6 +704,7 @@ mod core {
             println!("[{},{}]",shape[0],shape[1]);
             println!();
         }
+        // Nicely prints Array3<f32>
         pub fn f32_3d_prt(ndarray_param:&Array3<f32>) -> () {
 
             println!();
