@@ -167,6 +167,8 @@ mod core {
             // TODO Softmax layers can only be output layer for now
             fn softmax(y:&Array2<f32>) -> Array2<f32> {
                 // TODO Softmax layers can only be output layer for now
+                println!("THIS SHOULDN'T GET CALLED TEST");
+                panic!("oof");
                 return y.clone();
             }
         }
