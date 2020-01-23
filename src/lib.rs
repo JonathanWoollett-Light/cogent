@@ -39,7 +39,6 @@ mod core {
         Iteration(u32),
         Duration(Duration)
     }
-    //use EvaluationData::{Actual,Scaler,Percent};
     
     pub struct Trainer<'a> {
         training_data: Vec<(Vec<f32>,Vec<f32>)>,
@@ -58,7 +57,6 @@ mod core {
         learning_rate_interval: MeasuredCondition,
         neural_network: &'a mut NeuralNetwork
     }
-
     impl<'a> Trainer<'a> {
         pub fn evaluation_data(&mut self, evaluation_data:EvaluationData) -> &mut Trainer<'a> {
             self.evaluation_data = match evaluation_data {
@@ -116,47 +114,109 @@ mod core {
         }
     }
 
-    // A simple stochastic/incremental descent neural network.
+    // Enum for each neuron activation type
+    // For now we only have 1 activation type
+    #[derive(Clone,Copy)]
+    pub enum Activation {
+        Sigmoid // TODO Should this be capitalized?
+    }
+    impl Activation {
+        fn run(&self,y:&Array2<f32>) -> Array2<f32> {
+            match self {
+                Self::Sigmoid => y.mapv(|x| Activation::sigmoid(x)),
+            }
+        }
+        fn derivative(&self,y:&Array2<f32>) -> Array2<f32> {
+            match self {
+                Self::Sigmoid => y.mapv(|x| -> f32 { Activation::sigmoid_prime(x) })
+            }
+        }
+        fn delta(&self,output:&Array2<f32>,target:&Array2<f32>) -> Array2<f32> {
+            match self {
+                Self::Sigmoid => Activation::cross_entropy_delta(output,target)
+            }
+        }
+        // TODO Why is this called sigmoid `prime`?
+        // Applies derivative of sigmoid function
+        fn sigmoid_prime(y:f32) -> f32 {
+            Activation::sigmoid(y) * (1f32 - Activation::sigmoid(y))
+        }
+        // Applies sigmoid function
+        fn sigmoid(y: f32) -> f32 {
+            1f32 / (1f32 + (-y).exp())
+        }
+        fn cross_entropy_delta(output:&Array2<f32>,target:&Array2<f32>) -> Array2<f32> {
+            output - target
+        }
+    }
+    
+    // Struct for user specifiying layers in network
+    pub struct Layer {
+        size: usize,
+        activation: Activation,
+    }
+    impl Layer {
+        pub fn new(size:usize,activation:Activation) -> Layer {
+            Layer {size,activation}
+        }
+    }
+
+    // A stochastic/incremental descent neural network.
     // Implementing cross-entropy cost function and L2 regularization.
     pub struct NeuralNetwork {
         inputs: usize, //TODO Remove this, add simply integer val for number of input neurons.
         biases: Vec<Array2<f32>>,
-        connections: Vec<Array2<f32>>
+        connections: Vec<Array2<f32>>,
+        layers: Vec<Activation>
     }
-
     impl NeuralNetwork {
-
         // Constructs network of given layers
         // Returns constructed network.
-        pub fn new(layers: &[usize]) -> NeuralNetwork {
-            if layers.len() < 2 {
+        pub fn new(inputs:usize,layers: &[Layer]) -> NeuralNetwork {
+            if layers.len() == 0 {
                 panic!("Requires >1 layers");
             }
-            for &x in layers {
-                if x < 1usize {
+            if inputs == 0 {
+                panic!("Input size must be >0");
+            }
+            for x in layers {
+                if x.size < 1usize {
                     panic!("All layer sizes must be >0");
                 }
             }
-            let mut connections: Vec<Array2<f32>> = Vec::with_capacity(layers.len() - 1);
-            let mut biases: Vec<Array2<f32>> = Vec::with_capacity(layers.len() - 1);
+            let mut connections: Vec<Array2<f32>> = Vec::with_capacity(layers.len());
+            let mut biases: Vec<Array2<f32>> = Vec::with_capacity(layers.len());
 
             let range = Uniform::new(-1f32, 1f32);
+            // Sets connections between inputs and 1st hidden layer
+            connections.push(Array2::random(
+                (layers[0].size,inputs),range) / (inputs as f32).sqrt()
+            );
+            // Sets biases for 1st hidden layer
+            biases.push(Array2::random((1,layers[0].size),range));
+            // Sets connections and biases for all subsequent layers
             for i in 1..layers.len() {
                 connections.push(
-                    Array2::random((layers[i],layers[i-1]),range)
-                    / (layers[i-1] as f32).sqrt()
+                    Array2::random((layers[i].size,layers[i-1].size),range)
+                    / (layers[i-1].size as f32).sqrt()
                 );
-                biases.push(Array2::random((1,layers[i]),range));
+                biases.push(Array2::random((1,layers[i].size),range));
             }
-            NeuralNetwork{ inputs:layers[0], biases, connections }
+            let layers:Vec<Activation> = layers.iter().map(|x|x.activation).collect();
+            NeuralNetwork{ inputs, biases, connections, layers}
         }
         // Constructs and trains network for given dataset
         // Returns trained network.
         pub fn build(training_data:&Vec<(Vec<f32>,Vec<f32>)>) -> NeuralNetwork {
             println!("Building");
+            let inputs = training_data[0].0.len();
             let avg_size:usize = (((training_data[0].0.len() + training_data[0].1.len()) as f32 / 2f32) + 1f32) as usize;
-            let layers:&[usize] = &[training_data[0].0.len(),avg_size,training_data[0].1.len()];
-            let mut network = NeuralNetwork::new(layers);
+            let layers:&[Layer] = &[
+                Layer{size:avg_size,activation:Activation::Sigmoid},
+                Layer{size:training_data[0].1.len(),activation:Activation::Sigmoid}
+                
+            ];
+            let mut network = NeuralNetwork::new(inputs,layers);
             network.train(training_data).log_interval(MeasuredCondition::Duration(Duration::new(60,0))).go();
             println!("Built");
             return network;
@@ -165,11 +225,11 @@ mod core {
         // Returns outputs from batch of examples.
         fn run(&self, inputs:&Array2<f32>) -> Array2<f32> {
             let mut activations:Array2<f32> = inputs.clone();
-            for i in 0..self.connections.len() {
+            for i in 0..self.layers.len() {
                 let weighted_inputs:Array2<f32> = activations.dot(&self.connections[i].t());
                 let bias_matrix:Array2<f32> = Array2::ones((inputs.shape()[0],1)).dot(&self.biases[i]);
                 let inputs = weighted_inputs + bias_matrix;
-                activations = NeuralNetwork::sigmoid_mapping(&inputs);
+                activations = self.layers[i].run(&inputs);
             }
             return activations;
         }
@@ -427,11 +487,11 @@ mod core {
             let mut activations:Vec<Array2<f32>> = Vec::with_capacity(self.biases.len()+1);
             activations.push(example.0);
             //println!("activations[{}]:{}",0,&activations[0].clone());
-            for i in 0..self.connections.len() {
+            for i in 0..self.layers.len() {
                 let weighted_inputs = activations[i].dot(&self.connections[i].t());
                 let bias_matrix:Array2<f32> = Array2::ones((number_of_examples,1)).dot(&self.biases[i]); // TODO consider precomputing these
                 inputs.push(weighted_inputs + bias_matrix);
-                activations.push(NeuralNetwork::sigmoid_mapping(&inputs[i]));
+                activations.push(self.layers[i].run(&inputs[i]));
             }
 
             // Backpropagates
@@ -439,11 +499,15 @@ mod core {
 
             let target = example.1.clone(); // TODO check we don't need '.clone' here
             let last_index = self.connections.len()-1; // = nabla_b.len()-1 = nabla_w.len()-1 = self.neurons.len()-2 = self.connections.len()-1
-            let mut error:Array2<f32> = cross_entropy_delta(&activations[last_index+1],&target);
+            
+            
             // Gradients of biases and weights.
             let mut nabla_b:Vec<Array2<f32>> = Vec::with_capacity(self.biases.len());
             // TODO find way to make this ArrayD an Array3, ArrayD willl always have 3d imensions, just can't figure out caste.
             let mut nabla_w:Vec<ArrayD<f32>> = Vec::with_capacity(self.connections.len()); // this should really be 3d matrix instead of 'Vec<DMatrix<f32>>', its a bad workaround
+
+            let last_layer = self.layers[self.layers.len()-1];
+            let mut error:Array2<f32> = last_layer.delta(&activations[last_index+1],&target);
 
             // Sets gradients in output layer
             nabla_b.insert(0,error.clone());
@@ -455,7 +519,7 @@ mod core {
             // With input layer, self.neurons.len()-1=self.biases.len() is last nueron layer, but without, self.neurons.len()-2 is last neuron layer
             for i in (1..self.biases.len()).rev() {
                 // Calculates error
-                error = sigmoid_prime_mapping(&inputs[i-1]) *
+                error = self.layers[i-1].derivative(&inputs[i-1]) *
                     error.dot(&self.connections[i]);
 
                 // Sets gradients
@@ -490,15 +554,6 @@ mod core {
 
             // Returns gradients
             return (nabla_b_sum,nabla_w_sum);
-
-            // Returns new vector of `output-target`
-            fn cross_entropy_delta(output:&Array2<f32>,target:&Array2<f32>) -> Array2<f32> {
-                output - target
-            }
-            // Applies sigmoid prime function to every value in Array2<f32>`
-            fn sigmoid_prime_mapping(y: &Array2<f32>) -> Array2<f32> {   
-                y.mapv(|x| -> f32 { NeuralNetwork::sigmoid(x) * (1f32 - NeuralNetwork::sigmoid(x)) })
-            }
 
             // TODO Improvement or replacement of both these cast functions needs to be done
             fn cast_arrayd_to_array2(arrd:ArrayD<f32>) -> Array2<f32> {
@@ -692,15 +747,6 @@ mod core {
             return (input,output);
         }
 
-        // Applies siogmoid function to every value in Array2.
-        fn sigmoid_mapping(y: &Array2<f32>) -> Array2<f32>{
-            return y.mapv(|x| NeuralNetwork::sigmoid(x));
-        }
-        // Applies sigmoid function to value.
-        fn sigmoid(y: f32) -> f32 {
-            1f32 / (1f32 + (-y).exp())
-        }
-
         // Nicely prints Array2<f32>
         pub fn f32_2d_prt(ndarray_param:&Array2<f32>) -> () {
 
@@ -814,7 +860,7 @@ mod tests {
     
     use std::fs::File;
     use std::time::{Instant,Duration};
-    use crate::core::{EvaluationData,MeasuredCondition,NeuralNetwork};
+    use crate::core::{EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
     use std::io::Read;
     use std::io::prelude::*;
     use std::fs::OpenOptions;
@@ -839,27 +885,39 @@ mod tests {
 
     #[test]
     fn new() {
-        crate::core::NeuralNetwork::new(&[2,3,1]);
+        NeuralNetwork::new(2,&[
+            Layer::new(3,Activation::Sigmoid),
+            Layer::new(2,Activation::Sigmoid)
+        ]);
     }
     #[test]
     #[should_panic(expected="Requires >1 layers")]
     fn new_few_layers() {
-        crate::core::NeuralNetwork::new(&[2]);
+        NeuralNetwork::new(2,&[]);
     }
     #[test]
-    #[should_panic(expected="All layer sizes must be >0")]
+    #[should_panic(expected="Input size must be >0")]
     fn new_small_layers_0() {
-        crate::core::NeuralNetwork::new(&[0,3,1]);
+        NeuralNetwork::new(0,&[
+            Layer::new(3,Activation::Sigmoid),
+            Layer::new(2,Activation::Sigmoid)
+        ]);
     }
     #[test]
     #[should_panic(expected="All layer sizes must be >0")]
     fn new_small_layers_1() {
-        crate::core::NeuralNetwork::new(&[2,0,1]);
+        NeuralNetwork::new(2,&[
+            Layer::new(0,Activation::Sigmoid),
+            Layer::new(2,Activation::Sigmoid),
+        ]);
     }
     #[test]
     #[should_panic(expected="All layer sizes must be >0")]
     fn new_small_layers_2() {
-        crate::core::NeuralNetwork::new(&[2,3,0]);
+        NeuralNetwork::new(2,&[
+            Layer::new(3,Activation::Sigmoid),
+            Layer::new(0,Activation::Sigmoid),
+        ]);
     }
 
     //Tests network to learn an XOR gate.
@@ -871,7 +929,10 @@ mod tests {
         for _ in 0..runs {
             let start = Instant::now();
             //Setup
-            let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,2]);
+            let mut neural_network = NeuralNetwork::new(2,&[
+                Layer::new(3,Activation::Sigmoid),
+                Layer::new(2,Activation::Sigmoid)
+            ]);
             let training_data = vec![
                 (vec![0f32,0f32],vec![0f32,1f32]),
                 (vec![1f32,0f32],vec![1f32,0f32]),
@@ -907,7 +968,11 @@ mod tests {
         for _ in 0..(10 * TEST_RERUN_MULTIPLIER) {
             let start = Instant::now();
             //Setup
-            let mut neural_network = crate::core::NeuralNetwork::new(&[2,3,4,2]);
+            let mut neural_network = NeuralNetwork::new(2,&[
+                Layer::new(3,Activation::Sigmoid),
+                Layer::new(4,Activation::Sigmoid),
+                Layer::new(2,Activation::Sigmoid)
+            ]);
             let training_data = vec![
                 (vec![0f32,0f32],vec![0f32,1f32]),
                 (vec![1f32,0f32],vec![1f32,0f32]),
@@ -945,7 +1010,10 @@ mod tests {
         for _ in 0..runs {
             let start = Instant::now();
             //Setup
-            let mut neural_network = NeuralNetwork::new(&[784,100,10]);
+            let mut neural_network = NeuralNetwork::new(784,&[
+                Layer::new(100,Activation::Sigmoid),
+                Layer::new(10,Activation::Sigmoid)
+            ]);
             let training_data = get_mnist_dataset(false);
             //Execution
             neural_network.train(&training_data)
@@ -973,7 +1041,10 @@ mod tests {
         for _ in 0..runs {
             let start = Instant::now();
             //Setup
-            let mut neural_network = NeuralNetwork::new(&[784,100,10]);
+            let mut neural_network = NeuralNetwork::new(784,&[
+                Layer::new(100,Activation::Sigmoid),
+                Layer::new(10,Activation::Sigmoid)
+            ]);
             let training_data = get_mnist_dataset(false);
             let testing_data = get_mnist_dataset(true);
             //Execution
