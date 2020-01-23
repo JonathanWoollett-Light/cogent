@@ -599,7 +599,8 @@ mod core {
         // TODO Lot of stuff could be done to improve this function
         // Requires ordered test_data;
         // Returns confusion matrix with percentages.
-        pub fn evaluate_outputs(&self, test_data:&[(Vec<f32>,Vec<f32>)],alphabet_size:usize) -> Vec<Array1<f32>> {
+        pub fn evaluate_outputs(&self, test_data:&[(Vec<f32>,Vec<f32>)]) -> Array2<f32> {
+            let alphabet_size = test_data[0].1.len();
             let chunks = symbol_chunks(test_data,alphabet_size);
             let mut pool = Pool::new(chunks.len() as u32);
 
@@ -615,12 +616,33 @@ mod core {
                     });
                 }
             });
-            // I don't know how to turn a `Vec<Array1<_>>` into an `Array2<_>`, thus we return `Vec<Array1<_>>` for now.
-            return classifications;
-            
+
+            return cast_array1s_to_array2(classifications,alphabet_size);
+
+            // TODO Lots needs to be done to improve this.
+            // Returns Vec<(Array2<f32>,Array2<f32>)> with each tuple representing all examples of a character.
+            fn symbol_chunks(test_data:&[(Vec<f32>,Vec<f32>)],alphabet_size:usize) -> Vec<(Array2<f32>,Array2<f32>)> {
+                let mut chunks:Vec<(Array2<f32>,Array2<f32>)> = Vec::with_capacity(alphabet_size);
+                let mut slice = (0usize,0usize); // (lower bound,upper bound)
+                loop {
+                    slice.1+=1;
+                    while test_data[slice.1].1 == test_data[slice.1+1].1 {
+                        slice.1+=1;
+                        if slice.1+1 == test_data.len() {
+                            slice.1 += 1;
+                            break; 
+                        }
+                    } 
+                    let chunk_holder = NeuralNetwork::matrixify(&test_data[slice.0..slice.1]);
+                    chunks.push(chunk_holder);
+                    if chunks.len() == alphabet_size { break };
+                    slice.0 = slice.1;
+                }
+                return chunks;
+            }
+            // Sets all non-max values in row to 0 and max to 1 for each row in matrix.
             fn set_nonmax_zero(matrix:&Array2<f32>) -> Array2<u32> {
                 let mut max_indx = 0usize;
-                // TODO Name this better
                 let shape = matrix.shape();
                 let mut zero_matrix = Array2::zeros((shape[0],shape[1]));
 
@@ -635,39 +657,38 @@ mod core {
                 }
                 return zero_matrix;
             }
-            // Returns Vec<(Array2<f32>,Array2<f32>)> with each tuple representing all examples of a character.
-            fn symbol_chunks(test_data:&[(Vec<f32>,Vec<f32>)],alphabet_size:usize) -> Vec<(Array2<f32>,Array2<f32>)> {
-                let mut chunks:Vec<(Array2<f32>,Array2<f32>)> = Vec::with_capacity(alphabet_size);
-                let mut slice = (0usize,1usize); // (lower bound,upper bound)
-                loop {
-                    while test_data[slice.1] == test_data[slice.1+1] {
-                        slice.1+=1;
+            // TODO Need better way to caste than this
+            // Returns Array2<_> casted from Vec<Array1<_>>
+            fn cast_array1s_to_array2(vec:Vec<Array1<f32>>,alphabet_size:usize) -> Array2<f32> {
+                let mut arr2 = Array2::default((alphabet_size,alphabet_size));
+                for i in 0..vec.len() {
+                    for t in 0..vec[i].shape()[0] {
+                        arr2[[i,t]] = vec[i][[t]];
                     }
-                    let last_indx = chunks.len()-1; // TODO Why can't I put this inside next line?
-                    chunks[last_indx] = NeuralNetwork::matrixify(&test_data[slice.0..slice.1]);
-                    if chunks.len() == alphabet_size { break };
                 }
-                return chunks;
+                return arr2; 
             }
         }
 
         // Converts `[(Vec<f32>,Vec<f32>)]` to `(Array2<f32>,Array2<f32>)`.
         fn matrixify(examples:&[(Vec<f32>,Vec<f32>)]) -> (Array2<f32>,Array2<f32>) {
+            //println!("began here");
             let input_len = examples[0].0.len();
             let output_len = examples[0].1.len();
             let example_len = examples.len();
-        
-            let mut input_vec:Vec<f32> = Vec::with_capacity(example_len * examples[0].0.len());
-            let mut output_vec:Vec<f32> = Vec::with_capacity(example_len * examples[0].1.len());
+
+            let mut input_vec:Vec<f32> = Vec::with_capacity(example_len * input_len);
+            let mut output_vec:Vec<f32> = Vec::with_capacity(example_len * output_len);
             for example in examples {
                 // TODO Remove the `.clone()`s here,
                 input_vec.append(&mut example.0.clone());
                 output_vec.append(&mut example.1.clone());
             }
+            //println!("got here");
             // TODO Look inot better way to do this
             let input:Array2<f32> = Array2::from_shape_vec((example_len,input_len),input_vec).unwrap();
             let output:Array2<f32>  = Array2::from_shape_vec((example_len,output_len),output_vec).unwrap();
-        
+            //println!("finished here");
             return (input,output);
         }
 
@@ -745,6 +766,43 @@ mod core {
             println!("[{},{},{}]",shape[0],shape[1],shape[2]);
             println!();
         }
+
+        // TODO Improve this.
+        // For use to sort a dataset before using `evaluate_outputs`.
+        // Use counting sort since typically classification datasets have relatively high n compared to low k.
+        pub fn counting_sort(test_data:&[(Vec<f32>,Vec<f32>)]) -> Vec<(Vec<f32>,Vec<f32>)> {
+            let alphabet_size = test_data[0].1.len();
+            let mut count:Vec<usize> = vec!(0usize;alphabet_size);
+            let mut output_vals:Vec<usize> = vec!(0usize;test_data.len());
+
+            for i in 0..test_data.len() {
+                // TODO Put this in function.
+                //  Had difficultly putting this in function.
+                let mut one:usize = 0usize;
+                for t in 0..alphabet_size {
+                    if test_data[i].1[t] == 1f32 { 
+                        one = t;
+                        break; 
+                    }
+                }
+
+                count[one] += 1usize;
+                output_vals[i] = one;
+            }
+            for i in 1..count.len() {
+                count[i] += count[i-1];
+            }
+
+            let input_size = test_data[0].0.len();
+            let mut sorted_data:Vec<(Vec<f32>,Vec<f32>)> = vec!((vec!(0f32;input_size),vec!(0f32;alphabet_size));test_data.len());
+
+            for i in 0..test_data.len() {
+                sorted_data[count[output_vals[i]]-1] = test_data[i].clone();
+                count[output_vals[i]] -= 1;
+            }
+
+            return sorted_data;
+        }
     }
 }
 
@@ -764,7 +822,7 @@ mod tests {
     // TODO Figure out better name for this
     const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be >= 0)
     // TODO Figure out better name for this
-    const TESTING_MIN_ACCURACY:f32 = 0.90f32; // approx 5% min inaccuracy
+    const TESTING_MIN_ACCURACY:f32 = 0.90f32; // approx 10% min inaccuracy
     fn required_accuracy(test_data:&[(Vec<f32>,Vec<f32>)]) -> u32 {
         ((test_data.len() as f32) * TESTING_MIN_ACCURACY).ceil() as u32
     }
@@ -897,6 +955,10 @@ mod tests {
             //Evaluation
             total_time += start.elapsed().as_secs();
             let testing_data = get_mnist_dataset(true);
+
+            let sorted_data = NeuralNetwork::counting_sort(&testing_data);
+            NeuralNetwork::f32_2d_prt(&neural_network.evaluate_outputs(&sorted_data));
+
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
             total_accuracy += evaluation.1;
@@ -926,6 +988,10 @@ mod tests {
                 .go();
             //Evaluation
             total_time += start.elapsed().as_secs();
+
+            let sorted_data = NeuralNetwork::counting_sort(&testing_data);
+            NeuralNetwork::f32_2d_prt(&neural_network.evaluate_outputs(&sorted_data));
+
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
             total_accuracy += evaluation.1;
@@ -946,6 +1012,10 @@ mod tests {
             //Evaluation
             total_time += start.elapsed().as_secs();
             let testing_data = get_mnist_dataset(true);
+
+            let sorted_data = NeuralNetwork::counting_sort(&testing_data);
+            NeuralNetwork::f32_2d_prt(&neural_network.evaluate_outputs(&sorted_data));
+
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
             total_accuracy += evaluation.1;
