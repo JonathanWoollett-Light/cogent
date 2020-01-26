@@ -316,12 +316,8 @@ mod core {
 
             let mut best_accuracy = 0u32;
 
-            
             let mut evaluation = self.evaluate(evaluation_data);
 
-            
-            
-            
             if let Some(_) = log_interval {
                 println!("Iteration: {}, Time: {}, Cost: {:.5}, Classified: {}/{} ({:.3}%), Learning rate: {}",
                     iterations_elapsed,
@@ -379,38 +375,14 @@ mod core {
 
                 match log_interval {// TODO Reduce code duplication here
                     Some(MeasuredCondition::Iteration(iteration_interval)) => if iterations_elapsed % iteration_interval == 0 {
-                        evaluation = self.evaluate(evaluation_data);
-                        if evaluation.1 > best_accuracy { 
-                            best_accuracy = evaluation.1;
-                            best_accuracy_iteration = iterations_elapsed;
-                            best_accuracy_instant = Instant::now();
-                        }
-                        println!("Iteration: {}, Time: {}, Cost: {:.5}, Classified: {}/{} ({:.3}%), Learning rate: {}",
-                            iterations_elapsed,
-                            NeuralNetwork::time(start_instant),
-                            evaluation.0,
-                            evaluation.1,evaluation_data.len(),
-                            (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32,
-                            learning_rate
+                        log_fn(self,iterations_elapsed,start_instant,learning_rate,evaluation_data,
+                            &mut best_accuracy,&mut best_accuracy_iteration,&mut best_accuracy_instant,&mut last_logged_instant
                         );
-                        last_logged_instant = Instant::now();
                     },
                     Some(MeasuredCondition::Duration(duration_interval)) => if last_logged_instant.elapsed() >= duration_interval {
-                        evaluation = self.evaluate(evaluation_data);
-                        if evaluation.1 > best_accuracy { 
-                            best_accuracy = evaluation.1;
-                            best_accuracy_iteration = iterations_elapsed;
-                            best_accuracy_instant = Instant::now();
-                        }
-                        println!("Iteration: {}, Time: {}, Cost: {:.5}, Classified: {}/{} ({:.3}%), Learning rate: {}",
-                            iterations_elapsed,
-                            NeuralNetwork::time(start_instant),
-                            evaluation.0,
-                            evaluation.1,evaluation_data.len(),
-                            (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32,
-                            learning_rate
+                        log_fn(self,iterations_elapsed,start_instant,learning_rate,evaluation_data,
+                            &mut best_accuracy,&mut best_accuracy_iteration,&mut best_accuracy_instant,&mut last_logged_instant
                         );
-                        last_logged_instant = Instant::now();
                     },
                     _ => {},
                 }
@@ -425,6 +397,7 @@ mod core {
                     MeasuredCondition::Duration(interval_duration) => if best_accuracy_instant.elapsed() >= interval_duration { learning_rate *= learning_rate_decay }
                 }
             }
+            let evaluation = self.evaluate(evaluation_data);
             let new_percent = (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32;
             let starting_percent = (starting_evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32;
             println!();
@@ -454,7 +427,34 @@ mod core {
 
                 return batches;
             }
+            // TODO Do something better than thi
+            fn log_fn(
+                net:&NeuralNetwork,
+                iterations_elapsed:u32,
+                start_instant:Instant,
+                learning_rate:f32,
+                evaluation_data: &[(Vec<f32>,Vec<f32>)],
+                best_accuracy:&mut u32,best_accuracy_iteration:&mut u32,best_accuracy_instant:&mut Instant,
+                last_logged_instant:&mut Instant
+            ) -> () {
 
+                let evaluation = net.evaluate(evaluation_data);
+                if evaluation.1 > *best_accuracy { 
+                    *best_accuracy = evaluation.1;
+                    *best_accuracy_iteration = iterations_elapsed;
+                    *best_accuracy_instant = Instant::now();
+                }
+                println!("Iteration: {}, Time: {}, Cost: {:.5}, Classified: {}/{} ({:.3}%), Learning rate: {}",
+                    iterations_elapsed,
+                    NeuralNetwork::time(start_instant),
+                    evaluation.0,
+                    evaluation.1,evaluation_data.len(),
+                    (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32,
+                    learning_rate
+                );
+                *last_logged_instant = Instant::now();
+
+            }
             
         }
         // Runs batch through network to calculate weight and bias gradients.
@@ -1115,7 +1115,7 @@ mod tests {
             total_accuracy += evaluation.1;
         }
         export_result("train_digits_0",runs,10000u32,total_time,total_accuracy);
-        assert!(false);
+        
     }
     // #[test]
     // fn train_digits_1() {
