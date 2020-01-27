@@ -14,7 +14,7 @@ mod core {
     extern crate ndarray_einsum_beta;
     use ndarray_einsum_beta::*;
 
-    use std::io::{Write, stdout,Error,Stdout};
+    use std::io::{Write, stdout};
     use crossterm::{QueueableCommand, cursor};
 
     //Setting number of threads to use
@@ -327,20 +327,19 @@ mod core {
 
             let mut best_accuracy = 0u32;
 
-            let mut evaluation = self.evaluate(evaluation_data);
+            let starting_evaluation = self.evaluate(evaluation_data);
 
             if let Some(_) = log_interval {
-                println!("Iteration: {}, Time: {}, Cost: {:.5}, Classified: {}/{} ({:.3}%), Learning rate: {}",
+                stdout.write(format!("Iteration: {}, Time: {}, Cost: {:.5}, Classified: {}/{} ({:.3}%), Learning rate: {}\n",
                     iterations_elapsed,
                     NeuralNetwork::time(start_instant),
-                    evaluation.0,
-                    evaluation.1,evaluation_data.len(),
-                    (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32,
+                    starting_evaluation.0,
+                    starting_evaluation.1,evaluation_data.len(),
+                    (starting_evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32,
                     learning_rate
-                );
+                ).as_bytes()).unwrap();
             }
 
-            let starting_evaluation = evaluation;
             let mut last_logged_instant = Instant::now();
 
             loop {
@@ -354,44 +353,44 @@ mod core {
                 
                 let batch_start_instant = Instant::now();
                 training_data.shuffle(&mut rng);
-                let batches = get_batches(training_data,batch_size); // Couldn't we use 'chunks' here?
+                let batches:Vec<_> = training_data.chunks(batch_size).collect();
+                //let batches = get_batches(training_data,batch_size); // Couldn't we use 'chunks' here?
                 
                 stdout.queue(cursor::RestorePosition).unwrap();
                 stdout.flush().unwrap();
 
-                println!("Set batches:\t{}",NeuralNetwork::time(batch_start_instant));
+                stdout.write(format!("Set batches: {}\n",NeuralNetwork::time(batch_start_instant)).as_bytes()).unwrap();
+                //println!();
 
                 let mut percentage:f32 = 0f32;
-
+                
                 stdout.queue(cursor::SavePosition).unwrap();
-                stdout.write(format!("Backpropagating: {:.2}%",percentage).as_bytes()).unwrap();
 
                 let backprop_start_instant = Instant::now();
                 let percent_change:f32 = 100f32 * batch_size as f32 / training_data.len() as f32;
                 for batch in batches {
+                    stdout.write(format!("Backpropagating: {:.2}%",percentage).as_bytes()).unwrap();
                     let (new_connections,new_biases) = self.update_batch(batch,learning_rate,lambda,training_data.len() as f32);
                     self.connections = new_connections;
                     self.biases = new_biases;
                     percentage += percent_change;
                     stdout.queue(cursor::RestorePosition).unwrap();
                     stdout.flush().unwrap();
-                    stdout.write(format!("Backpropagating: {:.2}%",percentage).as_bytes()).unwrap();
+                    
                 }
-                stdout.queue(cursor::RestorePosition).unwrap();
-                stdout.flush().unwrap();
-                println!("Backprop:\t{}",NeuralNetwork::time(backprop_start_instant));
-
+                stdout.write(format!("Backpropagating: {}\n",NeuralNetwork::time(backprop_start_instant)).as_bytes()).unwrap();
+                
                 iterations_elapsed += 1;
                 
 
                 match log_interval {// TODO Reduce code duplication here
                     Some(MeasuredCondition::Iteration(iteration_interval)) => if iterations_elapsed % iteration_interval == 0 {
-                        log_fn(self,iterations_elapsed,start_instant,learning_rate,evaluation_data,
+                        log_fn(&mut stdout,self,iterations_elapsed,start_instant,learning_rate,evaluation_data,
                             &mut best_accuracy,&mut best_accuracy_iteration,&mut best_accuracy_instant,&mut last_logged_instant
                         );
                     },
                     Some(MeasuredCondition::Duration(duration_interval)) => if last_logged_instant.elapsed() >= duration_interval {
-                        log_fn(self,iterations_elapsed,start_instant,learning_rate,evaluation_data,
+                        log_fn(&mut stdout,self,iterations_elapsed,start_instant,learning_rate,evaluation_data,
                             &mut best_accuracy,&mut best_accuracy_iteration,&mut best_accuracy_instant,&mut last_logged_instant
                         );
                     },
@@ -440,6 +439,7 @@ mod core {
             }
             // TODO Do something better than thi
             fn log_fn(
+                stdout:&mut std::io::Stdout,
                 net:&NeuralNetwork,
                 iterations_elapsed:u32,
                 start_instant:Instant,
@@ -455,14 +455,14 @@ mod core {
                     *best_accuracy_iteration = iterations_elapsed;
                     *best_accuracy_instant = Instant::now();
                 }
-                println!("Iteration: {}, Time: {}, Cost: {:.5}, Classified: {}/{} ({:.3}%), Learning rate: {}",
+                stdout.write(format!("Iteration: {}, Time: {}, Cost: {:.5}, Classified: {}/{} ({:.3}%), Learning rate: {}\n",
                     iterations_elapsed,
                     NeuralNetwork::time(start_instant),
                     evaluation.0,
                     evaluation.1,evaluation_data.len(),
                     (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32,
                     learning_rate
-                );
+                ).as_bytes()).unwrap();
                 *last_logged_instant = Instant::now();
 
             }
@@ -940,6 +940,7 @@ mod tests {
     use std::io::prelude::*;
     use std::fs::OpenOptions;
     use std::io::stdout;
+    use rand::prelude::SliceRandom;
 
     // TODO Figure out better name for this
     const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be >= 0)
@@ -1094,39 +1095,39 @@ mod tests {
     // }
     
     // Tests network to recognize handwritten digits of 28x28 pixels
-    #[test]
-    fn train_digits_0() {
-        let mut total_accuracy = 0u32;
-        let mut total_time = 0u64;
-        let runs = TEST_RERUN_MULTIPLIER;
-        for _ in 0..runs {
-            let start = Instant::now();
-            //Setup
-            let mut neural_network = NeuralNetwork::new(784,&[
-                Layer::new(100,Activation::Sigmoid),
-                Layer::new(10,Activation::Softmax)
-            ]);
-            let training_data = get_mnist_dataset(false);
-            let testing_data = get_mnist_dataset(true);
-            //Execution
-            neural_network.train(&training_data)
-                .halt_condition(MeasuredCondition::Duration(Duration::new(60,0)))
-                .log_interval(MeasuredCondition::Duration(Duration::new(10,0)))
-                .evaluation_data(EvaluationData::Actual(testing_data.clone()))
-                .go();
-            //Evaluation
-            total_time += start.elapsed().as_secs();
+    // #[test]
+    // fn train_digits_0() {
+    //     let mut total_accuracy = 0u32;
+    //     let mut total_time = 0u64;
+    //     let runs = TEST_RERUN_MULTIPLIER;
+    //     for _ in 0..runs {
+    //         let start = Instant::now();
+    //         //Setup
+    //         let mut neural_network = NeuralNetwork::new(784,&[
+    //             Layer::new(100,Activation::Sigmoid),
+    //             Layer::new(10,Activation::Sigmoid)
+    //         ]);
+    //         let training_data = get_mnist_dataset(false);
+    //         let testing_data = get_mnist_dataset(true);
+    //         //Execution
+    //         neural_network.train(&training_data)
+    //             .halt_condition(MeasuredCondition::Duration(Duration::new(60,0)))
+    //             .log_interval(MeasuredCondition::Duration(Duration::new(10,0)))
+    //             .evaluation_data(EvaluationData::Actual(testing_data.clone()))
+    //             .go();
+    //         //Evaluation
+    //         total_time += start.elapsed().as_secs();
             
 
-            let sorted_data = NeuralNetwork::counting_sort(&testing_data);
-            NeuralNetwork::f32_2d_prt(&neural_network.evaluate_outputs(&sorted_data));
+    //         let sorted_data = NeuralNetwork::counting_sort(&testing_data);
+    //         NeuralNetwork::f32_2d_prt(&neural_network.evaluate_outputs(&sorted_data));
 
-            let evaluation = neural_network.evaluate(&testing_data);
-            assert!(evaluation.1 >= required_accuracy(&testing_data));
-            total_accuracy += evaluation.1;
-        }
-        export_result("train_digits_0",runs,10000u32,total_time,total_accuracy);
-    }
+    //         let evaluation = neural_network.evaluate(&testing_data);
+    //         assert!(evaluation.1 >= required_accuracy(&testing_data));
+    //         total_accuracy += evaluation.1;
+    //     }
+    //     export_result("train_digits_0",runs,10000u32,total_time,total_accuracy);
+    // }
     // #[test]
     // fn train_digits_1() {
     //     let mut total_accuracy = 0u32;
@@ -1187,113 +1188,117 @@ mod tests {
     //     }
     //     export_result("train_digits_2",runs,10000u32,total_time,total_accuracy);
     // }
-    fn get_mnist_dataset(testing:bool) -> Vec<(Vec<f32>,Vec<f32>)> {
+    // fn get_mnist_dataset(testing:bool) -> Vec<(Vec<f32>,Vec<f32>)> {
                 
-        let (images,labels) = if testing {
-            (get_images("data/MNIST/t10k-images.idx3-ubyte"),get_labels("data/MNIST/t10k-labels.idx1-ubyte"))
-        }
-        else {
-            (get_images("data/MNIST/train-images.idx3-ubyte"),get_labels("data/MNIST/train-labels.idx1-ubyte"))
-        };
-
-        let iterator = images.iter().zip(labels.iter());
-        let mut examples = Vec::new();
-        let set_output_layer = |label:u8| -> Vec<f32> { let mut temp = vec!(0f32;10); temp[label as usize] = 1f32; temp};
-        for (image,label) in iterator {
-            examples.push(
-                (
-                    image.clone(),
-                    set_output_layer(*label)
-                )
-            );
-        }
-        return examples;
-
-        fn get_labels(path:&str) -> Vec<u8> {
-            let mut file = File::open(path).unwrap();
-            let mut label_buffer = Vec::new();
-            file.read_to_end(&mut label_buffer).expect("Couldn't read MNIST labels");
-
-            // TODO Look into better ways to remove the 1st 7 elements
-            return label_buffer.drain(8..).collect();
-        }
-
-        fn get_images(path:&str) -> Vec<Vec<f32>> {
-            let mut file = File::open(path).unwrap();
-            let mut image_buffer_u8 = Vec::new();
-            file.read_to_end(&mut image_buffer_u8).expect("Couldn't read MNIST images");
-            // Removes 1st 16 bytes of meta data
-            image_buffer_u8 = image_buffer_u8.drain(16..).collect();
-
-            // Converts from u8 to f32
-            let mut image_buffer_f32 = Vec::new();
-            for pixel in image_buffer_u8 {
-                image_buffer_f32.push(pixel as f32 / 255f32);
-            }
-
-            // Splits buffer into vectors for each image
-            let mut images_vector = Vec::new();
-            for i in (0..image_buffer_f32.len() / (28 * 28)).rev() {
-                images_vector.push(image_buffer_f32.split_off(i * 28 * 28));
-            }
-            // Does splitting in reverse order due to how '.split_off' works, so reverses back to original order.
-            images_vector.reverse();
-            return images_vector;
-        }
-    }
-    
-    // #[test]
-    // fn train_full() {
-    //     println!("test start");
-    //     let runs = 1 * TEST_RERUN_MULTIPLIER;
-    //     let mut total_accuracy = 0u32;
-    //     for _ in 0..runs {
-    //         //Setup
-    //         println!("Loading dataset");
-    //         let training_data = get_combined("/home/jonathan/Projects/dataset_constructor/combined_dataset");
-    //         println!("Loaded dataset");
-    //         //Execution
-    //         let mut neural_network = NeuralNetwork::build(&training_data);
-    //         //Evaluation
-    //         // let evaluation = neural_network.evaluate(&testing_data);
-
-    //         // assert!(evaluation.1 >= required_accuracy(&testing_data));
-    //         // println!("train_full: accuracy: {}",evaluation.1);
-    //         // println!();
-    //         // total_accuracy += evaluation.1;
+    //     let (images,labels) = if testing {
+    //         (get_images("data/MNIST/t10k-images.idx3-ubyte"),get_labels("data/MNIST/t10k-labels.idx1-ubyte"))
     //     }
-    //     //export_result("train_full",runs,10000u32,total_time,total_accuracy);
-    //     assert!(false);
+    //     else {
+    //         (get_images("data/MNIST/train-images.idx3-ubyte"),get_labels("data/MNIST/train-labels.idx1-ubyte"))
+    //     };
+
+    //     let iterator = images.iter().zip(labels.iter());
+    //     let mut examples = Vec::new();
+    //     let set_output_layer = |label:u8| -> Vec<f32> { let mut temp = vec!(0f32;10); temp[label as usize] = 1f32; temp};
+    //     for (image,label) in iterator {
+    //         examples.push(
+    //             (
+    //                 image.clone(),
+    //                 set_output_layer(*label)
+    //             )
+    //         );
+    //     }
+    //     return examples;
+
+    //     fn get_labels(path:&str) -> Vec<u8> {
+    //         let mut file = File::open(path).unwrap();
+    //         let mut label_buffer = Vec::new();
+    //         file.read_to_end(&mut label_buffer).expect("Couldn't read MNIST labels");
+
+    //         // TODO Look into better ways to remove the 1st 7 elements
+    //         return label_buffer.drain(8..).collect();
+    //     }
+
+    //     fn get_images(path:&str) -> Vec<Vec<f32>> {
+    //         let mut file = File::open(path).unwrap();
+    //         let mut image_buffer_u8 = Vec::new();
+    //         file.read_to_end(&mut image_buffer_u8).expect("Couldn't read MNIST images");
+    //         // Removes 1st 16 bytes of meta data
+    //         image_buffer_u8 = image_buffer_u8.drain(16..).collect();
+
+    //         // Converts from u8 to f32
+    //         let mut image_buffer_f32 = Vec::new();
+    //         for pixel in image_buffer_u8 {
+    //             image_buffer_f32.push(pixel as f32 / 255f32);
+    //         }
+
+    //         // Splits buffer into vectors for each image
+    //         let mut images_vector = Vec::new();
+    //         for i in (0..image_buffer_f32.len() / (28 * 28)).rev() {
+    //             images_vector.push(image_buffer_f32.split_off(i * 28 * 28));
+    //         }
+    //         // Does splitting in reverse order due to how '.split_off' works, so reverses back to original order.
+    //         images_vector.reverse();
+    //         return images_vector;
+    //     }
     // }
-    // fn get_combined(path:&str) -> Vec<(Vec<f32>,Vec<f32>)> {
-    //     let mut file = File::open(path).unwrap();
-    //     let mut combined_buffer = Vec::new();
-    //     file.read_to_end(&mut combined_buffer).expect("Couldn't read combined");
+    
+    #[test]
+    fn train_full() {
+        println!("test start");
+        let runs = 1 * TEST_RERUN_MULTIPLIER;
+        let mut total_accuracy = 0u32;
+        let mut total_time = 0u64;
+        for _ in 0..runs {
+            let start = Instant::now();
+            //Setup
+            println!("Loading dataset");
+            let training_data = get_combined("/home/jonathan/Projects/dataset_constructor/combined_dataset");
+            println!("Loaded dataset");
+            //Execution#
+            let mut neural_network = NeuralNetwork::build(&training_data);
+            //Evaluation
+            total_time += start.elapsed().as_secs();
+            let confusion_matrix = neural_network.evaluate_outputs(&training_data);
 
-    //     let mut combined_vec = Vec::new();
-    //     let multiplier:usize = (45*45)+1;
-    //     let length = combined_buffer.len() / ((45*45)+1);
-    //     println!("length: {}",length);
-    //     let mut last_logged = Instant::now();
-    //     for i in (0..length).rev() {
-    //         let image_index = i * multiplier;
-    //         let label_index = image_index + multiplier -1;
+            NeuralNetwork::f32_2d_prt(&confusion_matrix);
+            // assert!(evaluation.1 >= required_accuracy(&testing_data));
+            // println!("train_full: accuracy: {}",evaluation.1);
+            // println!();
+            // total_accuracy += evaluation.1;
+        }
+        export_result("train_full",runs,10000u32,total_time,total_accuracy);
+        assert!(false);
+    }
+    fn get_combined(path:&str) -> Vec<(Vec<f32>,Vec<f32>)> {
+        let mut file = File::open(path).unwrap();
+        let mut combined_buffer = Vec::new();
+        file.read_to_end(&mut combined_buffer).expect("Couldn't read combined");
 
-    //         let label:u8 = combined_buffer.split_off(label_index)[0]; // Array is only 1 element regardless
-    //         let mut label_vec:Vec<f32> = vec!(0f32;95usize);
-    //         label_vec[label as usize] = 1f32;
+        let mut combined_vec = Vec::new();
+        let multiplier:usize = (35*35)+1;
+        let length = combined_buffer.len() / multiplier;
+        println!("length: {}",length);
+        let mut last_logged = Instant::now();
+        for i in (0..length).rev() {
+            let image_index = i * multiplier;
+            let label_index = image_index + multiplier -1;
 
-    //         let image:Vec<u8> = combined_buffer.split_off(image_index);
-    //         let image_f32 = image.iter().map(|&x| x as f32).collect();
+            let label:u8 = combined_buffer.split_off(label_index)[0]; // Array is only 1 element regardless
+            let mut label_vec:Vec<f32> = vec!(0f32;95usize);
+            label_vec[label as usize] = 1f32;
 
-    //         combined_vec.push((image_f32,label_vec));
+            let image:Vec<u8> = combined_buffer.split_off(image_index);
+            let image_f32 = image.iter().map(|&x| x as f32).collect();
+
+            combined_vec.push((image_f32,label_vec));
 
             
-    //         if last_logged.elapsed().as_secs() > 5 {
-    //             println!("{:.2}%",((length-i) as f32 / length as f32 *100f32));
-    //             last_logged = Instant::now();
-    //         }
-    //     }
-    //     return combined_vec;
-    // }
+            if last_logged.elapsed().as_secs() > 5 {
+                println!("{:.2}%",((length-i) as f32 / length as f32 *100f32));
+                last_logged = Instant::now();
+            }
+        }
+        return combined_vec;
+    }
 }
