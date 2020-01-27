@@ -123,12 +123,13 @@ mod core {
     // For now we only have 1 activation type
     #[derive(Clone,Copy)]
     pub enum Activation {
-        Sigmoid, // TODO Should these be capitalized?
+        Sigmoid,Softmax // TODO Fix softmax, it seems to suffer the exploding gradient problem.
     }
     impl Activation {
         fn run(&self,y:&Array2<f32>) -> Array2<f32> {
             return match self {
                 Self::Sigmoid => y.mapv(|x| sigmoid(x)),
+                Self::Softmax => softmax(y),
             };
             // Applies sigmoid function
             fn sigmoid(y: f32) -> f32 {
@@ -137,20 +138,21 @@ mod core {
 
             // For use later with softmax
             // TODO Make this better
-            // fn softmax(y: &Array2<f32>) -> Array2<f32> {
-            //     // Apply e^(x) to every value in matrix
-            //     let mut exp_matrix = y.mapv(|x|x.exp());
-            //     // Divide every value in matrix by sum of its row
-            //     let sum = exp_matrix.sum_axis(Axis(1));
-            //     for (sum,mut row) in izip!(sum.iter(),exp_matrix.axis_iter_mut(Axis(1))) {
-            //         row.mapv_inplace(|x| x / sum);
-            //     }
-            //     return exp_matrix;
-            // }
+            fn softmax(y: &Array2<f32>) -> Array2<f32> {
+                // Apply e^(x) to every value in matrix
+                let mut exp_matrix = y.mapv(|x|x.exp());
+                // Divide every value in matrix by sum of its row
+                let sum = exp_matrix.sum_axis(Axis(1));
+                for (sum,mut row) in izip!(sum.iter(),exp_matrix.axis_iter_mut(Axis(1))) {
+                    row.mapv_inplace(|x| x / sum);
+                }
+                return exp_matrix;
+            }
         }
         fn derivative(&self,y:&Array2<f32>) -> Array2<f32> {
             return match self {
                 Self::Sigmoid => y.mapv(|x| -> f32 { sigmoid(x) }),
+                Self::Softmax => softmax(y),
             };
             // TODO Should we names things `x` like `sigmoid` or `x_derivative` like `sigmoid_derivative`?
             // TODO Why is this called `sigmoid prime` in some cases?
@@ -162,14 +164,23 @@ mod core {
                     1f32 / (1f32 + (-y).exp())
                 }
             }
+            // Not implemented, softmax layers can only be used as output layer.
+            fn softmax(y:&Array2<f32>) -> Array2<f32> {
+                panic!("This shouldn't be called, softmax derivative not implemented");
+                return y.clone();
+            }
         }
         fn delta(&self,output:&Array2<f32>,target:&Array2<f32>) -> Array2<f32> {
             return match self {
                 Self::Sigmoid => cross_entropy_delta(output,target),
+                Self::Softmax => softmax(output,target),
             };
 
             // TODO Need to double check these
             fn cross_entropy_delta(output:&Array2<f32>,target:&Array2<f32>) -> Array2<f32> {
+                output - target
+            }
+            fn softmax(output:&Array2<f32>,target:&Array2<f32>) -> Array2<f32> {
                 output - target
             }
         }
@@ -1093,14 +1104,14 @@ mod tests {
             //Setup
             let mut neural_network = NeuralNetwork::new(784,&[
                 Layer::new(100,Activation::Sigmoid),
-                Layer::new(10,Activation::Sigmoid)
+                Layer::new(10,Activation::Softmax)
             ]);
             let training_data = get_mnist_dataset(false);
             let testing_data = get_mnist_dataset(true);
             //Execution
             neural_network.train(&training_data)
-                .halt_condition(MeasuredCondition::Duration(Duration::new(360,0)))
-                .log_interval(MeasuredCondition::Duration(Duration::new(60,0)))
+                .halt_condition(MeasuredCondition::Duration(Duration::new(60,0)))
+                .log_interval(MeasuredCondition::Duration(Duration::new(10,0)))
                 .evaluation_data(EvaluationData::Actual(testing_data.clone()))
                 .go();
             //Evaluation
@@ -1115,7 +1126,6 @@ mod tests {
             total_accuracy += evaluation.1;
         }
         export_result("train_digits_0",runs,10000u32,total_time,total_accuracy);
-        
     }
     // #[test]
     // fn train_digits_1() {
