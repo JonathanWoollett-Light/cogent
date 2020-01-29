@@ -20,6 +20,7 @@ mod core {
     use serde::{Serialize,Deserialize};
     use std::fmt;
 
+    use std::fs::create_dir;
     use std::fs::File;
     use std::io::Read;
     //Setting number of threads to use
@@ -50,7 +51,7 @@ mod core {
         Duration(Duration)
     }
     
-    pub struct Trainer<'a> {
+    struct Trainer<'a> {
         training_data: Vec<(Vec<f32>,Vec<f32>)>,
         // TODO Since we never alter `evaluation_data` look into changing this into a reference
         evaluation_data: Vec<(Vec<f32>,Vec<f32>)>, 
@@ -65,6 +66,7 @@ mod core {
         early_stopping_condition: MeasuredCondition,
         learning_rate_decay: f32,
         learning_rate_interval: MeasuredCondition,
+        checkpoint_interval: Option<MeasuredCondition>,
         neural_network: &'a mut NeuralNetwork
     }
     impl<'a> Trainer<'a> {
@@ -108,6 +110,11 @@ mod core {
             self.learning_rate_interval = learning_rate_interval;
             return self;
         }
+        pub fn checkpoint_interval(&mut self, checkpoint_interval:MeasuredCondition) -> &mut Trainer<'a> {
+            self.checkpoint_interval = Some(checkpoint_interval);
+            return self;
+        }
+        // Begins training.
         pub fn go(&mut self) -> () {
             self.neural_network.train_details(
                 &mut self.training_data,
@@ -119,7 +126,8 @@ mod core {
                 self.lambda,
                 self.early_stopping_condition,
                 self.learning_rate_decay,
-                self.learning_rate_interval
+                self.learning_rate_interval,
+                self.checkpoint_interval
             );
         }
     }
@@ -274,7 +282,7 @@ mod core {
             }
             return activations;
         }
-        // Begin training with specified hyperparameters
+        // Begin setting hyperparameters for training.
         // Returns internal `Trainer` struct used to specify hyperparameters
         pub fn train(&mut self,training_data:&Vec<(Vec<f32>,Vec<f32>)>) -> Trainer {
             let mut rng = rand::thread_rng();
@@ -308,7 +316,7 @@ mod core {
             };
         }
 
-        // Begins trainings
+        // Rungs training.
         fn train_details(&mut self,
             training_data: &mut [(Vec<f32>,Vec<f32>)], // TODO Look into `&[(Vec<f32>,Vec<f32>)]` vs `&Vec<(Vec<f32>,Vec<f32>)>`
             evaluation_data: &[(Vec<f32>,Vec<f32>)],
@@ -319,7 +327,8 @@ mod core {
             lambda: f32,
             early_stopping_n: MeasuredCondition,
             learning_rate_decay: f32,
-            learning_rate_interval: MeasuredCondition
+            learning_rate_interval: MeasuredCondition,
+            checkpoint_interval: Option<MeasuredCondition>
         ) -> (){
 
             let mut stdout = stdout();
@@ -335,6 +344,10 @@ mod core {
 
             let starting_evaluation = self.evaluate(evaluation_data);
 
+            if let Some(_) = checkpoint_interval {
+                create_dir("../checkpoints");
+            }
+
             if let Some(_) = log_interval {
                 stdout.write(format!("Iteration: {}, Time: {}, Cost: {:.5}, Classified: {}/{} ({:.3}%), Learning rate: {}\n",
                     iterations_elapsed,
@@ -346,7 +359,10 @@ mod core {
                 ).as_bytes()).unwrap();
             }
 
+            // TODO Can we only define these if we need them?
+            let mut last_checkpointed_instant = Instant::now();
             let mut last_logged_instant = Instant::now();
+            
 
             loop {
                 match halt_condition {
@@ -388,17 +404,28 @@ mod core {
                 
                 iterations_elapsed += 1;
                 
+                match checkpoint_interval {// TODO Reduce code duplication here
+                    Some(MeasuredCondition::Iteration(iteration_interval)) => if iterations_elapsed % iteration_interval == 0 {
+                        self.export(&format!("../checkpoints/{}",iterations_elapsed));
+                    },
+                    Some(MeasuredCondition::Duration(duration_interval)) => if last_checkpointed_instant.elapsed() >= duration_interval {
+                        self.export(&format!("../checkpoints/{}",NeuralNetwork::time(start_instant)));
+                        last_checkpointed_instant = Instant::now();
+                    },
+                    _ => {},
+                }
 
                 match log_interval {// TODO Reduce code duplication here
                     Some(MeasuredCondition::Iteration(iteration_interval)) => if iterations_elapsed % iteration_interval == 0 {
                         log_fn(&mut stdout,self,iterations_elapsed,start_instant,learning_rate,evaluation_data,
-                            &mut best_accuracy,&mut best_accuracy_iteration,&mut best_accuracy_instant,&mut last_logged_instant
+                            &mut best_accuracy,&mut best_accuracy_iteration,&mut best_accuracy_instant
                         );
                     },
                     Some(MeasuredCondition::Duration(duration_interval)) => if last_logged_instant.elapsed() >= duration_interval {
                         log_fn(&mut stdout,self,iterations_elapsed,start_instant,learning_rate,evaluation_data,
-                            &mut best_accuracy,&mut best_accuracy_iteration,&mut best_accuracy_instant,&mut last_logged_instant
+                            &mut best_accuracy,&mut best_accuracy_iteration,&mut best_accuracy_instant
                         );
+                        last_logged_instant = Instant::now();
                     },
                     _ => {},
                 }
@@ -451,8 +478,7 @@ mod core {
                 start_instant:Instant,
                 learning_rate:f32,
                 evaluation_data: &[(Vec<f32>,Vec<f32>)],
-                best_accuracy:&mut u32,best_accuracy_iteration:&mut u32,best_accuracy_instant:&mut Instant,
-                last_logged_instant:&mut Instant
+                best_accuracy:&mut u32,best_accuracy_iteration:&mut u32,best_accuracy_instant:&mut Instant
             ) -> () {
 
                 let evaluation = net.evaluate(evaluation_data);
@@ -469,8 +495,6 @@ mod core {
                     (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32,
                     learning_rate
                 ).as_bytes()).unwrap();
-                *last_logged_instant = Instant::now();
-
             }
             
         }
