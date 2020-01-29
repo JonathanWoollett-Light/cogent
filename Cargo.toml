@@ -9,10 +9,12 @@ edition = "2018"
 
 # Comment is what I'm using it for.
 [dependencies]
-rand = "0.7"                    # Random number generation
-scoped_threadpool = "0.1.*"     # Threading
-itertools = "0.8.2"             # Zipping iterators nicely
-ndarray = "0.12.0"              # Linear algebra
-ndarray_einsum_beta = "0.4.4"   # Einstein summation for batch backpropagation
-ndarray-rand = "0.10.0"         # Random Array generation
-crossterm="0.14.2"              # Nice printing
+rand = "0.7"                                        # Random number generation
+scoped_threadpool = "0.1.*"                         # Threading
+itertools = "0.8.2"                                 # Zipping iterators nicely
+ndarray = {version="0.13.0",features=["serde"]}     # Linear algebra
+ndarray_einsum_beta = "0.5.0"                       # Einstein summation for batch backpropagation
+ndarray-rand = "0.11.0"                             # Random Array generation
+crossterm="0.14.2"                                  # Nice printing
+serde = {version = "1.0.104",features=["derive"]}   # Serialize (Export) and deserialize (Import) neural network
+serde_json = "1.0"                                  # JSON format for serde

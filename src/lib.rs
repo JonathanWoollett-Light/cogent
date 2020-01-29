@@ -17,6 +17,11 @@ mod core {
     use std::io::{Write, stdout};
     use crossterm::{QueueableCommand, cursor};
 
+    use serde::{Serialize,Deserialize};
+    use std::fmt;
+
+    use std::fs::File;
+    use std::io::Read;
     //Setting number of threads to use
     const THREAD_COUNT:usize = 12usize;
 
@@ -121,7 +126,7 @@ mod core {
 
     // Enum for each neuron activation type
     // For now we only have 1 activation type
-    #[derive(Clone,Copy)]
+    #[derive(Clone,Copy,Serialize,Deserialize)]
     pub enum Activation {
         Sigmoid,Softmax // TODO Fix softmax, it seems to suffer the exploding gradient problem.
     }
@@ -199,6 +204,7 @@ mod core {
 
     // A stochastic/incremental descent neural network.
     // Implementing cross-entropy cost function and L2 regularization.
+    #[derive(Serialize,Deserialize)]
     pub struct NeuralNetwork {
         inputs: usize, //TODO Remove this, add simply integer val for number of input neurons.
         biases: Vec<Array2<f32>>,
@@ -923,6 +929,20 @@ mod core {
                 NeuralNetwork::f32_2d_prt(&self.biases[i]);
             }
             println!("-------------------------------------------");
+        }
+        // Exports neural network to path.
+        pub fn export(&self,path:&str) -> () {
+            let file = File::open(path);
+            let serialized:String = serde_json::to_string(self).unwrap();
+            file.unwrap().write_all(serialized.as_bytes());
+        }
+        // Imports neural network from path.
+        fn import(path:&str) -> NeuralNetwork {
+            let file = File::open(path);
+            let mut string_contents:String = String::new();
+            file.unwrap().read_to_string(&mut string_contents);
+            let deserialized:NeuralNetwork = serde_json::from_str(&string_contents).unwrap();
+            return deserialized;
         }
     }
 }
