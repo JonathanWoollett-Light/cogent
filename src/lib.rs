@@ -244,7 +244,7 @@ mod core {
             fn quadratic(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
                 outputs - targets
             }
-            // TODO Is this right?
+            // TODO Fix this: I really don't think this is right, it seems to underperform the quadratic cost.
             fn cross_entropy(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
                 outputs.mapv(|x|x.ln()) * targets
             }
@@ -1061,7 +1061,7 @@ mod tests {
     
     use std::fs::File;
     use std::time::{Instant,Duration};
-    use crate::core::{EvaluationData,MeasuredCondition,Activation,Layer,Cost,NeuralNetwork};
+    use crate::core::{EvaluationData,MeasuredCondition,HaltCondition,Activation,Layer,Cost,NeuralNetwork};
     use std::io::Read;
     use std::io::prelude::*;
     use std::fs::OpenOptions;
@@ -1108,8 +1108,8 @@ mod tests {
             let testing_data = training_data.clone();
             //Execution
             neural_network.train(&training_data)
-                .halt_condition(MeasuredCondition::Iteration(8000u32))
-                .early_stopping_condition(MeasuredCondition::Iteration(6000u32))
+                .halt_condition(HaltCondition::Accuracy(1f32))
+                .early_stopping_condition(MeasuredCondition::Duration(Duration::new(900,0)))
                 .batch_size(4usize)
                 .learning_rate(2f32)
                 .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
@@ -1146,8 +1146,8 @@ mod tests {
             let testing_data = training_data.clone();
             //Execution
             neural_network.train(&training_data)
-                .halt_condition(MeasuredCondition::Iteration(8000u32))
-                .early_stopping_condition(MeasuredCondition::Iteration(6000u32))
+                .halt_condition(HaltCondition::Accuracy(1f32))
+                .early_stopping_condition(MeasuredCondition::Duration(Duration::new(900,0)))
                 .batch_size(4usize)
                 .learning_rate(2f32)
                 .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
@@ -1163,46 +1163,84 @@ mod tests {
         }
         export_result("train_xor_1",runs,4u32,total_time,total_accuracy);
     }
-    // #[test]
-    // fn train_xor_1() {
-    //     let mut total_accuracy = 0u32;
-    //     let mut total_time = 0u64;
-    //     let runs = 10 * TEST_RERUN_MULTIPLIER;
-    //     for _ in 0..runs {
-    //         let start = Instant::now();
-    //         //Setup
-    //         let mut neural_network = NeuralNetwork::new(2,&[
-    //             Layer::new(3,Activation::Sigmoid),
-    //             Layer::new(4,Activation::Sigmoid),
-    //             Layer::new(2,Activation::Sigmoid)
-    //         ]);
-    //         let training_data = vec![
-    //             (vec![0f32,0f32],vec![0f32,1f32]),
-    //             (vec![1f32,0f32],vec![1f32,0f32]),
-    //             (vec![0f32,1f32],vec![1f32,0f32]),
-    //             (vec![1f32,1f32],vec![0f32,1f32])
-    //         ];
-    //         let testing_data = training_data.clone();
-    //         //Execution
-    //         neural_network.train(&training_data)
-    //             .halt_condition(crate::core::MeasuredCondition::Iteration(8000u32))
-    //             .early_stopping_condition(MeasuredCondition::Iteration(6000u32))
-    //             .batch_size(4usize)
-    //             .learning_rate(2f32)
-    //             .learning_rate_interval(MeasuredCondition::Iteration(1000u32))
-    //             .evaluation_data(crate::core::EvaluationData::Actual(testing_data.clone()))
-    //             .lambda(0f32)
-    //             .log_interval(MeasuredCondition::Iteration(1000u32))
-    //             .go();
+    #[test]
+    fn train_xor_2() {
+        let mut total_accuracy = 0u32;
+        let mut total_time = 0u64;
+        let runs = 10 * TEST_RERUN_MULTIPLIER;
+        for _ in 0..runs {
+            let start = Instant::now();
+            //Setup
+            let mut neural_network = NeuralNetwork::new(2,&[
+                Layer::new(3,Activation::Sigmoid),
+                Layer::new(4,Activation::Sigmoid),
+                Layer::new(2,Activation::Sigmoid)
+            ],Cost::CrossEntropy);
+            let training_data = vec![
+                (vec![0f32,0f32],vec![0f32,1f32]),
+                (vec![1f32,0f32],vec![1f32,0f32]),
+                (vec![0f32,1f32],vec![1f32,0f32]),
+                (vec![1f32,1f32],vec![0f32,1f32])
+            ];
+            let testing_data = training_data.clone();
+            //Execution
+            neural_network.train(&training_data)
+                .halt_condition(HaltCondition::Accuracy(1f32))
+                .early_stopping_condition(MeasuredCondition::Duration(Duration::new(900,0)))
+                .batch_size(4usize)
+                .learning_rate(2f32)
+                .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
+                .evaluation_data(crate::core::EvaluationData::Actual(testing_data.clone()))
+                .lambda(0f32)
+                .go();
 
-    //         //Evaluation
-    //         total_time += start.elapsed().as_secs();
-    //         let evaluation = neural_network.evaluate(&testing_data);
-    //         assert!(evaluation.1 >= required_accuracy(&testing_data));
-    //         total_accuracy += evaluation.1;
-    //     }
-    //     export_result("train_xor_1",runs,4u32,total_time,total_accuracy);
-    // }
+            //Evaluation
+            total_time += start.elapsed().as_secs();
+            let evaluation = neural_network.evaluate(&testing_data);
+            assert!(evaluation.1 >= required_accuracy(&testing_data));
+            total_accuracy += evaluation.1;
+        }
+        export_result("train_xor_2",runs,4u32,total_time,total_accuracy);
+    }
+    #[test]
+    fn train_xor_3() {
+        let mut total_accuracy = 0u32;
+        let mut total_time = 0u64;
+        let runs = 10 * TEST_RERUN_MULTIPLIER;
+        for _ in 0..runs {
+            let start = Instant::now();
+            //Setup
+            let mut neural_network = NeuralNetwork::new(2,&[
+                Layer::new(3,Activation::Sigmoid),
+                Layer::new(4,Activation::Sigmoid),
+                Layer::new(2,Activation::Softmax)
+            ],Cost::CrossEntropy);
+            let training_data = vec![
+                (vec![0f32,0f32],vec![0f32,1f32]),
+                (vec![1f32,0f32],vec![1f32,0f32]),
+                (vec![0f32,1f32],vec![1f32,0f32]),
+                (vec![1f32,1f32],vec![0f32,1f32])
+            ];
+            let testing_data = training_data.clone();
+            //Execution
+            neural_network.train(&training_data)
+                .halt_condition(HaltCondition::Accuracy(1f32))
+                .early_stopping_condition(MeasuredCondition::Duration(Duration::new(900,0)))
+                .batch_size(4usize)
+                .learning_rate(2f32)
+                .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
+                .evaluation_data(crate::core::EvaluationData::Actual(testing_data.clone()))
+                .lambda(0f32)
+                .go();
+
+            //Evaluation
+            total_time += start.elapsed().as_secs();
+            let evaluation = neural_network.evaluate(&testing_data);
+            assert!(evaluation.1 >= required_accuracy(&testing_data));
+            total_accuracy += evaluation.1;
+        }
+        export_result("train_xor_3",runs,4u32,total_time,total_accuracy);
+    }
     
     // Tests network to recognize handwritten digits of 28x28 pixels
     #[test]
@@ -1296,7 +1334,7 @@ mod tests {
             assert!(evaluation.1 >= required_accuracy(&testing_data));
             total_accuracy += evaluation.1;
         }
-        export_result("train_digits_0",runs,10000u32,total_time,total_accuracy);
+        export_result("train_digits_2",runs,10000u32,total_time,total_accuracy);
     }
     #[test]
     fn train_digits_3() {
@@ -1327,7 +1365,7 @@ mod tests {
             assert!(evaluation.1 >= required_accuracy(&testing_data));
             total_accuracy += evaluation.1;
         }
-        export_result("train_digits_1",runs,10000u32,total_time,total_accuracy);
+        export_result("train_digits_3",runs,10000u32,total_time,total_accuracy);
     }
     fn get_mnist_dataset(testing:bool) -> Vec<(Vec<f32>,Vec<f32>)> {
                 
