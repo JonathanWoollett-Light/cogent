@@ -745,8 +745,10 @@ mod core {
         }
         // TODO Lot of stuff could be done to improve this function
         // Requires ordered test_data;
-        // Returns confusion matrix with percentages.
-        pub fn evaluate_outputs(&self, test_data:&[(Vec<f32>,Vec<f32>)]) -> Array2<f32> {
+        // Returns tuple of:
+        //  Array1<f32> of percentages of examples in each class correctly classified.
+        //  Array2<f32> of confusion matrix with percentages.
+        pub fn evaluate_outputs(&self, test_data:&[(Vec<f32>,Vec<f32>)]) -> (Array1<f32>,Array2<f32>) {
             let alphabet_size = test_data[0].1.len();
             let chunks = symbol_chunks(test_data,alphabet_size);
             let mut pool = Pool::new(chunks.len() as u32);
@@ -759,12 +761,14 @@ mod core {
                         let classes:Array2<u32> = set_nonmax_zero(&results);
                         let class_sums:Array1<u32> = classes.sum_axis(Axis(0));
                         let sum:f32 = class_sums.sum() as f32;
-                        *classification = class_sums.mapv(|val| (val as f32 /sum));
+                        *classification = class_sums.mapv(|val| (val as f32 / sum));
                     });
                 }
             });
-
-            return cast_array1s_to_array2(classifications,alphabet_size);
+            let matrix:Array2<f32> = cast_array1s_to_array2(classifications,alphabet_size);
+            // TODO Getting `diagonal` could porbably be improved, look into that.
+            let diagonal:Array1<f32> = matrix.clone().into_diag();
+            return (diagonal,matrix);
 
             // TODO Lots needs to be done to improve this.
             // Returns Vec<(Array2<f32>,Array2<f32>)> with each tuple representing all examples of a character.
