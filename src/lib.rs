@@ -36,9 +36,10 @@ mod core {
     const DEFAULT_BATCH_SIZE:f32 = 0.002f32; //(x * examples.len() as f32).ceil() as usize. batch_size = x% of training data
     const DEFAULT_LEARNING_RATE:f32 = 0.1f32;
     const DEFAULT_LAMBDA:f32 = 0.1f32; // lambda = (x * examples.len() as f32). lambda = x% of training data. lambda = regularization parameter
-    const DEFAULT_EARLY_STOPPING:f32 = 0.00005f32; // Duration::new(examples[0].0.len()*examples.len()*x,0). (MNIST is approx 4 mins)
-    const DEFAULT_LEARNING_RATE_DECAY:f32 = 0.5f32;
-    const DEFAULT_LEARNING_RATE_INTERVAL:u32 = 500u32; // Iteration(x * examples[0].0.len() / examples.len()). (MNIST is approx 6 iterations)
+    const DEFAULT_EARLY_STOPPING:f32 = 0.00005f32; // Duration::new(examples[0].0.len()*examples.len()*x,0). (MNIST is approx 32 mins)
+    const DEFAULT_EARLY_STOPPING_MIN_CHANGE:f32 = 0.001f32; // Minimum +% evaluation change required to prevent early stoppage
+    const DEFAULT_LEARNING_RATE_DECAY:f32 = 0.5f32; // Amount to reduce learning rate by
+    const DEFAULT_LEARNING_RATE_INTERVAL:u32 = 500u32; // Iteration(x * examples[0].0.len() / examples.len()). (MNIST is approx 7 iterations
 
     pub enum EvaluationData {
         Scaler(usize),
@@ -56,6 +57,11 @@ mod core {
         Duration(Duration),
         Accuracy(f32)
     }
+    #[derive(Clone,Copy)]
+    pub enum EarlyStoppingChange {
+        Scaler(u32),
+        Percent(f32),
+    }
     
     pub struct Trainer<'a> {
         training_data: Vec<(Vec<f32>,Vec<f32>)>,
@@ -70,6 +76,7 @@ mod core {
         lambda: f32, // Regularization parameter
         // Can stop after no cost improvement over a certain number of iterations, a certain duration, or not at all.
         early_stopping_condition: MeasuredCondition,
+        early_stopping_min_change: EarlyStoppingChange,
         learning_rate_decay: f32,
         learning_rate_interval: MeasuredCondition,
         checkpoint_interval: Option<MeasuredCondition>,
@@ -109,6 +116,10 @@ mod core {
             self.early_stopping_condition = early_stopping_condition;
             return self;
         }
+        pub fn early_stopping_min_change(&mut self, early_stopping_min_change:EarlyStoppingChange) -> &mut Trainer<'a> {
+            self.early_stopping_min_change = early_stopping_min_change;
+            return self;
+        }
         pub fn learning_rate_decay(&mut self, learning_rate_decay:f32) -> &mut Trainer<'a> {
             self.learning_rate_decay = learning_rate_decay;
             return self;
@@ -136,6 +147,7 @@ mod core {
                 self.learning_rate,
                 self.lambda,
                 self.early_stopping_condition,
+                self.early_stopping_min_change,
                 self.learning_rate_decay,
                 self.learning_rate_interval,
                 self.checkpoint_interval,
@@ -332,6 +344,7 @@ mod core {
                 learning_rate: DEFAULT_LEARNING_RATE,
                 lambda: DEFAULT_LAMBDA,
                 early_stopping_condition: MeasuredCondition::Duration(early_stopping_condition),
+                early_stopping_min_change: EarlyStoppingChange::Percent(DEFAULT_EARLY_STOPPING_MIN_CHANGE),
                 learning_rate_decay: DEFAULT_LEARNING_RATE_DECAY,
                 learning_rate_interval: MeasuredCondition::Iteration(learning_rate_interval),
                 checkpoint_interval: None,
@@ -350,6 +363,7 @@ mod core {
             mut learning_rate: f32,
             lambda: f32,
             early_stopping_n: MeasuredCondition,
+            early_stopping_min_change: EarlyStoppingChange,
             learning_rate_decay: f32,
             learning_rate_interval: MeasuredCondition,
             checkpoint_interval: Option<MeasuredCondition>,
@@ -422,11 +436,7 @@ mod core {
                 iterations_elapsed += 1;
 
                 let evaluation = self.evaluate(evaluation_data);
-                if evaluation.1 > best_accuracy { 
-                    best_accuracy = evaluation.1;
-                    best_accuracy_iteration = iterations_elapsed;
-                    best_accuracy_instant = Instant::now();
-                }
+                
                 
                 match checkpoint_interval {// TODO Reduce code duplication here
                     Some(MeasuredCondition::Iteration(iteration_interval)) => if iterations_elapsed % iteration_interval == 0 {
@@ -457,6 +467,20 @@ mod core {
                     Some(HaltCondition::Duration(duration)) => if start_instant.elapsed() > duration { break; },
                     Some(HaltCondition::Accuracy(accuracy)) => if evaluation.1 as f32 / evaluation_data.len() as f32 > accuracy { break; },
                     _ => {},
+                }
+
+                // TODO Is there a way to reduce code duplication here?
+                match early_stopping_min_change {
+                    EarlyStoppingChange::Percent(percent) => if (evaluation.1 as f32 / evaluation_data.len() as f32) > (best_accuracy as f32 / evaluation_data.len() as f32) + percent {
+                        best_accuracy = evaluation.1;
+                        best_accuracy_iteration = iterations_elapsed;
+                        best_accuracy_instant = Instant::now();
+                    }
+                    EarlyStoppingChange::Scaler(scaler) => if evaluation.1 > best_accuracy + scaler {
+                        best_accuracy = evaluation.1;
+                        best_accuracy_iteration = iterations_elapsed;
+                        best_accuracy_instant = Instant::now();
+                    }
                 }
 
                 match early_stopping_n {
