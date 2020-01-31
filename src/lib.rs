@@ -33,7 +33,6 @@ mod core {
     const E:f32 = 2.718281f32;
 
     const DEFAULT_EVALUTATION_DATA:f32 = 0.1f32; //`(x * examples.len() as f32) as usize` of `testing_data` is split_off into `evaluation_data`
-    const DEFAULT_HALT_CONDITION:f32 = 0.0001f32; // Duration::new(examples[0].0.len()*examples.len()*x,0). (MNIST is approx 15 mins)
     const DEFAULT_BATCH_SIZE:f32 = 0.002f32; //(x * examples.len() as f32).ceil() as usize. batch_size = x% of training data
     const DEFAULT_LEARNING_RATE:f32 = 0.1f32;
     const DEFAULT_LAMBDA:f32 = 0.1f32; // lambda = (x * examples.len() as f32). lambda = x% of training data. lambda = regularization parameter
@@ -51,13 +50,19 @@ mod core {
         Iteration(u32),
         Duration(Duration)
     }
+    #[derive(Clone,Copy)]
+    pub enum HaltCondition {
+        Iteration(u32),
+        Duration(Duration),
+        Accuracy(f32)
+    }
     
     pub struct Trainer<'a> {
         training_data: Vec<(Vec<f32>,Vec<f32>)>,
         // TODO Since we never alter `evaluation_data` look into changing this into a reference
         evaluation_data: Vec<(Vec<f32>,Vec<f32>)>, 
         // Will halt after at a certain iteration, accuracy or duration.
-        halt_condition: MeasuredCondition,
+        halt_condition: Option<HaltCondition>,
         // Can log after a certain number of iterations, a certain duration, or not at all.
         log_interval: Option<MeasuredCondition>,
         batch_size: usize, // TODO Maybe change `batch_size` to allow it to be set by a user as a % of their data
@@ -80,8 +85,8 @@ mod core {
             };
             return self;
         }
-        pub fn halt_condition(&mut self, halt_condition:MeasuredCondition) -> &mut Trainer<'a> {
-            self.halt_condition = halt_condition;
+        pub fn halt_condition(&mut self, halt_condition:HaltCondition) -> &mut Trainer<'a> {
+            self.halt_condition = Some(halt_condition);
             return self;
         }
         pub fn log_interval(&mut self, log_interval:MeasuredCondition) -> &mut Trainer<'a> {
@@ -314,7 +319,6 @@ mod core {
             let temp_evaluation_data = temp_training_data.split_off(training_data.len() - (training_data.len() as f32 * DEFAULT_EVALUTATION_DATA) as usize);
 
             let multiplier:f32 = training_data[0].0.len() as f32 * training_data.len() as f32;
-            let halt_condition = Duration::new((multiplier * DEFAULT_HALT_CONDITION) as u64,0);
             let early_stopping_condition = Duration::new((multiplier * DEFAULT_EARLY_STOPPING) as u64,0);
             let learning_rate_interval:u32 = (DEFAULT_LEARNING_RATE_INTERVAL as f32 * training_data[0].0.len() as f32 / training_data.len() as f32) as u32;
             
@@ -322,7 +326,7 @@ mod core {
             return Trainer {
                 training_data: temp_training_data,
                 evaluation_data: temp_evaluation_data,
-                halt_condition: MeasuredCondition::Duration(halt_condition),
+                halt_condition: None,
                 log_interval: None,
                 batch_size: (DEFAULT_BATCH_SIZE * training_data.len() as f32).ceil() as usize,
                 learning_rate: DEFAULT_LEARNING_RATE,
@@ -340,7 +344,7 @@ mod core {
         fn train_details(&mut self,
             training_data: &mut [(Vec<f32>,Vec<f32>)], // TODO Look into `&[(Vec<f32>,Vec<f32>)]` vs `&Vec<(Vec<f32>,Vec<f32>)>`
             evaluation_data: &[(Vec<f32>,Vec<f32>)],
-            halt_condition: MeasuredCondition,
+            halt_condition: Option<HaltCondition>,
             log_interval: Option<MeasuredCondition>,
             batch_size: usize,
             mut learning_rate: f32,
@@ -384,14 +388,8 @@ mod core {
             // TODO Can we only define these if we need them?
             let mut last_checkpointed_instant = Instant::now();
             let mut last_logged_instant = Instant::now();
-            
 
             loop {
-                match halt_condition {
-                    MeasuredCondition::Iteration(iteration) => if iterations_elapsed == iteration { break; },
-                    MeasuredCondition::Duration(duration) => if start_instant.elapsed() >= duration { break; },
-                }
-
                 let batch_start_instant = Instant::now();
                 training_data.shuffle(&mut rng);
                 let batches:Vec<_> = training_data.chunks(batch_size).collect();
@@ -451,6 +449,13 @@ mod core {
                         );
                         last_logged_instant = Instant::now();
                     },
+                    _ => {},
+                }
+
+                match halt_condition {
+                    Some(HaltCondition::Iteration(iteration)) => if iterations_elapsed == iteration { break; },
+                    Some(HaltCondition::Duration(duration)) => if start_instant.elapsed() > duration { break; },
+                    Some(HaltCondition::Accuracy(accuracy)) => if evaluation.1 as f32 / evaluation_data.len() as f32 > accuracy { break; },
                     _ => {},
                 }
 
