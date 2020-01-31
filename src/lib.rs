@@ -18,12 +18,9 @@ mod core {
     use crossterm::{QueueableCommand, cursor};
 
     use serde::{Serialize,Deserialize};
-    use std::fmt;
 
-    use std::fs::create_dir;
     use std::fs::File;
     use std::io::Read;
-    use std::fs::read_dir;
     //Setting number of threads to use
     const THREAD_COUNT:usize = 12usize;
 
@@ -201,7 +198,7 @@ mod core {
             // ------------------------------------------------
 
             // Get max value in each row (each example)
-            let mut max_axis_vals = exp_matrix.fold_axis(Axis(1),0f32,|acc,x| (if acc > x { *acc } else { *x }));
+            let max_axis_vals = exp_matrix.fold_axis(Axis(1),0f32,|acc,x| (if acc > x { *acc } else { *x }));
             // Subtracts row max from every value in matrix // TODO Improve this
             for i in 0..exp_matrix.shape()[0] {
                 exp_matrix.row_mut(i).mapv_inplace(|x| x-max_axis_vals[i]); 
@@ -404,7 +401,6 @@ mod core {
             let mut last_logged_instant = Instant::now();
 
             loop {
-                let batch_start_instant = Instant::now();
                 training_data.shuffle(&mut rng);
                 let batches:Vec<_> = training_data.chunks(batch_size).collect();
                 
@@ -451,11 +447,11 @@ mod core {
 
                 match log_interval {// TODO Reduce code duplication here
                     Some(MeasuredCondition::Iteration(iteration_interval)) => if iterations_elapsed % iteration_interval == 0 {
-                        log_fn(&mut stdout,self,iterations_elapsed,start_instant,learning_rate,evaluation,evaluation_data.len()
+                        log_fn(&mut stdout,iterations_elapsed,start_instant,learning_rate,evaluation,evaluation_data.len()
                         );
                     },
                     Some(MeasuredCondition::Duration(duration_interval)) => if last_logged_instant.elapsed() >= duration_interval {
-                        log_fn(&mut stdout,self,iterations_elapsed,start_instant,learning_rate,evaluation,evaluation_data.len()
+                        log_fn(&mut stdout,iterations_elapsed,start_instant,learning_rate,evaluation,evaluation_data.len()
                         );
                         last_logged_instant = Instant::now();
                     },
@@ -526,7 +522,6 @@ mod core {
             // TODO Do something better than thi
             fn log_fn(
                 stdout:&mut std::io::Stdout,
-                net:&NeuralNetwork,
                 iterations_elapsed:u32,
                 start_instant:Instant,
                 learning_rate:f32,
@@ -711,9 +706,6 @@ mod core {
         
         // Returns tuple (average cost, number of examples correctly classified)
         pub fn evaluate(&self, test_data:&[(Vec<f32>,Vec<f32>)]) -> (f32,u32) {
-
-            let eval_start_instant = Instant::now();
-
             let chunks_length:usize = if test_data.len() < THREAD_COUNT { test_data.len() } else { test_data.len() / THREAD_COUNT };
             let chunks:Vec<_> = test_data.chunks(chunks_length).collect(); // Specify type further
             let mut pool = Pool::new(chunks.len() as u32);
