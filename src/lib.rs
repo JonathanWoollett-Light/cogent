@@ -170,22 +170,6 @@ mod core {
                 return softmax;
             }
         }
-        fn delta(&self,output:&Array2<f32>,target:&Array2<f32>) -> Array2<f32> {
-            return match self {
-                Self::Sigmoid => sigmoid(output,target),
-                Self::Softmax => softmax(output,target),
-            };
-            // cross entropy derivative * sigmoid derivative
-            fn sigmoid(output:&Array2<f32>,target:&Array2<f32>) -> Array2<f32> {
-                // It simplifies to the following:
-                output - target
-            }
-            // quadratic cost derivative * softmax derivatve
-            fn softmax(output:&Array2<f32>,target:&Array2<f32>) -> Array2<f32> {
-                let derivative = output.mapv(|x|x*(1f32-x));
-                return (output - target)*derivative;
-            }
-        }
         // Applies sigmoid function
         fn sigmoid(y: f32) -> f32 {
             1f32 / (1f32 + (-y).exp())
@@ -638,12 +622,10 @@ mod core {
             let mut nabla_w:Vec<ArrayD<f32>> = Vec::with_capacity(self.connections.len()); // this should really be 3d matrix instead of 'Vec<DMatrix<f32>>', its a bad workaround
 
             let last_layer = self.layers[self.layers.len()-1];
+            // TODO:
+            //  A few of these output error calculations can be greatly simplified (e.g. cross entropy sigmoid = outputs-target).
+            //  Find a way to implement these simplifications.
             let mut error:Array2<f32> = self.cost.derivative(&activations[last_index+1],&target) * last_layer.derivative(&inputs[last_index]);
-            // println!("\ngot here\n");
-            // println!("quadratic_cost_derivative(&activations[last_index+1],&target).shape():{:.?}",quadratic_cost_derivative(&activations[last_index+1],&target).shape());
-            // println!("last_layer.derivative(&inputs[last_index+1]).shape():{:.?}",last_layer.derivative(&inputs[last_index]).shape());
-            //let mut error:Array2<f32> = quadratic_cost_derivative(&activations[last_index+1],&target) * last_layer.derivative(&inputs[last_index]);
-            //println!("\nerror.shape:{:.?}\n",error.shape());
 
             // Sets gradients in output layer
             nabla_b.insert(0,error.clone());
@@ -651,9 +633,9 @@ mod core {
             nabla_w.insert(0,weight_errors);
             
 
-            // self.neurons.len()-2 -> 1 (inclusive)
-            // With input layer, self.neurons.len()-1=self.biases.len() is last nueron layer, but without, self.neurons.len()-2 is last neuron layer
-            for i in (1..self.biases.len()).rev() {
+            // self.layers.len()-1 -> 1 (inclusive)
+            // (self.layers.len()=self.biases.len()=self.connections.len())
+            for i in (1..self.layers.len()).rev() {
                 // Calculates error
                 error = self.layers[i-1].derivative(&inputs[i-1]) *
                     error.dot(&self.connections[i]);
