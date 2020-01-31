@@ -33,11 +33,11 @@ mod core {
     const E:f32 = 2.718281f32;
 
     const DEFAULT_EVALUTATION_DATA:f32 = 0.1f32; //`(x * examples.len() as f32) as usize` of `testing_data` is split_off into `evaluation_data`
-    const DEFAULT_HALT_CONDITION:f32 = 0.00002f32; // Duration::new(examples[0].0.len()*examples.len()*x,0). (MNIST is approx 15 mins)
+    const DEFAULT_HALT_CONDITION:f32 = 0.0001f32; // Duration::new(examples[0].0.len()*examples.len()*x,0). (MNIST is approx 15 mins)
     const DEFAULT_BATCH_SIZE:f32 = 0.002f32; //(x * examples.len() as f32).ceil() as usize. batch_size = x% of training data
     const DEFAULT_LEARNING_RATE:f32 = 0.1f32;
     const DEFAULT_LAMBDA:f32 = 0.1f32; // lambda = (x * examples.len() as f32). lambda = x% of training data. lambda = regularization parameter
-    const DEFAULT_EARLY_STOPPING:f32 = 0.000005f32; // Duration::new(examples[0].0.len()*examples.len()*x,0). (MNIST is approx 4 mins)
+    const DEFAULT_EARLY_STOPPING:f32 = 0.00005f32; // Duration::new(examples[0].0.len()*examples.len()*x,0). (MNIST is approx 4 mins)
     const DEFAULT_LEARNING_RATE_DECAY:f32 = 0.5f32;
     const DEFAULT_LEARNING_RATE_INTERVAL:u32 = 500u32; // Iteration(x * examples[0].0.len() / examples.len()). (MNIST is approx 6 iterations)
 
@@ -217,6 +217,7 @@ mod core {
             fn quadratic(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array1<f32> {
                 (targets - outputs).mapv(|x| 0.5f32 * x.powi(2)).sum_axis(Axis(1))
             }
+            // TODO This isn't done yet.
             fn cross_entropy(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
                 outputs - targets
             }
@@ -229,8 +230,9 @@ mod core {
             fn quadratic(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
                 outputs - targets
             }
+            // TODO Is this right?
             fn cross_entropy(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
-                outputs - targets
+                outputs.mapv(|x|x.ln()) * targets
             }
         }
     }
@@ -315,12 +317,7 @@ mod core {
             let halt_condition = Duration::new((multiplier * DEFAULT_HALT_CONDITION) as u64,0);
             let early_stopping_condition = Duration::new((multiplier * DEFAULT_EARLY_STOPPING) as u64,0);
             let learning_rate_interval:u32 = (DEFAULT_LEARNING_RATE_INTERVAL as f32 * training_data[0].0.len() as f32 / training_data.len() as f32) as u32;
-            println!(
-                "halt_condition: {:.2} mins ({:.2} hours), early_stopping_condition: {:.2} mins ({:.2} hours), learning_rate_interval: {} ints",
-                halt_condition.as_secs() as f32 / 60f32,halt_condition.as_secs() as f32 / 3600f32,
-                early_stopping_condition.as_secs() as f32 / 60f32,early_stopping_condition.as_secs() as f32 / 3600f32,
-                learning_rate_interval
-            );
+            
             
             return Trainer {
                 training_data: temp_training_data,
@@ -425,6 +422,13 @@ mod core {
                 }
 
                 iterations_elapsed += 1;
+
+                let evaluation = self.evaluate(evaluation_data);
+                if evaluation.1 > best_accuracy { 
+                    best_accuracy = evaluation.1;
+                    best_accuracy_iteration = iterations_elapsed;
+                    best_accuracy_instant = Instant::now();
+                }
                 
                 match checkpoint_interval {// TODO Reduce code duplication here
                     Some(MeasuredCondition::Iteration(iteration_interval)) => if iterations_elapsed % iteration_interval == 0 {
@@ -439,13 +443,11 @@ mod core {
 
                 match log_interval {// TODO Reduce code duplication here
                     Some(MeasuredCondition::Iteration(iteration_interval)) => if iterations_elapsed % iteration_interval == 0 {
-                        log_fn(&mut stdout,self,iterations_elapsed,start_instant,learning_rate,evaluation_data,
-                            &mut best_accuracy,&mut best_accuracy_iteration,&mut best_accuracy_instant
+                        log_fn(&mut stdout,self,iterations_elapsed,start_instant,learning_rate,evaluation,evaluation_data.len()
                         );
                     },
                     Some(MeasuredCondition::Duration(duration_interval)) => if last_logged_instant.elapsed() >= duration_interval {
-                        log_fn(&mut stdout,self,iterations_elapsed,start_instant,learning_rate,evaluation_data,
-                            &mut best_accuracy,&mut best_accuracy_iteration,&mut best_accuracy_instant
+                        log_fn(&mut stdout,self,iterations_elapsed,start_instant,learning_rate,evaluation,evaluation_data.len()
                         );
                         last_logged_instant = Instant::now();
                     },
@@ -499,22 +501,17 @@ mod core {
                 iterations_elapsed:u32,
                 start_instant:Instant,
                 learning_rate:f32,
-                evaluation_data: &[(Vec<f32>,Vec<f32>)],
-                best_accuracy:&mut u32,best_accuracy_iteration:&mut u32,best_accuracy_instant:&mut Instant
+                evaluation: (f32,u32),
+                eval_len: usize
             ) -> () {
 
-                let evaluation = net.evaluate(evaluation_data);
-                if evaluation.1 > *best_accuracy { 
-                    *best_accuracy = evaluation.1;
-                    *best_accuracy_iteration = iterations_elapsed;
-                    *best_accuracy_instant = Instant::now();
-                }
+                
                 stdout.write(format!("Iteration: {}, Time: {}, Cost: {:.5}, Classified: {}/{} ({:.3}%), Learning rate: {}\n",
                     iterations_elapsed,
                     NeuralNetwork::time(start_instant),
                     evaluation.0,
-                    evaluation.1,evaluation_data.len(),
-                    (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32,
+                    evaluation.1,eval_len,
+                    (evaluation.1 as f32)/(eval_len as f32) * 100f32,
                     learning_rate
                 ).as_bytes()).unwrap();
             }
@@ -1203,7 +1200,6 @@ mod tests {
             let testing_data = get_mnist_dataset(true);
             //Execution
             neural_network.train(&training_data)
-                .halt_condition(MeasuredCondition::Duration(Duration::new(120,0)))
                 .evaluation_data(EvaluationData::Actual(testing_data.clone()))
                 .go();
             //Evaluation
@@ -1211,7 +1207,7 @@ mod tests {
             
 
             let sorted_data = NeuralNetwork::counting_sort(&testing_data);
-            NeuralNetwork::f32_2d_prt(&neural_network.evaluate_outputs(&sorted_data));
+            println!("{:.?}",neural_network.evaluate_outputs(&sorted_data).0);
 
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
@@ -1235,7 +1231,6 @@ mod tests {
             let testing_data = get_mnist_dataset(true);
             //Execution
             neural_network.train(&training_data)
-                .halt_condition(MeasuredCondition::Duration(Duration::new(120,0)))
                 .evaluation_data(EvaluationData::Actual(testing_data.clone()))
                 .go();
             //Evaluation
@@ -1243,7 +1238,7 @@ mod tests {
             
 
             let sorted_data = NeuralNetwork::counting_sort(&testing_data);
-            NeuralNetwork::f32_2d_prt(&neural_network.evaluate_outputs(&sorted_data));
+            println!("{:.?}",neural_network.evaluate_outputs(&sorted_data).0);
 
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
@@ -1251,66 +1246,68 @@ mod tests {
         }
         export_result("train_digits_1",runs,10000u32,total_time,total_accuracy);
     }
-    // #[test]
-    // fn train_digits_1() {
-    //     let mut total_accuracy = 0u32;
-    //     let mut total_time = 0u64;
-    //     let runs = TEST_RERUN_MULTIPLIER;
-    //     for _ in 0..runs {
-    //         let start = Instant::now();
-    //         //Setup
-    //         let mut neural_network = NeuralNetwork::new(784,&[
-    //             Layer::new(100,Activation::Sigmoid),
-    //             Layer::new(10,Activation::Sigmoid)
-    //         ]);
-    //         let training_data = get_mnist_dataset(false);
-    //         let testing_data = get_mnist_dataset(true);
-    //         //Execution
-    //         neural_network.train(&training_data)
-    //             .halt_condition(MeasuredCondition::Iteration(30u32))
-    //             .log_interval(MeasuredCondition::Iteration(1u32))
-    //             .batch_size(10usize)
-    //             .learning_rate(0.5f32)
-    //             .evaluation_data(EvaluationData::Actual(testing_data.clone()))
-    //             .lambda(5f32)
-    //             .early_stopping_condition(MeasuredCondition::Iteration(10u32))
-    //             .go();
-    //         //Evaluation
-    //         total_time += start.elapsed().as_secs();
+    #[test]
+    fn train_digits_2() {
+        let mut total_accuracy = 0u32;
+        let mut total_time = 0u64;
+        let runs = TEST_RERUN_MULTIPLIER;
+        for _ in 0..runs {
+            let start = Instant::now();
+            //Setup
+            let mut neural_network = NeuralNetwork::new(784,&[
+                Layer::new(100,Activation::Sigmoid),
+                Layer::new(10,Activation::Sigmoid)
+            ],Cost::CrossEntropy);
+            let training_data = get_mnist_dataset(false);
+            let testing_data = get_mnist_dataset(true);
+            //Execution
+            neural_network.train(&training_data)
+                .evaluation_data(EvaluationData::Actual(testing_data.clone()))
+                .go();
+            //Evaluation
+            total_time += start.elapsed().as_secs();
+            
 
-    //         let sorted_data = NeuralNetwork::counting_sort(&testing_data);
-    //         NeuralNetwork::f32_2d_prt(&neural_network.evaluate_outputs(&sorted_data));
+            let sorted_data = NeuralNetwork::counting_sort(&testing_data);
+            println!("{:.?}",neural_network.evaluate_outputs(&sorted_data).0);
 
-    //         let evaluation = neural_network.evaluate(&testing_data);
-    //         assert!(evaluation.1 >= required_accuracy(&testing_data));
-    //         total_accuracy += evaluation.1;
-    //     }
-    //     export_result("train_digits_1",runs,10000u32,total_time,total_accuracy);
-    // }
-    // #[test]
-    // fn train_digits_2() {
-    //     let mut total_accuracy = 0u32;
-    //     let mut total_time = 0u64;
-    //     let runs = TEST_RERUN_MULTIPLIER;
-    //     for _ in 0..runs {
-    //         let start = Instant::now();
-    //         //Setup
-    //         let training_data = get_mnist_dataset(false);
-    //         //Execution
-    //         let neural_network = NeuralNetwork::build(&training_data);
-    //         //Evaluation
-    //         total_time += start.elapsed().as_secs();
-    //         let testing_data = get_mnist_dataset(true);
+            let evaluation = neural_network.evaluate(&testing_data);
+            assert!(evaluation.1 >= required_accuracy(&testing_data));
+            total_accuracy += evaluation.1;
+        }
+        export_result("train_digits_0",runs,10000u32,total_time,total_accuracy);
+    }
+    #[test]
+    fn train_digits_3() {
+        let mut total_accuracy = 0u32;
+        let mut total_time = 0u64;
+        let runs = TEST_RERUN_MULTIPLIER;
+        for _ in 0..runs {
+            let start = Instant::now();
+            //Setup
+            let mut neural_network = NeuralNetwork::new(784,&[
+                Layer::new(100,Activation::Sigmoid),
+                Layer::new(10,Activation::Softmax)
+            ],Cost::CrossEntropy);
+            let training_data = get_mnist_dataset(false);
+            let testing_data = get_mnist_dataset(true);
+            //Execution
+            neural_network.train(&training_data)
+                .evaluation_data(EvaluationData::Actual(testing_data.clone()))
+                .go();
+            //Evaluation
+            total_time += start.elapsed().as_secs();
+            
 
-    //         let sorted_data = NeuralNetwork::counting_sort(&testing_data);
-    //         NeuralNetwork::f32_2d_prt(&neural_network.evaluate_outputs(&sorted_data));
+            let sorted_data = NeuralNetwork::counting_sort(&testing_data);
+            println!("{:.?}",neural_network.evaluate_outputs(&sorted_data).0);
 
-    //         let evaluation = neural_network.evaluate(&testing_data);
-    //         assert!(evaluation.1 >= required_accuracy(&testing_data));
-    //         total_accuracy += evaluation.1;
-    //     }
-    //     export_result("train_digits_2",runs,10000u32,total_time,total_accuracy);
-    // }
+            let evaluation = neural_network.evaluate(&testing_data);
+            assert!(evaluation.1 >= required_accuracy(&testing_data));
+            total_accuracy += evaluation.1;
+        }
+        export_result("train_digits_1",runs,10000u32,total_time,total_accuracy);
+    }
     fn get_mnist_dataset(testing:bool) -> Vec<(Vec<f32>,Vec<f32>)> {
                 
         let (images,labels) = if testing {
