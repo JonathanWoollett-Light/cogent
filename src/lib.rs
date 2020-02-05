@@ -1,4 +1,4 @@
-#[allow(dead_code)]
+/// Core functionality of training a neural network.
 pub mod core {
     use rand::prelude::SliceRandom;
     use std::time::{Duration,Instant};
@@ -8,7 +8,7 @@ pub mod core {
     use scoped_threadpool::Pool;
 
     extern crate ndarray;
-    use ndarray::{Array2,Array1,Array3,ArrayD,Axis};
+    use ndarray::{Array2,Array1,ArrayD,Axis};
     use ndarray_rand::{RandomExt,rand_distr::Uniform};
 
     extern crate ndarray_einsum_beta;
@@ -17,17 +17,15 @@ pub mod core {
     use std::io::{Write, stdout};
     use crossterm::{QueueableCommand, cursor};
 
+    
     use serde::{Serialize,Deserialize};
 
     use std::fs::File;
     use std::io::Read;
-    //Setting number of threads to use
+    // Setting number of threads to use
     const THREAD_COUNT:usize = 12usize;
 
     use std::f32;
-
-    //Defining euler's constant
-    const E:f32 = 2.718281f32;
 
     const DEFAULT_EVALUTATION_DATA:f32 = 0.1f32; // (x * examples.len() as f32) as usize` of `testing_data` is split_off into `evaluation_data`
     const DEFAULT_BATCH_SIZE:f32 = 0.002f32; // (x * examples.len() as f32).ceil() as usize. batch_size = x% of training data
@@ -38,32 +36,33 @@ pub mod core {
     const DEFAULT_LEARNING_RATE_DECAY:f32 = 0.5f32; // Amount to reduce learning rate by
     const DEFAULT_LEARNING_RATE_INTERVAL:u32 = 200u32; // Iteration(x * examples[0].0.len() / examples.len()). (MNIST is approx 3 iterations)
 
-    // Enum for setting evaluation data.
+    /// For setting evaluation data.
     pub enum EvaluationData {
         Scaler(usize),
         Percent(f32),
         Actual(Vec<(Vec<f32>,Vec<f32>)>)
     }
-    // Enum for setting a hyperparameter with measured intervals.
+    /// For setting a hyperparameter with measured intervals.
     #[derive(Clone,Copy)]
     pub enum MeasuredCondition {
         Iteration(u32),
         Duration(Duration)
     }
-    // Enum for setting the halt condition (`halt_condition`).
+    /// For setting the halt condition `halt_condition`.
     #[derive(Clone,Copy)]
     pub enum HaltCondition {
         Iteration(u32),
         Duration(Duration),
         Accuracy(f32)
     }
-    // Enum for setting the minimum change required to log positive evaluation change (`evaluation_min_change`).
+    /// For setting the minimum change required to log positive evaluation change `evaluation_min_change`.
     #[derive(Clone,Copy)]
     pub enum EvaluationChange {
         Scaler(u32),
         Percent(f32),
     }
     
+    /// To practicaly implement optional setting of training hyperparameters.
     pub struct Trainer<'a> {
         training_data: Vec<(Vec<f32>,Vec<f32>)>,
         evaluation_data: Vec<(Vec<f32>,Vec<f32>)>,
@@ -156,8 +155,7 @@ pub mod core {
         }
     }
 
-    // Enum for each neuron activation type
-    // For now we only have 2 activation type
+    /// For each layer activation type.
     #[derive(Clone,Copy,Serialize,Deserialize)]
     pub enum Activation {
         Sigmoid,Softmax
@@ -246,7 +244,7 @@ pub mod core {
         }
     }
     
-    // Struct for user specifiying layers in network
+    /// To specify layers to construct neural net.
     pub struct Layer {
         size: usize,
         activation: Activation,
@@ -257,17 +255,17 @@ pub mod core {
         }
     }
 
-    // A stochastic/incremental descent neural network.
+    /// Neural network.
     #[derive(Serialize,Deserialize)]
     pub struct NeuralNetwork {
-        inputs: usize, //TODO Remove this, add simply integer val for number of input neurons.
+        inputs: usize,
         biases: Vec<Array2<f32>>,
         connections: Vec<Array2<f32>>,
         layers: Vec<Activation>,
     }
     impl NeuralNetwork {
-        // Constructs network of given layers
-        // Returns constructed network.
+        /// Constructs network of given layers
+        /// Returns constructed network.
         pub fn new(inputs:usize,layers: &[Layer]) -> NeuralNetwork {
             if layers.len() == 0 {
                 panic!("Requires >1 layers");
@@ -301,10 +299,10 @@ pub mod core {
             let layers:Vec<Activation> = layers.iter().map(|x|x.activation).collect();
             NeuralNetwork{ inputs, biases, connections, layers}
         }
-        // Runs batch of examples through network.
-        // Returns outputs from batch of examples.
+        /// Runs batch of examples through network.
+        /// Returns outputs from batch of examples.
         pub fn run(&self, inputs:&Array2<f32>) -> Array2<f32> {
-            let mut activations:Array2<f32> = inputs.clone(); // don't remove this clone though
+            let mut activations:Array2<f32> = inputs.clone();
             for i in 0..self.layers.len() {
                 let weighted_inputs:Array2<f32> = activations.dot(&self.connections[i].t());
                 let bias_matrix:Array2<f32> = Array2::ones((inputs.shape()[0],1)).dot(&self.biases[i]);
@@ -313,8 +311,8 @@ pub mod core {
             }
             return activations;
         }
-        // Begins setting hyperparameters for training.
-        // Returns `Trainer` struct used to specify hyperparameters
+        /// Begins setting hyperparameters for training.
+        /// Returns `Trainer` struct used to specify hyperparameters
         pub fn train(&mut self,training_data:&Vec<(Vec<f32>,Vec<f32>)>) -> Trainer {
             let mut rng = rand::thread_rng();
             let mut temp_training_data = training_data.clone();
@@ -344,7 +342,7 @@ pub mod core {
             };
         }
 
-        // Runs training.
+        /// Runs training.
         fn train_details(&mut self,
             training_data: &mut [(Vec<f32>,Vec<f32>)], // TODO Look into `&mut [(Vec<f32>,Vec<f32>)]` vs `&mut Vec<(Vec<f32>,Vec<f32>)>`
             evaluation_data: &[(Vec<f32>,Vec<f32>)],
@@ -523,8 +521,8 @@ pub mod core {
             }
             
         }
-        // Runs batch through network to calculate weight and bias gradients.
-        // Returns new weights and biases values.
+        /// Runs batch through network to calculate weight and bias gradients.
+        /// Returns new weights and biases values.
         fn update_batch(&self, batch: &[(Vec<f32>, Vec<f32>)], eta: f32, lambda:f32, n:f32) -> (Vec<Array2<f32>>,Vec<Array2<f32>>) {
             
             // TODO Look into a better way to setup 'bias_nabla' and 'weight_nabla'
@@ -593,8 +591,8 @@ pub mod core {
 
             return (return_connections,return_biases);
         }
-        // Runs backpropgation on chunk of batch.
-        // Returns weight and bias partial derivatives (errors).
+        /// Runs backpropgation on chunk of batch.
+        /// Returns weight and bias partial derivatives (errors).
         fn backpropagate(&self, example:(Array2<f32>,Array2<f32>)) -> (Vec<Array2<f32>>,Vec<Array2<f32>>) {
 
             // Feeds forward
@@ -684,7 +682,7 @@ pub mod core {
             }
         }
         
-        // Returns tuple (average cost, number of examples correctly classified)
+        /// Returns tuple: (`f32`: Average cost across batch, `u32`: Number of examples correctly classified).
         pub fn evaluate(&self, test_data:&[(Vec<f32>,Vec<f32>)]) -> (f32,u32) {
             let chunks_length:usize = if test_data.len() < THREAD_COUNT { test_data.len() } else { test_data.len() / THREAD_COUNT };
             let chunks:Vec<_> = test_data.chunks(chunks_length).collect(); // Specify type further
@@ -748,10 +746,10 @@ pub mod core {
             }
         }
         // TODO Lot of stuff could be done to improve this function
-        // Requires ordered test_data (why `counting_sort` is present in library); 
-        // Returns tuple of:
-        //  Array1<f32> of percentages of examples in each class correctly classified.
-        //  Array2<f32> of confusion matrix with percentages.
+        /// Requires ordered test_data (why `counting_sort` is present in library); 
+        /// Returns tuple of:
+        ///     `Array1<f32>`: list of percentages of examples in each class correctly classified.
+        ///     `Array2<f32>`: confusion matrix with percentages.
         pub fn evaluate_outputs(&self, test_data:&[(Vec<f32>,Vec<f32>)]) -> (Array1<f32>,Array2<f32>) {
             let alphabet_size = test_data[0].1.len();
             let chunks = symbol_chunks(test_data,alphabet_size);
@@ -825,7 +823,7 @@ pub mod core {
             }
         }
 
-        // Converts `[(Vec<f32>,Vec<f32>)]` to `(Array2<f32>,Array2<f32>)`.
+        /// Converts `[(Vec<f32>,Vec<f32>)]` to `(Array2<f32>,Array2<f32>)`.
         pub fn matrixify(examples:&[(Vec<f32>,Vec<f32>)]) -> (Array2<f32>,Array2<f32>) {
             //println!("began here");
             let input_len = examples[0].0.len();
@@ -847,7 +845,7 @@ pub mod core {
             return (input,output);
         }
 
-        // Returns Instant::elapsed() as hh:mm:ss string
+        /// Returns Instant::elapsed() as hh:mm:ss string.
         fn time(instant:Instant) -> String {
             let mut seconds = instant.elapsed().as_secs();
             let hours = (seconds as f32 / 3600f32).floor();
@@ -857,113 +855,8 @@ pub mod core {
             let time = format!("{:#02}:{:#02}:{:#02}",hours,minutes,seconds);
             return time;
         }
-
-        // TODO Make `f32_2d_prt` and `f32_3d_prt` be usable for any primitive datatype.
-        // TODO Allow adjusting printing precision and customizing other flags (for `f32_2d_prt` and `f32_3d_prt`).
-        // Nicely prints Array2<f32>
-        pub fn f32_2d_prt(ndarray_param:&Array2<f32>) -> () {
-
-            println!();
-            let shape = ndarray_param.shape(); // shape[0],shape[1]=row,column
-            let spacing = 5*shape[1];
-            println!("┌ {: <1$}┐","",spacing);
-            for row in 0..shape[0] {
-                print!("│ ");
-                for val in ndarray_param.row(row) {
-                    if *val < 0f32 { print!("{:.1} ",val); }
-                    else { print!("{:.2} ",val); }
-                    
-                }
-                println!("│");
-            }
-            println!("└ {:<1$}┘","",spacing);
-            print!("{:<1$}","",(spacing/2)-1);
-            println!("[{},{}]",shape[0],shape[1]);
-            println!();
-        }
-        // Nicely prints Array3<f32>
-        pub fn f32_3d_prt(ndarray_param:&Array3<f32>) -> () {
-
-            println!();
-            let shape = ndarray_param.shape(); // shape[0],shape[1],shape[2]=layer,row,column
-            let outer_spacing = (5*shape[0]*shape[2]) + (3*shape[0]) + 2;
-            println!("┌{: <1$}┐","",outer_spacing);
-
-            let inner_spacing = 5 * shape[2];
-
-            print!("│ ");
-            for _ in 0..shape[0] {
-                print!("┌ {: <1$}┐","",inner_spacing);
-                
-            }
-            print!(" │");
-
-            println!();
-            for i in 0..shape[1] {
-                print!("│ ");
-                for t in 0..shape[0] {
-                    print!("│ ");
-                    for p in 0..shape[2] {
-                        let val = ndarray_param[[t,i,p]];
-                        if val < 0f32 || val >= 10f32 { print!("{:.1} ",val); }
-                        else { print!("{:.2} ",val); }
-                    }
-                    print!("│");
-                }
-                println!(" │");
-            }
-
-            print!("│ ");
-            for _ in 0..shape[0] {
-                print!("└ {: <1$}┘","",inner_spacing);
-            }
-            print!(" │");
-
-            println!();
-            println!("└{:<1$}┘","",outer_spacing);
-            print!("{:<1$}","",(outer_spacing / 2) - 2);
-            println!("[{},{},{}]",shape[0],shape[1],shape[2]);
-            println!();
-        }
-
-        // TODO Improve this.
-        // For use to sort a dataset before using `evaluate_outputs`.
-        // Use counting sort since typically classification datasets have relatively high n compared to low k.
-        pub fn counting_sort(test_data:&[(Vec<f32>,Vec<f32>)]) -> Vec<(Vec<f32>,Vec<f32>)> {
-            let alphabet_size = test_data[0].1.len();
-            let mut count:Vec<usize> = vec!(0usize;alphabet_size);
-            let mut output_vals:Vec<usize> = vec!(0usize;test_data.len());
-
-            for i in 0..test_data.len() {
-                // TODO Put this in function: Had difficultly putting this in function.
-                let mut one:usize = 0usize;
-                for t in 0..alphabet_size {
-                    if test_data[i].1[t] == 1f32 { 
-                        one = t;
-                        break;
-                    }
-                }
-
-                count[one] += 1usize;
-                output_vals[i] = one;
-            }
-            for i in 1..count.len() {
-                count[i] += count[i-1];
-            }
-
-            let input_size = test_data[0].0.len();
-            let mut sorted_data:Vec<(Vec<f32>,Vec<f32>)> = vec!((vec!(0f32;input_size),vec!(0f32;alphabet_size));test_data.len());
-
-            for i in 0..test_data.len() {
-                sorted_data[count[output_vals[i]]-1] = test_data[i].clone();
-                count[output_vals[i]] -= 1;
-            }
-
-            return sorted_data;
-        }
-        
-        // Prints the weights ands biases of the neural net.
         // TODO General improvement, specifically allow printing to variable accuracy.
+        /// Prints the weights ands biases of the neural net.
         pub fn print_net(&self) -> () {
             let max:usize = self.biases.iter().map(|x|x.shape()[1]).max().unwrap();
             let width = self.connections.len(); // == self.biases.len()
@@ -1020,7 +913,7 @@ pub mod core {
             println!();
         }
         // TODO Allow exporting to anywhere.
-        // Exports neural network to path (requires `rust_neural_network/checkpoints` directory to exist).
+        /// Exports neural network to `checkpoints/path` (requires `rust_neural_network/checkpoints` directory to exist).
         pub fn export(&self,path:&str) -> () {
             println!("here");
             let file = File::create(format!("/home/jonathan/Projects/rust_neural_network/checkpoints/{}",path));
@@ -1029,7 +922,7 @@ pub mod core {
             file.unwrap().write_all(serialized.as_bytes()).unwrap();
         }
         // TODO Allowing importing from anywhere.
-        // Imports neural network from `checkpoints/path`.
+        /// Imports neural network from `checkpoints/path`.
         pub fn import(path:&str) -> NeuralNetwork {
             let file = File::open(format!("/home/jonathan/Projects/rust_neural_network/checkpoints/{}",path));
             let mut string_contents:String = String::new();
@@ -1037,5 +930,111 @@ pub mod core {
             let deserialized:NeuralNetwork = serde_json::from_str(&string_contents).unwrap();
             return deserialized;
         }
+    }
+}
+/// Some uneccessary utility functions not fundementally linked to `core::NeuralNetwork`
+pub mod utilities {
+    extern crate ndarray;
+    use ndarray::{Array2,Array3};
+    /// Nicely prints Array2<f32>
+    pub fn f32_2d_prt(ndarray_param:&Array2<f32>) -> () {
+
+        println!();
+        let shape = ndarray_param.shape(); // shape[0],shape[1]=row,column
+        let spacing = 5*shape[1];
+        println!("┌ {: <1$}┐","",spacing);
+        for row in 0..shape[0] {
+            print!("│ ");
+            for val in ndarray_param.row(row) {
+                if *val < 0f32 { print!("{:.1} ",val); }
+                else { print!("{:.2} ",val); }
+                
+            }
+            println!("│");
+        }
+        println!("└ {:<1$}┘","",spacing);
+        print!("{:<1$}","",(spacing/2)-1);
+        println!("[{},{}]",shape[0],shape[1]);
+        println!();
+    }
+    /// Nicely prints Array3<f32>
+    pub fn f32_3d_prt(ndarray_param:&Array3<f32>) -> () {
+
+        println!();
+        let shape = ndarray_param.shape(); // shape[0],shape[1],shape[2]=layer,row,column
+        let outer_spacing = (5*shape[0]*shape[2]) + (3*shape[0]) + 2;
+        println!("┌{: <1$}┐","",outer_spacing);
+
+        let inner_spacing = 5 * shape[2];
+
+        print!("│ ");
+        for _ in 0..shape[0] {
+            print!("┌ {: <1$}┐","",inner_spacing);
+            
+        }
+        print!(" │");
+
+        println!();
+        for i in 0..shape[1] {
+            print!("│ ");
+            for t in 0..shape[0] {
+                print!("│ ");
+                for p in 0..shape[2] {
+                    let val = ndarray_param[[t,i,p]];
+                    if val < 0f32 || val >= 10f32 { print!("{:.1} ",val); }
+                    else { print!("{:.2} ",val); }
+                }
+                print!("│");
+            }
+            println!(" │");
+        }
+
+        print!("│ ");
+        for _ in 0..shape[0] {
+            print!("└ {: <1$}┘","",inner_spacing);
+        }
+        print!(" │");
+
+        println!();
+        println!("└{:<1$}┘","",outer_spacing);
+        print!("{:<1$}","",(outer_spacing / 2) - 2);
+        println!("[{},{},{}]",shape[0],shape[1],shape[2]);
+        println!();
+    }
+    /// Counting sort
+    /// Implemented for use with `NeuralNetwork::evaluate_outputs`.
+    /// Counting sort implemented since typically classification datasets have high `n` vs low `k`.
+    /// Counting sort Onotation being `O(n+k)`.
+    pub fn counting_sort(test_data:&[(Vec<f32>,Vec<f32>)]) -> Vec<(Vec<f32>,Vec<f32>)> {
+        let alphabet_size = test_data[0].1.len();
+        let mut count:Vec<usize> = vec!(0usize;alphabet_size);
+        let mut output_vals:Vec<usize> = vec!(0usize;test_data.len());
+
+        for i in 0..test_data.len() {
+            // TODO Put this in function: Had difficultly putting this in function.
+            let mut one:usize = 0usize;
+            for t in 0..alphabet_size {
+                if test_data[i].1[t] == 1f32 { 
+                    one = t;
+                    break;
+                }
+            }
+
+            count[one] += 1usize;
+            output_vals[i] = one;
+        }
+        for i in 1..count.len() {
+            count[i] += count[i-1];
+        }
+
+        let input_size = test_data[0].0.len();
+        let mut sorted_data:Vec<(Vec<f32>,Vec<f32>)> = vec!((vec!(0f32;input_size),vec!(0f32;alphabet_size));test_data.len());
+
+        for i in 0..test_data.len() {
+            sorted_data[count[output_vals[i]]-1] = test_data[i].clone();
+            count[output_vals[i]] -= 1;
+        }
+
+        return sorted_data;
     }
 }
