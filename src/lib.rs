@@ -936,7 +936,7 @@ pub mod core {
 pub mod utilities {
     extern crate ndarray;
     use ndarray::{Array2,Array3};
-    /// Nicely prints Array2<f32>
+    /// Nicely prints `Array2<f32>`.
     pub fn f32_2d_prt(ndarray_param:&Array2<f32>) -> () {
 
         println!();
@@ -957,7 +957,7 @@ pub mod utilities {
         println!("[{},{}]",shape[0],shape[1]);
         println!();
     }
-    /// Nicely prints Array3<f32>
+    /// Nicely prints `Array3<f32>`.
     pub fn f32_3d_prt(ndarray_param:&Array3<f32>) -> () {
 
         println!();
@@ -1001,7 +1001,7 @@ pub mod utilities {
         println!("[{},{},{}]",shape[0],shape[1],shape[2]);
         println!();
     }
-    /// Counting sort
+    /// Counting sort.
     /// Implemented for use with `NeuralNetwork::evaluate_outputs`.
     /// Counting sort implemented since typically classification datasets have high `n` vs low `k`.
     /// Counting sort Onotation being `O(n+k)`.
