@@ -24,7 +24,6 @@ mod tests {
         let result = format!("{} : {} * {:.2} mins, {}%, {}/{}\n",test,runs,avg_time,avg_accuracy_percent,avg_accuracy,dataset_length);
         
         file.unwrap().write_all(result.as_bytes());
-        //writeln!(file,&result_literal);
     }
 
     // Tests network to learn an XOR gate.

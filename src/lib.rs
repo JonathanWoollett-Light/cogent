@@ -14,14 +14,13 @@ pub mod core {
     extern crate ndarray_einsum_beta;
     use ndarray_einsum_beta::*;
 
-    use std::io::{Write, stdout};
+    use std::io::{Read,Write, stdout};
     use crossterm::{QueueableCommand, cursor};
 
     
     use serde::{Serialize,Deserialize};
 
     use std::fs::File;
-    use std::io::Read;
     // Setting number of threads to use
     const THREAD_COUNT:usize = 12usize;
 
@@ -342,6 +341,7 @@ pub mod core {
             };
         }
 
+        // TODO Name this better
         /// Runs training.
         fn train_details(&mut self,
             training_data: &mut [(Vec<f32>,Vec<f32>)], // TODO Look into `&mut [(Vec<f32>,Vec<f32>)]` vs `&mut Vec<(Vec<f32>,Vec<f32>)>`
