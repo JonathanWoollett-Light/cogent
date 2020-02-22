@@ -1,39 +1,37 @@
-#[cfg(bench)]
-mod benches {
-    extern crate rust_neural_network;
-    #[bench]
-    fn train_full() {
-        println!("test start");
-        let runs = 1 * TEST_RERUN_MULTIPLIER;
-        let mut total_accuracy = 0u32;
-        let mut total_time = 0u64;
-        for _ in 0..runs {
-            let start = Instant::now();
-            //Setup
-            let training_data = get_combined("/home/jonathan/Projects/data/combined_dataset");
-            let mut neural_network = NeuralNetwork::new(training_data[0].0.len(),&[
-                Layer::new(training_data[0].0.len()+training_data[0].1.len(),Activation::Sigmoid),
-                Layer::new(training_data[0].1.len(),Activation::Sigmoid)
-            ]);
-            //Execution
-            neural_network.train(&training_data)
-                .learning_rate(0.05f32)
-                .log_interval(MeasuredCondition::Iteration(1u32))
-                .checkpoint_interval(MeasuredCondition::Duration(Duration::new(1800,0)))
-                .tracking()
-            .go();
-            //Evaluation
-            total_time += start.elapsed().as_secs();
-            let evaluated_outputs = neural_network.evaluate_outputs(&training_data);
+#![feature(test)]
+extern crate test;
 
-            println!("{:.?}",evaluated_outputs.0)
-            // assert!(evaluation.1 >= required_accuracy(&testing_data));
-            // println!("train_full: accuracy: {}",evaluation.1);
-            // println!();
-            // total_accuracy += evaluation.1;
-        }
-        export_result("train_full",runs,450000,total_time,total_accuracy);
-        assert!(false);
+#[cfg(test)]
+mod benches {
+    use test::Bencher;
+
+    extern crate rust_neural_network;
+    use rust_neural_network::core::{HaltCondition,EvaluationChange,MeasuredCondition,Activation,Layer,NeuralNetwork};
+    
+    use std::time::{Instant,Duration};
+    
+    use std::fs::File;
+    use std::io::Read;
+
+    #[bench]
+    fn combined_dataset_training(b: &mut Bencher) {
+        let combined_dataset = get_combined("data/combined_dataset");
+        b.iter(|| train_on_combined(&combined_dataset));
+    }
+    fn train_on_combined(combined_dataset: &Vec<(Vec<f32>,Vec<f32>)>) {
+        //Setup
+        let training_data = combined_dataset;
+        let mut neural_network = NeuralNetwork::new(training_data[0].0.len(),&[
+            Layer::new(training_data[0].0.len()+training_data[0].1.len(),Activation::Sigmoid),
+            Layer::new(training_data[0].1.len(),Activation::Sigmoid)
+        ]);
+        //Execution
+        neural_network.train(training_data)
+            .learning_rate(0.05f32)
+            .halt_condition(HaltCondition::Accuracy(0.95f32))
+            .early_stopping_condition(MeasuredCondition::Duration(Duration::new(600,0)))
+            .evaluation_min_change(EvaluationChange::Percent(0.1f32))
+        .go();
     }
     fn get_combined(path:&str) -> Vec<(Vec<f32>,Vec<f32>)> {
         let mut file = File::open(path).unwrap();
