@@ -456,7 +456,7 @@ pub mod core {
                 match halt_condition {
                     Some(HaltCondition::Iteration(iteration)) => if iterations_elapsed == iteration { break; },
                     Some(HaltCondition::Duration(duration)) => if start_instant.elapsed() > duration { break; },
-                    Some(HaltCondition::Accuracy(accuracy)) => if evaluation.1 as f32 / evaluation_data.len() as f32 > accuracy { break; },
+                    Some(HaltCondition::Accuracy(accuracy)) => if (evaluation_data.len() as f32 * accuracy) as u32 >= evaluation.1 { break; },
                     _ => {},
                 }
 
