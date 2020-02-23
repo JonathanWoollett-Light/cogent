@@ -2,13 +2,13 @@
 mod tests {
     extern crate rust_neural_network;
     use std::time::{Instant,Duration};
-    use rust_neural_network::core::{EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
+    use rust_neural_network::core::{HaltCondition,EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
     use std::io::Read;
     use std::io::prelude::*;
     use std::fs::{File,OpenOptions};
 
     // TODO Figure out better name for this
-    const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be >= 0)
+    const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be > 0)
     // TODO Figure out better name for this
     const TESTING_MIN_ACCURACY:f32 = 0.90f32; // approx 10% min inaccuracy
     // Returns `TESTING_MIN_ACCURACY` percentage as scaler as number of example in dataset.
@@ -30,11 +30,8 @@ mod tests {
     // Softmax output.
     #[test]
     fn train_xor_0() {
-        let mut total_accuracy = 0u32;
-        let mut total_time = 0u64;
         let runs = 10 * TEST_RERUN_MULTIPLIER;
         for _ in 0..runs {
-            let start = Instant::now();
             // Setup
             // ------------------------------------------------
             // Sets network
@@ -59,26 +56,21 @@ mod tests {
                 .learning_rate(2f32)
                 .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
                 .evaluation_data(EvaluationData::Actual(testing_data.clone())) // Use testing data as evaluation data.
+                .halt_condition(HaltCondition::Accuracy(1f32))
                 .lambda(0f32)
             .go();
 
             //Evaluation
-            total_time += start.elapsed().as_secs();
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 as usize == testing_data.len());
-            total_accuracy += evaluation.1;
         }
-        export_result("train_xor_0",runs,4u32,total_time,total_accuracy);
     }
     // Tests network to learn an XOR gate.
     // Sigmoid output.
     #[test]
     fn train_xor_1() {
-        let mut total_accuracy = 0u32;
-        let mut total_time = 0u64;
         let runs = 10 * TEST_RERUN_MULTIPLIER;
         for _ in 0..runs {
-            let start = Instant::now();
 
             // Setup
             // ------------------------------------------------
@@ -105,17 +97,15 @@ mod tests {
                 .learning_rate(2f32)
                 .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
                 .evaluation_data(EvaluationData::Actual(testing_data.clone()))
+                .halt_condition(HaltCondition::Accuracy(1f32))
                 .lambda(0f32)
             .go();
 
             // Evaluation
             // ------------------------------------------------
-            total_time += start.elapsed().as_secs();
             let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 as usize == testing_data.len());
-            total_accuracy += evaluation.1;
         }
-        export_result("train_xor_1",runs,4u32,total_time,total_accuracy);
     }
     
     // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
@@ -143,7 +133,7 @@ mod tests {
             // ------------------------------------------------
             neural_network.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(testing_data.clone())) // Use testing data as evaluation data.
-                .log_interval(MeasuredCondition::Duration(Duration::new(10,0)))
+                .halt_condition(HaltCondition::Accuracy(0.95f32))
                 .go();
 
             // Evaluation
@@ -182,6 +172,7 @@ mod tests {
             // ------------------------------------------------
             neural_network.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(testing_data.clone())) // Use testing data as evaluation data.
+                .halt_condition(HaltCondition::Accuracy(0.95f32))
                 .go();
 
             // Evaluation
