@@ -56,7 +56,6 @@ mod tests {
                 .learning_rate(2f32)
                 .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
                 .evaluation_data(EvaluationData::Actual(testing_data.clone())) // Use testing data as evaluation data.
-                .halt_condition(HaltCondition::Accuracy(1f32))
                 .lambda(0f32)
             .go();
 
@@ -97,7 +96,6 @@ mod tests {
                 .learning_rate(2f32)
                 .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
                 .evaluation_data(EvaluationData::Actual(testing_data.clone()))
-                .halt_condition(HaltCondition::Accuracy(1f32))
                 .lambda(0f32)
             .go();
 
