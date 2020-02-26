@@ -25,14 +25,25 @@ pub mod core {
 
     use std::f32;
 
-    const DEFAULT_EVALUTATION_DATA:f32 = 0.1f32; // (x * examples.len() as f32) as usize` of `testing_data` is split_off into `evaluation_data`
-    const DEFAULT_BATCH_SIZE:f32 = 0.002f32; // (x * examples.len() as f32).ceil() as usize. batch_size = x% of training data
+    // Default percentage of training data to set as evaluation data (0.1=10%).
+    const DEFAULT_EVALUTATION_DATA:f32 = 0.1f32;
+    // Default percentage of size of training data to set batch size (0.002=0.2%).
+    const DEFAULT_BATCH_SIZE:f32 = 0.002f32;
+    // Default learning rate.
     const DEFAULT_LEARNING_RATE:f32 = 0.1f32;
-    const DEFAULT_LAMBDA:f32 = 0.1f32; // lambda = (x * examples.len() as f32). lambda = (100*x)% of training data. lambda = regularization parameter
-    const DEFAULT_EARLY_STOPPING:f32 = 0.00001f32; // Duration::new(examples[0].0.len()*examples.len()*x,0). (MNIST is approx 6 mins)
-    const DEFAULT_EVALUATION_MIN_CHANGE:f32 = 0.005f32; // Minimum +% evaluation change required to prevent early stoppage or learning rate decay
-    const DEFAULT_LEARNING_RATE_DECAY:f32 = 0.5f32; // Amount to reduce learning rate by
-    const DEFAULT_LEARNING_RATE_INTERVAL:u32 = 200u32; // Iteration(x * examples[0].0.len() / examples.len()). (MNIST is approx 3 iterations)
+    // Default percentage size of training data to set regularization parameter (0.1=10%).
+    const DEFAULT_LAMBDA:f32 = 0.1f32;
+    // Default seconds to set duration for early stopping condition. 
+    // early stopping = (number of examples * size of examples * default early stopping) seconds
+    const DEFAULT_EARLY_STOPPING:f32 = 0.00001f32;
+    //Default percentage minimum positive change required to prevent early stopping or learning rate decay (0.005=0.5%).
+    const DEFAULT_EVALUATION_MIN_CHANGE:f32 = 0.005f32;
+    // Default amount to decay learning rate after period of un-notable (what word should I use here?) change.
+    // `new learning rate = learning rate decay * old learning rate`
+    const DEFAULT_LEARNING_RATE_DECAY:f32 = 0.5f32;
+    // Default interval to go without notable importment before learning rate decay.
+    // interval = (number of examples * size of examples * default learning rate interval) iterations.
+    const DEFAULT_LEARNING_RATE_INTERVAL:u32 = 200u32;
 
     /// For setting `evaluation_data`.
     pub enum EvaluationData {
@@ -66,40 +77,35 @@ pub mod core {
     
     /// To practicaly implement optional setting of training hyperparameters.
     pub struct Trainer<'a> {
-        /// placeholder
         training_data: Vec<(Vec<f32>,Vec<f32>)>,
-        /// placeholder
         evaluation_data: Vec<(Vec<f32>,Vec<f32>)>,
         // Will halt after at a certain iteration, accuracy or duration.
-        /// placeholder
         halt_condition: Option<HaltCondition>,
         // Can log after a certain number of iterations, a certain duration, or not at all.
-        /// placeholder
         log_interval: Option<MeasuredCondition>,
-        /// placeholder
         batch_size: usize, // TODO Maybe change `batch_size` to allow it to be set by a user as a % of their data
-        /// placeholder
-        learning_rate: f32, // Reffered to as `ETA` in `NeuralNetwork`.
-        /// placeholder
-        lambda: f32, // Regularization parameter
-        // Can stop after no cost improvement over a certain number of iterations, a certain duration, or not at all.
-        /// placeholder
+        // Reffered to as `ETA` in `NeuralNetwork`.
+        learning_rate: f32, 
+        // Regularization parameter
+        lambda: f32,
+        // Can stop after a lack of cost improvement over a certain number of iterations/durations, or not at all.
         early_stopping_condition: MeasuredCondition,
-        /// placeholder
-        evaluation_min_change: EvaluationChange, // Minimum change required to log positive evaluation change.
-        /// placeholder
-        learning_rate_decay: f32, // Amount to decrease learning rate by (<1)(`learning_rate` *= learning_rate_decay`).
-        /// placeholder
-        learning_rate_interval: MeasuredCondition, // Time without improvement to go until decreasing learning rate.
-        /// placeholder
+        // Minimum change required to log positive evaluation change.
+        evaluation_min_change: EvaluationChange, 
+        // Amount to decrease learning rate by (less than 1)(`learning_rate` *= learning_rate_decay`).
+        learning_rate_decay: f32, 
+        // Time without notable improvement to wait until decreasing learning rate.
+        learning_rate_interval: MeasuredCondition,
+        /// Duration/iterations between outputting neural network weights and biases to file.
         checkpoint_interval: Option<MeasuredCondition>,
-        /// placeholder
-        tracking: bool, // Whether to print percantage progress in each iteration of backpropagation
-        /// placeholder
+        // Whether to print percantage progress in each iteration of backpropagation
+        tracking: bool,
         neural_network: &'a mut NeuralNetwork
     }
     impl<'a> Trainer<'a> {
         /// Sets `evaluation_data`.
+        /// 
+        /// `evaluation_data` determines how to set the evaluation data.
         pub fn evaluation_data(&mut self, evaluation_data:EvaluationData) -> &mut Trainer<'a> {
             self.evaluation_data = match evaluation_data {
                 EvaluationData::Scaler(scaler) => { self.training_data.split_off(self.training_data.len() - scaler) }
@@ -109,11 +115,15 @@ pub mod core {
             return self;
         }
         /// Sets `halt_condition`.
+        /// 
+        /// `halt_condition` sets after which Iteration/Duration or reached accuracy to stop training.
         pub fn halt_condition(&mut self, halt_condition:HaltCondition) -> &mut Trainer<'a> {
             self.halt_condition = Some(halt_condition);
             return self;
         }
         /// Sets `log_interval`.
+        /// 
+        /// `log_interval` sets some amount of Iterations/Duration to print the cost and accuracy of the neural net.
         pub fn log_interval(&mut self, log_interval:MeasuredCondition) -> &mut Trainer<'a> {
             self.log_interval = Some(log_interval);
             return self;
@@ -129,21 +139,29 @@ pub mod core {
             return self;
         }
         /// Sets `lamdba` (otherwise known as regulation parameter).
+        /// 
+        /// `lamdba` is the regularization paramter.
         pub fn lambda(&mut self, lambda:f32) -> &mut Trainer<'a> {
             self.lambda = lambda;
             return self;
         }
         /// Sets `early_stopping_condition`.
+        /// 
+        /// `early_stopping_condition` sets some amount of Iterations/Duration to stop after without notable cost improvement.
         pub fn early_stopping_condition(&mut self, early_stopping_condition:MeasuredCondition) -> &mut Trainer<'a> {
             self.early_stopping_condition = early_stopping_condition;
             return self;
         }
         /// Sets `evaluation_min_change`.
+        /// 
+        /// Minimum change required to log positive evaluation change.
         pub fn evaluation_min_change(&mut self, evaluation_min_change:EvaluationChange) -> &mut Trainer<'a> {
             self.evaluation_min_change = evaluation_min_change;
             return self;
         }
         /// Sets `learning_rate_decay`.
+        /// 
+        /// `learning_rate_decay` is the mulipliers by which to decay the learning rate.
         pub fn learning_rate_decay(&mut self, learning_rate_decay:f32) -> &mut Trainer<'a> {
             self.learning_rate_decay = learning_rate_decay;
             return self;
@@ -154,11 +172,15 @@ pub mod core {
             return self;
         }
         /// Sets `checkpoint_interval`.
+        /// 
+        /// `checkpoint_interval` sets how often (if at all) to serialize and output neural network to .txt file.
         pub fn checkpoint_interval(&mut self, checkpoint_interval:MeasuredCondition) -> &mut Trainer<'a> {
             self.checkpoint_interval = Some(checkpoint_interval);
             return self;
         }
         /// Sets `tracking`.
+        /// 
+        /// `tracking` determines whether to output percentage progress during backpropgation.
         pub fn tracking(&mut self) -> &mut Trainer<'a> {
             self.tracking = true;
             return self;
