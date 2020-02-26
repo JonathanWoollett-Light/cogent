@@ -912,7 +912,7 @@ pub mod core {
         }
         // TODO General improvement, specifically allow printing to variable accuracy.
         /// Prints the weights ands biases of the neural net.
-        pub fn print_net(&self) -> () {
+        pub fn print(&self) -> () {
             let max:usize = self.biases.iter().map(|x|x.shape()[1]).max().unwrap();
             let width = self.connections.len(); // == self.biases.len()
             //println!("max:{}",max);
