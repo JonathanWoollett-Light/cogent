@@ -34,7 +34,7 @@ pub mod core {
     const DEFAULT_LEARNING_RATE_DECAY:f32 = 0.5f32; // Amount to reduce learning rate by
     const DEFAULT_LEARNING_RATE_INTERVAL:u32 = 200u32; // Iteration(x * examples[0].0.len() / examples.len()). (MNIST is approx 3 iterations)
 
-    /// For setting evaluation data.
+    /// For setting `evaluation_data`.
     pub enum EvaluationData {
         Scaler(usize),
         Percent(f32),
@@ -46,14 +46,18 @@ pub mod core {
         Iteration(u32),
         Duration(Duration)
     }
-    /// For setting the halt condition `halt_condition`.
+    /// For setting `halt_condition`.
+    ///
+    /// The training halt condition.
     #[derive(Clone,Copy)]
     pub enum HaltCondition {
         Iteration(u32),
         Duration(Duration),
         Accuracy(f32)
     }
-    /// For setting the minimum change required to log positive evaluation change `evaluation_min_change`.
+    /// For setting `evaluation_min_change`. 
+    /// 
+    /// The minimum change required to log positive evaluation change.
     #[derive(Clone,Copy)]
     pub enum EvaluationChange {
         Scaler(u32),
@@ -62,25 +66,40 @@ pub mod core {
     
     /// To practicaly implement optional setting of training hyperparameters.
     pub struct Trainer<'a> {
+        /// placeholder
         training_data: Vec<(Vec<f32>,Vec<f32>)>,
+        /// placeholder
         evaluation_data: Vec<(Vec<f32>,Vec<f32>)>,
         // Will halt after at a certain iteration, accuracy or duration.
+        /// placeholder
         halt_condition: Option<HaltCondition>,
         // Can log after a certain number of iterations, a certain duration, or not at all.
+        /// placeholder
         log_interval: Option<MeasuredCondition>,
+        /// placeholder
         batch_size: usize, // TODO Maybe change `batch_size` to allow it to be set by a user as a % of their data
+        /// placeholder
         learning_rate: f32, // Reffered to as `ETA` in `NeuralNetwork`.
+        /// placeholder
         lambda: f32, // Regularization parameter
         // Can stop after no cost improvement over a certain number of iterations, a certain duration, or not at all.
+        /// placeholder
         early_stopping_condition: MeasuredCondition,
+        /// placeholder
         evaluation_min_change: EvaluationChange, // Minimum change required to log positive evaluation change.
+        /// placeholder
         learning_rate_decay: f32, // Amount to decrease learning rate by (<1)(`learning_rate` *= learning_rate_decay`).
+        /// placeholder
         learning_rate_interval: MeasuredCondition, // Time without improvement to go until decreasing learning rate.
+        /// placeholder
         checkpoint_interval: Option<MeasuredCondition>,
+        /// placeholder
         tracking: bool, // Whether to print percantage progress in each iteration of backpropagation
+        /// placeholder
         neural_network: &'a mut NeuralNetwork
     }
     impl<'a> Trainer<'a> {
+        /// Sets `evaluation_data`.
         pub fn evaluation_data(&mut self, evaluation_data:EvaluationData) -> &mut Trainer<'a> {
             self.evaluation_data = match evaluation_data {
                 EvaluationData::Scaler(scaler) => { self.training_data.split_off(self.training_data.len() - scaler) }
@@ -89,51 +108,62 @@ pub mod core {
             };
             return self;
         }
+        /// Sets `halt_condition`.
         pub fn halt_condition(&mut self, halt_condition:HaltCondition) -> &mut Trainer<'a> {
             self.halt_condition = Some(halt_condition);
             return self;
         }
+        /// Sets `log_interval`.
         pub fn log_interval(&mut self, log_interval:MeasuredCondition) -> &mut Trainer<'a> {
             self.log_interval = Some(log_interval);
             return self;
         }
+        /// Sets `batch_size`.
         pub fn batch_size(&mut self, batch_size:usize) -> &mut Trainer<'a> {
             self.batch_size = batch_size;
             return self;
         }
+        /// Sets `learning_rate`.
         pub fn learning_rate(&mut self, learning_rate:f32) -> &mut Trainer<'a> {
             self.learning_rate = learning_rate;
             return self;
         }
+        /// Sets `lamdba` (otherwise known as regulation parameter).
         pub fn lambda(&mut self, lambda:f32) -> &mut Trainer<'a> {
             self.lambda = lambda;
             return self;
         }
+        /// Sets `early_stopping_condition`.
         pub fn early_stopping_condition(&mut self, early_stopping_condition:MeasuredCondition) -> &mut Trainer<'a> {
             self.early_stopping_condition = early_stopping_condition;
             return self;
         }
+        /// Sets `evaluation_min_change`.
         pub fn evaluation_min_change(&mut self, evaluation_min_change:EvaluationChange) -> &mut Trainer<'a> {
             self.evaluation_min_change = evaluation_min_change;
             return self;
         }
+        /// Sets `learning_rate_decay`.
         pub fn learning_rate_decay(&mut self, learning_rate_decay:f32) -> &mut Trainer<'a> {
             self.learning_rate_decay = learning_rate_decay;
             return self;
         }
+        /// Sets `learning_rate_interval`.
         pub fn learning_rate_interval(&mut self, learning_rate_interval:MeasuredCondition) -> &mut Trainer<'a> {
             self.learning_rate_interval = learning_rate_interval;
             return self;
         }
+        /// Sets `checkpoint_interval`.
         pub fn checkpoint_interval(&mut self, checkpoint_interval:MeasuredCondition) -> &mut Trainer<'a> {
             self.checkpoint_interval = Some(checkpoint_interval);
             return self;
         }
+        /// Sets `tracking`.
         pub fn tracking(&mut self) -> &mut Trainer<'a> {
             self.tracking = true;
             return self;
         }
-        // Begins training.
+        /// Begins training.
         pub fn go(&mut self) -> () {
             self.neural_network.train_details(
                 &mut self.training_data,
@@ -153,20 +183,20 @@ pub mod core {
         }
     }
 
-    /// For each layer activation type.
+    /// Used to define each layer's activation.
     #[derive(Clone,Copy,Serialize,Deserialize)]
     pub enum Activation {
         Sigmoid,Softmax
     }
     impl Activation {
-        // Computes activations given inputs (`y`).
+        /// Computes activations given inputs (`y`).
         fn run(&self,y:&Array2<f32>) -> Array2<f32> {
             return match self {
                 Self::Sigmoid => y.mapv(|x| Activation::sigmoid(x)),
                 Self::Softmax => Activation::softmax(y),
             };
         }
-        // Applies derivative function of activation to given `y`.
+        /// Applies derivative function of activation to given `y`.
         fn derivative(&self,y:&Array2<f32>) -> Array2<f32> {
             return match self {
                 Self::Sigmoid => y.mapv(|x| -> f32 { sigmoid(x) }),
@@ -262,7 +292,8 @@ pub mod core {
         layers: Vec<Activation>,
     }
     impl NeuralNetwork {
-        /// Constructs network of given layers
+        /// Constructs network of given layers.
+        /// 
         /// Returns constructed network.
         pub fn new(inputs:usize,layers: &[Layer]) -> NeuralNetwork {
             if layers.len() == 0 {
@@ -298,6 +329,7 @@ pub mod core {
             NeuralNetwork{ inputs, biases, connections, layers}
         }
         /// Runs batch of examples through network.
+        /// 
         /// Returns outputs from batch of examples.
         pub fn run(&self, inputs:&Array2<f32>) -> Array2<f32> {
             let mut activations:Array2<f32> = inputs.clone();
@@ -310,6 +342,7 @@ pub mod core {
             return activations;
         }
         /// Begins setting hyperparameters for training.
+        /// 
         /// Returns `Trainer` struct used to specify hyperparameters
         pub fn train(&mut self,training_data:&Vec<(Vec<f32>,Vec<f32>)>) -> Trainer {
             let mut rng = rand::thread_rng();
@@ -521,6 +554,7 @@ pub mod core {
             
         }
         /// Runs batch through network to calculate weight and bias gradients.
+        /// 
         /// Returns new weights and biases values.
         fn update_batch(&self, batch: &[(Vec<f32>, Vec<f32>)], eta: f32, lambda:f32, n:f32) -> (Vec<Array2<f32>>,Vec<Array2<f32>>) {
             
@@ -591,6 +625,7 @@ pub mod core {
             return (return_connections,return_biases);
         }
         /// Runs backpropgation on chunk of batch.
+        /// 
         /// Returns weight and bias partial derivatives (errors).
         fn backpropagate(&self, example:(Array2<f32>,Array2<f32>)) -> (Vec<Array2<f32>>,Vec<Array2<f32>>) {
 
@@ -745,10 +780,9 @@ pub mod core {
             }
         }
         // TODO Lot of stuff could be done to improve this function
-        /// Requires ordered test_data (why `counting_sort` is present in library); 
-        /// Returns tuple of:
-        ///     `Array1<f32>`: list of percentages of examples in each class correctly classified.
-        ///     `Array2<f32>`: confusion matrix with percentages.
+        /// Requires ordered test_data.
+        /// 
+        /// Returns tuple of: (List of correctly classified percentage for each class. Confusion matrix of percentages).
         pub fn evaluate_outputs(&self, test_data:&[(Vec<f32>,Vec<f32>)]) -> (Array1<f32>,Array2<f32>) {
             let alphabet_size = test_data[0].1.len();
             let chunks = symbol_chunks(test_data,alphabet_size);
