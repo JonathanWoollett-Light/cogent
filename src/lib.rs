@@ -970,9 +970,7 @@ pub mod core {
         // TODO Allow exporting to anywhere.
         /// Exports neural network to `checkpoints/path` (requires `rust_neural_network/checkpoints` directory to exist).
         pub fn export(&self,path:&str) -> () {
-            println!("here");
             let file = File::create(format!("/home/jonathan/Projects/rust_neural_network/checkpoints/{}",path));
-            println!("can we get here?");
             let serialized:String = serde_json::to_string(self).unwrap();
             file.unwrap().write_all(serialized.as_bytes()).unwrap();
         }
