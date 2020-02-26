@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-    extern crate rust_neural_network;
     use std::time::{Instant,Duration};
     use rust_neural_network::core::{HaltCondition,EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
     use std::io::Read;
@@ -25,7 +24,6 @@ mod tests {
         
         file.unwrap().write_all(result.as_bytes());
     }
-
     // Tests network to learn an XOR gate.
     // Softmax output.
     #[test]

@@ -17,7 +17,6 @@ pub mod core {
     use std::io::{Read,Write, stdout};
     use crossterm::{QueueableCommand, cursor};
 
-    
     use serde::{Serialize,Deserialize};
 
     use std::fs::File;
@@ -243,7 +242,7 @@ pub mod core {
         }
     }
     
-    /// To specify layers to construct neural net.
+    /// Used to specify layers to construct neural net.
     pub struct Layer {
         size: usize,
         activation: Activation,
@@ -682,7 +681,7 @@ pub mod core {
             }
         }
         
-        /// Returns tuple: (`f32`: Average cost across batch, `u32`: Number of examples correctly classified).
+        /// Returns tuple: (Average cost across batch, Number of examples correctly classified).
         pub fn evaluate(&self, test_data:&[(Vec<f32>,Vec<f32>)]) -> (f32,u32) {
             let chunks_length:usize = if test_data.len() < THREAD_COUNT { test_data.len() } else { test_data.len() / THREAD_COUNT };
             let chunks:Vec<_> = test_data.chunks(chunks_length).collect(); // Specify type further
@@ -936,70 +935,102 @@ pub mod core {
 pub mod utilities {
     extern crate ndarray;
     use ndarray::{Array2,Array3};
+    // TODO Use generics in these prints
+    // TODO Figure out how to run rustdoc tests
     /// Nicely prints `Array2<f32>`.
-    pub fn f32_2d_prt(ndarray_param:&Array2<f32>) -> () {
-
-        println!();
+    /// ```
+    /// let array2:Array2<f32> = array![
+    ///     [-4f32,-3f32,-2f32],
+    ///     [-1f32,0f32,1f32],
+    ///     [2f32,3f32,4f32]
+    /// ];
+    /// let prt:String = f32_2d_prt(&array2);
+    /// println!("{}",prt);
+    /// let expect:&str = 
+    /// "┌                ┐
+    /// | -4.0 -3.0 -2.0 |
+    /// | -1.0 +0.0 +1.0 |
+    /// | +2.0 +3.0 +4.0 |
+    /// └                ┘
+    ///       [3,3]\n";
+    /// assert_eq!(&prt,expect);
+    /// ```
+    pub fn f32_2d_prt(ndarray_param:&Array2<f32>) -> String {
+        let mut prt_string:String = String::new();
         let shape = ndarray_param.shape(); // shape[0],shape[1]=row,column
         let spacing = 5*shape[1];
-        println!("┌ {: <1$}┐","",spacing);
+        prt_string.push_str(&format!("┌ {: <1$}┐\n","",spacing));
         for row in 0..shape[0] {
-            print!("│ ");
+            prt_string.push_str("| ");
             for val in ndarray_param.row(row) {
-                if *val < 0f32 { print!("{:.1} ",val); }
-                else { print!("{:.2} ",val); }
+                prt_string.push_str(&format!("{:+.1} ",val));
                 
             }
-            println!("│");
+            prt_string.push_str("|\n");
         }
-        println!("└ {:<1$}┘","",spacing);
-        print!("{:<1$}","",(spacing/2)-1);
-        println!("[{},{}]",shape[0],shape[1]);
-        println!();
+        prt_string.push_str(&format!("└ {:<1$}┘\n","",spacing));
+        prt_string.push_str(&format!("{:<1$}","",(spacing/2)-1));
+        prt_string.push_str(&format!("[{},{}]\n",shape[0],shape[1]));
+
+        return prt_string;
     }
     /// Nicely prints `Array3<f32>`.
-    pub fn f32_3d_prt(ndarray_param:&Array3<f32>) -> () {
-
-        println!();
+    /// ```
+    /// let array3:Array3<f32> = array![
+    ///     [[-1.0f32,-1.1f32],[-1.2f32,-1.3f32]],
+    ///     [[0.0f32,0.1f32],[0.2f32,0.3f32]],
+    ///     [[1.0f32,1.1f32],[1.2f32,1.3f32]],
+    /// ];
+    /// let prt:String = f32_3d_prt(&array3);
+    /// println!("{}",prt);
+    /// let expect:&str = 
+    /// "┌                                         ┐
+    /// │ ┌           ┐┌           ┐┌           ┐ │
+    /// │ │ -1.0 -1.1 ││ +0.0 +2.1 ││ +1.0 +1.1 │ │
+    /// │ │ -1.2 -1.3 ││ +2.2 +2.3 ││ +1.2 +1.3 │ │
+    /// │ └           ┘└           ┘└           ┘ │
+    /// └                                         ┘
+    ///                   [3,2,2]\n";
+    /// assert_eq!(&prt,expect);
+    /// ```
+    pub fn f32_3d_prt(ndarray_param:&Array3<f32>) -> String {
+        let mut prt_string:String = String::new();
         let shape = ndarray_param.shape(); // shape[0],shape[1],shape[2]=layer,row,column
         let outer_spacing = (5*shape[0]*shape[2]) + (3*shape[0]) + 2;
-        println!("┌{: <1$}┐","",outer_spacing);
+        prt_string.push_str(&format!("┌{: <1$}┐\n","",outer_spacing));
 
         let inner_spacing = 5 * shape[2];
 
-        print!("│ ");
+        prt_string.push_str("│ ");
         for _ in 0..shape[0] {
-            print!("┌ {: <1$}┐","",inner_spacing);
+            prt_string.push_str(&format!("┌ {: <1$}┐","",inner_spacing));
             
         }
-        print!(" │");
+        prt_string.push_str(" │\n");
 
-        println!();
         for i in 0..shape[1] {
-            print!("│ ");
+            prt_string.push_str("│ ");
             for t in 0..shape[0] {
-                print!("│ ");
+                prt_string.push_str("│ ");
                 for p in 0..shape[2] {
                     let val = ndarray_param[[t,i,p]];
-                    if val < 0f32 || val >= 10f32 { print!("{:.1} ",val); }
-                    else { print!("{:.2} ",val); }
+                    prt_string.push_str(&format!("{:+.1} ",val));
                 }
-                print!("│");
+                prt_string.push_str("│");
             }
-            println!(" │");
+            prt_string.push_str(" │\n");
         }
-
-        print!("│ ");
+        prt_string.push_str("│ ");
         for _ in 0..shape[0] {
-            print!("└ {: <1$}┘","",inner_spacing);
+            prt_string.push_str(&format!("└ {: <1$}┘","",inner_spacing));
         }
-        print!(" │");
+        prt_string.push_str(" │\n");
 
-        println!();
-        println!("└{:<1$}┘","",outer_spacing);
-        print!("{:<1$}","",(outer_spacing / 2) - 2);
-        println!("[{},{},{}]",shape[0],shape[1],shape[2]);
-        println!();
+        prt_string.push_str(&format!("└{:<1$}┘\n","",outer_spacing));
+        prt_string.push_str(&format!("{:<1$}","",(outer_spacing / 2) - 2));
+        prt_string.push_str(&format!("[{},{},{}]\n",shape[0],shape[1],shape[2]));
+
+        return prt_string;
     }
     /// Counting sort.
     /// Implemented for use with `NeuralNetwork::evaluate_outputs`.
