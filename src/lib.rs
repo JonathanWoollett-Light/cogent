@@ -447,7 +447,7 @@ pub mod core {
                     let path = format!("checkpoints/{}",folder);
                     // If folder exists, empty it.
                     if Path::new(&path).exists() {
-                        fs::remove_dir(&path).unwrap();// Delete folder
+                        fs::remove_dir_all(&path).unwrap();// Delete folder
                     }
                     fs::create_dir(&path).unwrap(); // Create folder
                 }

@@ -43,22 +43,22 @@ mod tests {
         sigmoid_net.train(&data)
             .halt_condition(HaltCondition::Iteration(6000u32))
             .learning_rate(2f32)
-            .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
             .evaluation_data(EvaluationData::Actual(data.clone()))
             .checkpoint_interval(MeasuredCondition::Iteration(100u32))
             .name("sigmoid")
             .log_interval(MeasuredCondition::Iteration(100u32))
         .go();
 
-        sigmoid_net.train(&data)
+        softmax_net.train(&data)
             .halt_condition(HaltCondition::Iteration(6000u32))
             .learning_rate(2f32)
-            .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
             .evaluation_data(EvaluationData::Actual(data.clone()))
             .checkpoint_interval(MeasuredCondition::Iteration(100u32))
             .name("softmax")
             .log_interval(MeasuredCondition::Iteration(100u32))
         .go();
+
+        assert!(false);
     }
     // Tests network to learn an XOR gate.
     // Softmax output.
