@@ -20,6 +20,8 @@ pub mod core {
     use serde::{Serialize,Deserialize};
 
     use std::fs::File;
+    use std::fs;
+    use std::path::Path;
     // Setting number of threads to use
     const THREAD_COUNT:usize = 12usize;
 
@@ -96,8 +98,10 @@ pub mod core {
         learning_rate_decay: f32, 
         // Time without notable improvement to wait until decreasing learning rate.
         learning_rate_interval: MeasuredCondition,
-        /// Duration/iterations between outputting neural network weights and biases to file.
+        // Duration/iterations between outputting neural network weights and biases to file.
         checkpoint_interval: Option<MeasuredCondition>,
+        // Sets what to pretend to checkpoint files. Used to differentiate between nets when checkpointing multiple.
+        name: Option<&'a str>,
         // Whether to print percantage progress in each iteration of backpropagation
         tracking: bool,
         neural_network: &'a mut NeuralNetwork
@@ -178,6 +182,13 @@ pub mod core {
             self.checkpoint_interval = Some(checkpoint_interval);
             return self;
         }
+        /// Sets `name`
+        /// 
+        /// `name` sets what to pretend to checkpoint files. Used to differentiate between nets when checkpointing multiple.
+        pub fn name(&mut self, name:&'a str) -> &mut Trainer<'a> {
+            self.name=Some(name);
+            return self;
+        }
         /// Sets `tracking`.
         /// 
         /// `tracking` determines whether to output percentage progress during backpropgation.
@@ -200,6 +211,7 @@ pub mod core {
                 self.learning_rate_decay,
                 self.learning_rate_interval,
                 self.checkpoint_interval,
+                self.name,
                 self.tracking
             );
         }
@@ -390,6 +402,7 @@ pub mod core {
                 learning_rate_decay: DEFAULT_LEARNING_RATE_DECAY,
                 learning_rate_interval: MeasuredCondition::Iteration(learning_rate_interval),
                 checkpoint_interval: None,
+                name: None,
                 tracking: false,
                 neural_network:self
             };
@@ -410,8 +423,23 @@ pub mod core {
             learning_rate_decay: f32,
             learning_rate_interval: MeasuredCondition,
             checkpoint_interval: Option<MeasuredCondition>,
+            name: Option<&str>,
             tracking:bool
         ) -> (){
+            if let Some(_) = checkpoint_interval {
+                if !Path::new("checkpoints").exists() {
+                    // Create folder
+                    fs::create_dir("checkpoints").unwrap();
+                }
+                if let Some(folder) = name {
+                    let path = format!("checkpoints/{}",folder);
+                    // If folder exists, empty it.
+                    if Path::new(&path).exists() {
+                        fs::remove_dir(&path).unwrap();// Delete folder
+                    }
+                    fs::create_dir(&path).unwrap(); // Create folder
+                }
+            }   
 
             let mut stdout = stdout(); // Handle for standard output for this process.
             let mut rng = rand::thread_rng(); // Random number generator.
@@ -481,10 +509,20 @@ pub mod core {
                 // If `checkpoint_interval` number of iterations or length of duration passed, export weights  (`connections`) and biases (`biases`) to file.
                 match checkpoint_interval {// TODO Reduce code duplication here
                     Some(MeasuredCondition::Iteration(iteration_interval)) => if iterations_elapsed % iteration_interval == 0 {
-                        self.export(&format!("{}",iterations_elapsed));
+                        if let Some(folder) = name {
+                            self.export(&format!("checkpoints/{}/{}",folder,iterations_elapsed));
+                        }
+                        else {
+                            self.export(&format!("checkpoints/{}",iterations_elapsed));
+                        }
                     },
                     Some(MeasuredCondition::Duration(duration_interval)) => if last_checkpointed_instant.elapsed() >= duration_interval {
-                        self.export(&format!("{}",NeuralNetwork::time(start_instant)));
+                        if let Some(folder) = name {
+                            self.export(&format!("checkpoints/{}/{}",folder,NeuralNetwork::time(start_instant)));
+                        }
+                        else {
+                            self.export(&format!("checkpoints/{}",NeuralNetwork::time(start_instant)));
+                        }
                         last_checkpointed_instant = Instant::now();
                     },
                     _ => {},
@@ -504,6 +542,7 @@ pub mod core {
                     _ => {},
                 }
 
+                // If 100% accuracy, halt.
                 if evaluation.1 as usize == evaluation_data.len() { break; }
 
                 // If `halt_condition` number of iterations occured, duration passed or accuracy acheived, halt training.
@@ -967,17 +1006,15 @@ pub mod core {
             }
             println!();
         }
-        // TODO Allow exporting to anywhere.
-        /// Exports neural network to `checkpoints/path` (requires `rust_neural_network/checkpoints` directory to exist).
+        /// Exports neural network to `path`.
         pub fn export(&self,path:&str) -> () {
-            let file = File::create(format!("/home/jonathan/Projects/rust_neural_network/checkpoints/{}",path));
+            let file = File::create(format!("{}.json",path));
             let serialized:String = serde_json::to_string(self).unwrap();
             file.unwrap().write_all(serialized.as_bytes()).unwrap();
         }
-        // TODO Allowing importing from anywhere.
-        /// Imports neural network from `checkpoints/path`.
+        /// Imports neural network from `path`.
         pub fn import(path:&str) -> NeuralNetwork {
-            let file = File::open(format!("/home/jonathan/Projects/rust_neural_network/checkpoints/{}",path));
+            let file = File::open(format!("{}.json",path));
             let mut string_contents:String = String::new();
             file.unwrap().read_to_string(&mut string_contents).unwrap();
             let deserialized:NeuralNetwork = serde_json::from_str(&string_contents).unwrap();
