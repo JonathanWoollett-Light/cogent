@@ -24,6 +24,42 @@ mod tests {
         
         file.unwrap().write_all(result.as_bytes());
     }
+    #[test]
+    fn xor_training_sigmoid_vs_softmax() {
+        let mut sigmoid_net = NeuralNetwork::new(2,&[
+            Layer::new(3,Activation::Sigmoid),
+            Layer::new(2,Activation::Sigmoid)
+        ]);
+        let mut softmax_net = sigmoid_net.clone();
+        softmax_net.activation(1,Activation::Softmax);
+
+        let data = vec![
+            (vec![0f32,0f32],vec![0f32,1f32]),
+            (vec![1f32,0f32],vec![1f32,0f32]),
+            (vec![0f32,1f32],vec![1f32,0f32]),
+            (vec![1f32,1f32],vec![0f32,1f32])
+        ];
+
+        sigmoid_net.train(&data)
+            .halt_condition(HaltCondition::Iteration(6000u32))
+            .learning_rate(2f32)
+            .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
+            .evaluation_data(EvaluationData::Actual(data.clone()))
+            .checkpoint_interval(MeasuredCondition::Iteration(100u32))
+            .name("sigmoid")
+            .log_interval(MeasuredCondition::Iteration(100u32))
+        .go();
+
+        sigmoid_net.train(&data)
+            .halt_condition(HaltCondition::Iteration(6000u32))
+            .learning_rate(2f32)
+            .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
+            .evaluation_data(EvaluationData::Actual(data.clone()))
+            .checkpoint_interval(MeasuredCondition::Iteration(100u32))
+            .name("softmax")
+            .log_interval(MeasuredCondition::Iteration(100u32))
+        .go();
+    }
     // Tests network to learn an XOR gate.
     // Softmax output.
     #[test]
