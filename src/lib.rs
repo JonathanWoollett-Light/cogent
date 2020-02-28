@@ -48,10 +48,10 @@ pub mod core {
     const DEFAULT_LEARNING_RATE_INTERVAL:f32 = 2000f32;
 
     /// For setting `evaluation_data`.
-    pub enum EvaluationData {
+    pub enum EvaluationData<'b> {
         Scaler(usize),
         Percent(f32),
-        Actual(Vec<(Vec<f32>,Vec<f32>)>)
+        Actual(&'b Vec<(Vec<f32>,Vec<f32>)>)
     }
     /// For setting a hyperparameter with measured intervals.
     #[derive(Clone,Copy)]
@@ -114,7 +114,7 @@ pub mod core {
             self.evaluation_data = match evaluation_data {
                 EvaluationData::Scaler(scaler) => { self.training_data.split_off(self.training_data.len() - scaler) }
                 EvaluationData::Percent(percent) => { self.training_data.split_off(self.training_data.len() - (self.training_data.len() as f32 * percent) as usize) }
-                EvaluationData::Actual(actual) => { actual }
+                EvaluationData::Actual(actual) => { actual.clone() }
             };
             return self;
         }
