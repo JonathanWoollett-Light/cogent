@@ -399,7 +399,7 @@ pub mod core {
             }
             else {
                 batch_holder.ceil() as usize
-            }
+            };
 
             return Trainer {
                 training_data: temp_training_data,
