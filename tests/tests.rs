@@ -41,21 +41,21 @@ mod tests {
         ];
 
         sigmoid_net.train(&data)
-            .halt_condition(HaltCondition::Iteration(6000u32))
             .learning_rate(2f32)
-            .evaluation_data(EvaluationData::Actual(data.clone()))
+            .evaluation_data(EvaluationData::Actual(&data))
             .checkpoint_interval(MeasuredCondition::Iteration(100u32))
             .name("sigmoid")
-            .log_interval(MeasuredCondition::Iteration(100u32))
+            .log_interval(MeasuredCondition::Iteration(10u32))
+            .lambda(0f32)
         .go();
 
         softmax_net.train(&data)
-            .halt_condition(HaltCondition::Iteration(6000u32))
             .learning_rate(2f32)
-            .evaluation_data(EvaluationData::Actual(data.clone()))
+            .evaluation_data(EvaluationData::Actual(&data))
             .checkpoint_interval(MeasuredCondition::Iteration(100u32))
             .name("softmax")
-            .log_interval(MeasuredCondition::Iteration(100u32))
+            .log_interval(MeasuredCondition::Iteration(10u32))
+            .lambda(0f32)
         .go();
 
         assert!(false);
@@ -89,7 +89,7 @@ mod tests {
                 .batch_size(4usize)
                 .learning_rate(2f32)
                 .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
-                .evaluation_data(EvaluationData::Actual(testing_data.clone())) // Use testing data as evaluation data.
+                .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .lambda(0f32)
             .go();
 
@@ -129,7 +129,7 @@ mod tests {
                 .batch_size(4usize)
                 .learning_rate(2f32)
                 .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
-                .evaluation_data(EvaluationData::Actual(testing_data.clone()))
+                .evaluation_data(EvaluationData::Actual(&testing_data))
                 .lambda(0f32)
             .go();
 
@@ -139,7 +139,36 @@ mod tests {
             assert!(evaluation.1 as usize == testing_data.len());
         }
     }
-    
+    #[test]
+    fn mnist_training_sigmoid_vs_softmax() {
+        let mut sigmoid_net = NeuralNetwork::new(784,&[
+            Layer::new(100,Activation::Sigmoid),
+            Layer::new(10,Activation::Sigmoid)
+        ]);
+        let mut softmax_net = sigmoid_net.clone();
+        softmax_net.activation(1,Activation::Softmax);
+
+        let training_data = get_mnist_dataset(false);
+        let testing_data = get_mnist_dataset(true);
+
+        sigmoid_net.train(&training_data)
+            .evaluation_data(EvaluationData::Actual(&testing_data))
+            .checkpoint_interval(MeasuredCondition::Iteration(1u32))
+            .name("sigmoid")
+            .log_interval(MeasuredCondition::Iteration(1u32))
+            .halt_condition(HaltCondition::Accuracy(0.95f32))
+        .go();
+
+        softmax_net.train(&training_data)
+            .evaluation_data(EvaluationData::Actual(&testing_data))
+            .checkpoint_interval(MeasuredCondition::Iteration(1u32))
+            .name("softmax")
+            .log_interval(MeasuredCondition::Iteration(1u32))
+            .halt_condition(HaltCondition::Accuracy(0.95f32))
+        .go();
+
+        assert!(false);
+    }
     // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
     // Sigmoid output.
     #[test]
@@ -203,7 +232,7 @@ mod tests {
             // Execution
             // ------------------------------------------------
             neural_network.train(&training_data)
-                .evaluation_data(EvaluationData::Actual(testing_data.clone())) // Use testing data as evaluation data.
+                .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(0.95f32))
                 .go();
 
