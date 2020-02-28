@@ -193,7 +193,7 @@ mod tests {
             // Execution
             // ------------------------------------------------
             neural_network.train(&training_data)
-                .evaluation_data(EvaluationData::Actual(testing_data.clone())) // Use testing data as evaluation data.
+                .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(0.95f32))
                 .go();
 
