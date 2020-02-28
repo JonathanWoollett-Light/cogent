@@ -36,16 +36,16 @@ pub mod core {
     // Default percentage size of training data to set regularization parameter (0.1=10%).
     const DEFAULT_LAMBDA:f32 = 0.1f32;
     // Default seconds to set duration for early stopping condition. 
-    // early stopping = (number of examples * size of examples * default early stopping) seconds
-    const DEFAULT_EARLY_STOPPING:f32 = 0.00001f32;
-    //Default percentage minimum positive change required to prevent early stopping or learning rate decay (0.005=0.5%).
+    // early stopping = default early stopping * (size of examples / number of examples) seconds
+    const DEFAULT_EARLY_STOPPING:f32 = 5000f32;
+    // Default percentage minimum positive accuracy change required to prevent early stopping or learning rate decay (0.005=0.5%).
     const DEFAULT_EVALUATION_MIN_CHANGE:f32 = 0.005f32;
     // Default amount to decay learning rate after period of un-notable (what word should I use here?) change.
     // `new learning rate = learning rate decay * old learning rate`
     const DEFAULT_LEARNING_RATE_DECAY:f32 = 0.5f32;
     // Default interval to go without notable importment before learning rate decay.
-    // interval = (number of examples * size of examples * default learning rate interval) iterations.
-    const DEFAULT_LEARNING_RATE_INTERVAL:u32 = 200u32;
+    // interval = default learning rate interval * (size of examples / number of examples) iterations.
+    const DEFAULT_LEARNING_RATE_INTERVAL:f32 = 2000f32;
 
     /// For setting `evaluation_data`.
     pub enum EvaluationData {
@@ -318,7 +318,7 @@ pub mod core {
     }
 
     /// Neural network.
-    #[derive(Serialize,Deserialize)]
+    #[derive(Serialize,Deserialize,Clone)]
     pub struct NeuralNetwork {
         inputs: usize,
         biases: Vec<Array2<f32>>,
@@ -362,6 +362,10 @@ pub mod core {
             let layers:Vec<Activation> = layers.iter().map(|x|x.activation).collect();
             NeuralNetwork{ inputs, biases, connections, layers}
         }
+        /// Sets activation of hidden layer specified by index.
+        pub fn activation(&mut self, index:usize, activation:Activation) {
+            self.layers[index] = activation;
+        }
         /// Runs batch of examples through network.
         /// 
         /// Returns outputs from batch of examples.
@@ -384,20 +388,28 @@ pub mod core {
             temp_training_data.shuffle(&mut rng);
             let temp_evaluation_data = temp_training_data.split_off(training_data.len() - (training_data.len() as f32 * DEFAULT_EVALUTATION_DATA) as usize);
 
-            let multiplier:f32 = training_data[0].0.len() as f32 * training_data.len() as f32;
-            let early_stopping_condition = Duration::new((multiplier * DEFAULT_EARLY_STOPPING) as u64,0);
-            let learning_rate_interval:u32 = (DEFAULT_LEARNING_RATE_INTERVAL as f32 * training_data[0].0.len() as f32 / training_data.len() as f32) as u32;
+            let multiplier:f32 = training_data[0].0.len() as f32 / training_data.len() as f32;
+            let early_stopping_condition:u32 = (DEFAULT_EARLY_STOPPING * multiplier).ceil() as u32;
+            let learning_rate_interval:u32 = (DEFAULT_LEARNING_RATE_INTERVAL * multiplier).ceil() as u32;
             
-            
+            let batch_holder:f32 = DEFAULT_BATCH_SIZE * training_data.len() as f32;
+            // TODO What should we use as min batch size here instead of `10f32`?
+            let batch_size:usize = if batch_holder < 10f32 {
+                training_data.len()
+            }
+            else {
+                batch_holder.ceil() as usize
+            }
+
             return Trainer {
                 training_data: temp_training_data,
                 evaluation_data: temp_evaluation_data,
                 halt_condition: None,
                 log_interval: None,
-                batch_size: (DEFAULT_BATCH_SIZE * training_data.len() as f32).ceil() as usize,
+                batch_size: batch_size,
                 learning_rate: DEFAULT_LEARNING_RATE,
                 lambda: DEFAULT_LAMBDA,
-                early_stopping_condition: MeasuredCondition::Duration(early_stopping_condition),
+                early_stopping_condition: MeasuredCondition::Iteration(early_stopping_condition),
                 evaluation_min_change: EvaluationChange::Percent(DEFAULT_EVALUATION_MIN_CHANGE),
                 learning_rate_decay: DEFAULT_LEARNING_RATE_DECAY,
                 learning_rate_interval: MeasuredCondition::Iteration(learning_rate_interval),
