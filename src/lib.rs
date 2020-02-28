@@ -329,6 +329,14 @@ pub mod core {
         /// Constructs network of given layers.
         /// 
         /// Returns constructed network.
+        /// ```
+        /// use rust_neural_network::core::{NeuralNetwork,Layer};
+        /// 
+        /// let mut net = NeuralNetwork::new(2,&[
+        ///     Layer::new(3,Activation::Sigmoid),
+        ///     Layer::new(2,Activation::Softmax)
+        /// ]);
+        /// ```
         pub fn new(inputs:usize,layers: &[Layer]) -> NeuralNetwork {
             if layers.len() == 0 {
                 panic!("Requires >1 layers");
@@ -362,13 +370,38 @@ pub mod core {
             let layers:Vec<Activation> = layers.iter().map(|x|x.activation).collect();
             NeuralNetwork{ inputs, biases, connections, layers}
         }
-        /// Sets activation of hidden layer specified by index.
+        /// Sets activation of layer specified by index (excluding input layer).
+        /// ```
+        /// use rust_neural_network::core::{NeuralNetwork,Layer,Activation};
+        /// 
+        /// let mut net = NeuralNetwork::new(2,&[
+        ///     Layer::new(3,Activation::Sigmoid),
+        ///     Layer::new(2,Activation::Sigmoid)
+        /// ]);
+        /// net.activation(1,Activation::Softmax); // Changes activation of output layer.
+        /// ```
         pub fn activation(&mut self, index:usize, activation:Activation) {
             self.layers[index] = activation;
         }
         /// Runs batch of examples through network.
         /// 
         /// Returns outputs from batch of examples.
+        /// ```
+        /// use rust_neural_network::core::{NeuralNetwork,Layer,Activation};
+        /// use ndarray::{Array2,array};
+        /// 
+        /// let mut net = NeuralNetwork::new(2,&[
+        ///     Layer::new(3,Activation::Sigmoid),
+        ///     Layer::new(2,Activation::Softmax)
+        /// ]);
+        /// let input:Array2<f32> = array![
+        ///     [0f32,0f32],
+        ///     [1f32,0f32],
+        ///     [0f32,1f32],
+        ///     [1f32,1f32]
+        /// ];
+        /// let output:Array2<f32> = net.run(&input);
+        /// ```
         pub fn run(&self, inputs:&Array2<f32>) -> Array2<f32> {
             let mut activations:Array2<f32> = inputs.clone();
             for i in 0..self.layers.len() {
@@ -382,6 +415,36 @@ pub mod core {
         /// Begins setting hyperparameters for training.
         /// 
         /// Returns `Trainer` struct used to specify hyperparameters
+        /// 
+        /// The most basic case:
+        /// ```
+        /// let mut neural_network = NeuralNetwork::new(...);
+        /// 
+        /// let data:Vec<(Vec<f32>,Vec<f32>)> = ...;
+        ///
+        /// neural_network.train(&data).go();
+        /// ```
+        /// Training a network to learn an XOR gate:
+        /// ```
+        /// // Sets network
+        /// let mut neural_network = NeuralNetwork::new(2,&[
+        ///     Layer::new(3,Activation::Sigmoid),
+        ///     Layer::new(2,Activation::Softmax)
+        /// ]);
+        /// // Sets data
+        /// let data = vec![
+        ///     (vec![0f32,0f32],vec![0f32,1f32]),
+        ///     (vec![1f32,0f32],vec![1f32,0f32]),
+        ///     (vec![0f32,1f32],vec![1f32,0f32]),
+        ///     (vec![1f32,1f32],vec![0f32,1f32])
+        /// ];-
+        /// // Trains network
+        /// neural_network.train(&data)
+        ///     .learning_rate(2f32)
+        ///     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
+        ///     .lambda(0f32)
+        /// .go();
+        /// ```
         pub fn train(&mut self,training_data:&Vec<(Vec<f32>,Vec<f32>)>) -> Trainer {
             let mut rng = rand::thread_rng();
             let mut temp_training_data = training_data.clone();
@@ -897,6 +960,11 @@ pub mod core {
                     if chunks.len() == alphabet_size { break };
                     slice.0 = slice.1;
                 }
+
+                // If `test_data` not sorted.
+                if slice.1 != test_data.len() {
+                    panic!("`evaluate outputs` requires sorted data (sorted by output)");
+                }
                 return chunks;
             }
             // Sets all non-max values in row to 0 and max to 1 for each row in matrix.
@@ -1054,9 +1122,9 @@ pub mod utilities {
     /// println!("{}",prt);
     /// let expect:&str = 
     /// "┌                ┐
-    /// | -4.0 -3.0 -2.0 |
-    /// | -1.0 +0.0 +1.0 |
-    /// | +2.0 +3.0 +4.0 |
+    /// │ -4.0 -3.0 -2.0 │
+    /// │ -1.0 +0.0 +1.0 │
+    /// │ +2.0 +3.0 +4.0 │
     /// └                ┘
     ///       [3,3]\n";
     /// assert_eq!(&prt,expect);
@@ -1095,8 +1163,8 @@ pub mod utilities {
     /// let expect:&str = 
     /// "┌                                         ┐
     /// │ ┌           ┐┌           ┐┌           ┐ │
-    /// │ │ -1.0 -1.1 ││ +0.0 +2.1 ││ +1.0 +1.1 │ │
-    /// │ │ -1.2 -1.3 ││ +2.2 +2.3 ││ +1.2 +1.3 │ │
+    /// │ │ -1.0 -1.1 ││ +0.0 +0.1 ││ +1.0 +1.1 │ │
+    /// │ │ -1.2 -1.3 ││ +0.2 +0.3 ││ +1.2 +1.3 │ │
     /// │ └           ┘└           ┘└           ┘ │
     /// └                                         ┘
     ///                   [3,2,2]\n";
