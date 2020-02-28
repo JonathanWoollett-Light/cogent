@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use std::time::{Instant,Duration};
+    use std::time::Instant;
     use rust_neural_network::core::{HaltCondition,EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
     use std::io::Read;
     use std::io::prelude::*;
@@ -24,48 +24,16 @@ mod tests {
         
         file.unwrap().write_all(result.as_bytes());
     }
-    #[test]
-    fn xor_training_sigmoid_vs_softmax() {
-        let mut sigmoid_net = NeuralNetwork::new(2,&[
-            Layer::new(3,Activation::Sigmoid),
-            Layer::new(2,Activation::Sigmoid)
-        ]);
-        let mut softmax_net = sigmoid_net.clone();
-        softmax_net.activation(1,Activation::Softmax);
-
-        let data = vec![
-            (vec![0f32,0f32],vec![0f32,1f32]),
-            (vec![1f32,0f32],vec![1f32,0f32]),
-            (vec![0f32,1f32],vec![1f32,0f32]),
-            (vec![1f32,1f32],vec![0f32,1f32])
-        ];
-
-        sigmoid_net.train(&data)
-            .learning_rate(2f32)
-            .evaluation_data(EvaluationData::Actual(&data))
-            .checkpoint_interval(MeasuredCondition::Iteration(100u32))
-            .name("sigmoid")
-            .log_interval(MeasuredCondition::Iteration(10u32))
-            .lambda(0f32)
-        .go();
-
-        softmax_net.train(&data)
-            .learning_rate(2f32)
-            .evaluation_data(EvaluationData::Actual(&data))
-            .checkpoint_interval(MeasuredCondition::Iteration(100u32))
-            .name("softmax")
-            .log_interval(MeasuredCondition::Iteration(10u32))
-            .lambda(0f32)
-        .go();
-
-        assert!(false);
-    }
     // Tests network to learn an XOR gate.
     // Softmax output.
     #[test]
     fn train_xor_0() {
+        let mut total_accuracy = 0u32;
+        let mut total_time = 0u64;
         let runs = 10 * TEST_RERUN_MULTIPLIER;
         for _ in 0..runs {
+            let start = Instant::now();
+
             // Setup
             // ------------------------------------------------
             // Sets network
@@ -74,36 +42,40 @@ mod tests {
                 Layer::new(2,Activation::Softmax)
             ]);
             // Sets training and testing data
-            let training_data = vec![
+            let data = vec![
                 (vec![0f32,0f32],vec![0f32,1f32]),
                 (vec![1f32,0f32],vec![1f32,0f32]),
                 (vec![0f32,1f32],vec![1f32,0f32]),
                 (vec![1f32,1f32],vec![0f32,1f32])
             ];
-            // In this case, we are using our training data as our testing data and evaluation data.
-            let testing_data = training_data.clone();
             // Execution
             // ------------------------------------------------
-            neural_network.train(&training_data)
-                .early_stopping_condition(MeasuredCondition::Iteration(3000u32))
-                .batch_size(4usize)
+            neural_network.train(&data)
                 .learning_rate(2f32)
-                .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
-                .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
+                .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .lambda(0f32)
             .go();
 
-            //Evaluation
-            let evaluation = neural_network.evaluate(&testing_data);
-            assert!(evaluation.1 as usize == testing_data.len());
+            // Evaluation
+            // ------------------------------------------------
+            total_time += start.elapsed().as_secs();
+
+            let evaluation = neural_network.evaluate(&data);
+            assert!(evaluation.1 as usize == data.len());
+
+            total_accuracy += evaluation.1;
         }
+        export_result("train_xor_0",runs,4u32,total_time,total_accuracy);
     }
     // Tests network to learn an XOR gate.
     // Sigmoid output.
     #[test]
     fn train_xor_1() {
+        let mut total_accuracy = 0u32;
+        let mut total_time = 0u64;
         let runs = 10 * TEST_RERUN_MULTIPLIER;
         for _ in 0..runs {
+            let start = Instant::now();
 
             // Setup
             // ------------------------------------------------
@@ -113,61 +85,31 @@ mod tests {
                 Layer::new(2,Activation::Sigmoid)
             ]);
             // Sets training and testing data
-            let training_data = vec![
+            let data = vec![
                 (vec![0f32,0f32],vec![0f32,1f32]),
                 (vec![1f32,0f32],vec![1f32,0f32]),
                 (vec![0f32,1f32],vec![1f32,0f32]),
                 (vec![1f32,1f32],vec![0f32,1f32])
             ];
-            // In this case, we are using our training data as our testing data and evaluation data.
-            let testing_data = training_data.clone();
 
             // Execution
             // ------------------------------------------------
-            neural_network.train(&training_data)
-                .early_stopping_condition(MeasuredCondition::Iteration(3000u32))
-                .batch_size(4usize)
+            neural_network.train(&data)
                 .learning_rate(2f32)
-                .learning_rate_interval(MeasuredCondition::Iteration(2000u32))
-                .evaluation_data(EvaluationData::Actual(&testing_data))
+                .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .lambda(0f32)
             .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = neural_network.evaluate(&testing_data);
-            assert!(evaluation.1 as usize == testing_data.len());
+            total_time += start.elapsed().as_secs();
+
+            let evaluation = neural_network.evaluate(&data);
+            assert!(evaluation.1 as usize == data.len());
+
+            total_accuracy += evaluation.1;
         }
-    }
-    #[test]
-    fn mnist_training_sigmoid_vs_softmax() {
-        let mut sigmoid_net = NeuralNetwork::new(784,&[
-            Layer::new(100,Activation::Sigmoid),
-            Layer::new(10,Activation::Sigmoid)
-        ]);
-        let mut softmax_net = sigmoid_net.clone();
-        softmax_net.activation(1,Activation::Softmax);
-
-        let training_data = get_mnist_dataset(false);
-        let testing_data = get_mnist_dataset(true);
-
-        sigmoid_net.train(&training_data)
-            .evaluation_data(EvaluationData::Actual(&testing_data))
-            .checkpoint_interval(MeasuredCondition::Iteration(1u32))
-            .name("sigmoid")
-            .log_interval(MeasuredCondition::Iteration(1u32))
-            .halt_condition(HaltCondition::Accuracy(0.95f32))
-        .go();
-
-        softmax_net.train(&training_data)
-            .evaluation_data(EvaluationData::Actual(&testing_data))
-            .checkpoint_interval(MeasuredCondition::Iteration(1u32))
-            .name("softmax")
-            .log_interval(MeasuredCondition::Iteration(1u32))
-            .halt_condition(HaltCondition::Accuracy(0.95f32))
-        .go();
-
-        assert!(false);
+        export_result("train_xor_1",runs,4u32,total_time,total_accuracy);
     }
     // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
     // Sigmoid output.
@@ -234,7 +176,7 @@ mod tests {
             neural_network.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(0.95f32))
-                .go();
+            .go();
 
             // Evaluation
             // ------------------------------------------------

@@ -299,7 +299,7 @@ pub mod core {
             // Calculates sums of rows
             let sum = exp_matrix.sum_axis(Axis(1));
             // Divide every value in matrix by sum of its row
-            for (sum,mut row) in izip!(sum.iter(),exp_matrix.axis_iter_mut(Axis(1))) {
+            for (sum,mut row) in izip!(sum.iter(),exp_matrix.axis_iter_mut(Axis(0))) {
                 row.mapv_inplace(|x| x / sum);
             }
             return exp_matrix;
@@ -1042,6 +1042,9 @@ pub mod utilities {
     // TODO Figure out how to run rustdoc tests
     /// Nicely prints `Array2<f32>`.
     /// ```
+    /// use rust_neural_network::utilities::f32_2d_prt;
+    /// use ndarray::{array,Array2};
+    /// 
     /// let array2:Array2<f32> = array![
     ///     [-4f32,-3f32,-2f32],
     ///     [-1f32,0f32,1f32],
@@ -1064,12 +1067,12 @@ pub mod utilities {
         let spacing = 5*shape[1];
         prt_string.push_str(&format!("┌ {: <1$}┐\n","",spacing));
         for row in 0..shape[0] {
-            prt_string.push_str("| ");
+            prt_string.push_str("│ ");
             for val in ndarray_param.row(row) {
                 prt_string.push_str(&format!("{:+.1} ",val));
                 
             }
-            prt_string.push_str("|\n");
+            prt_string.push_str("│\n");
         }
         prt_string.push_str(&format!("└ {:<1$}┘\n","",spacing));
         prt_string.push_str(&format!("{:<1$}","",(spacing/2)-1));
@@ -1079,6 +1082,9 @@ pub mod utilities {
     }
     /// Nicely prints `Array3<f32>`.
     /// ```
+    /// use rust_neural_network::utilities::f32_3d_prt;
+    /// use ndarray::{array,Array3};
+    /// 
     /// let array3:Array3<f32> = array![
     ///     [[-1.0f32,-1.1f32],[-1.2f32,-1.3f32]],
     ///     [[0.0f32,0.1f32],[0.2f32,0.3f32]],
