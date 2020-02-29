@@ -330,7 +330,7 @@ pub mod core {
         /// 
         /// Returns constructed network.
         /// ```
-        /// use rust_neural_network::core::{NeuralNetwork,Layer};
+        /// use rust_neural_network::core::{NeuralNetwork,Layer,Activation};
         /// 
         /// let mut net = NeuralNetwork::new(2,&[
         ///     Layer::new(3,Activation::Sigmoid),
@@ -416,16 +416,10 @@ pub mod core {
         /// 
         /// Returns `Trainer` struct used to specify hyperparameters
         /// 
-        /// The most basic case:
-        /// ```
-        /// let mut neural_network = NeuralNetwork::new(...);
-        /// 
-        /// let data:Vec<(Vec<f32>,Vec<f32>)> = ...;
-        ///
-        /// neural_network.train(&data).go();
-        /// ```
         /// Training a network to learn an XOR gate:
         /// ```
+        /// use rust_neural_network::core::{NeuralNetwork,Layer,Activation,EvaluationData};
+        /// 
         /// // Sets network
         /// let mut neural_network = NeuralNetwork::new(2,&[
         ///     Layer::new(3,Activation::Sigmoid),
@@ -437,7 +431,7 @@ pub mod core {
         ///     (vec![1f32,0f32],vec![1f32,0f32]),
         ///     (vec![0f32,1f32],vec![1f32,0f32]),
         ///     (vec![1f32,1f32],vec![0f32,1f32])
-        /// ];-
+        /// ];
         /// // Trains network
         /// neural_network.train(&data)
         ///     .learning_rate(2f32)
@@ -1106,11 +1100,12 @@ pub mod core {
 pub mod utilities {
     extern crate ndarray;
     use ndarray::{Array2,Array3};
+    use std::fmt::Display;
     // TODO Use generics in these prints
     // TODO Figure out how to run rustdoc tests
     /// Nicely prints `Array2<f32>`.
     /// ```
-    /// use rust_neural_network::utilities::f32_2d_prt;
+    /// use rust_neural_network::utilities::array2_prt;
     /// use ndarray::{array,Array2};
     /// 
     /// let array2:Array2<f32> = array![
@@ -1118,7 +1113,7 @@ pub mod utilities {
     ///     [-1f32,0f32,1f32],
     ///     [2f32,3f32,4f32]
     /// ];
-    /// let prt:String = f32_2d_prt(&array2);
+    /// let prt:String = array2_prt(&array2);
     /// println!("{}",prt);
     /// let expect:&str = 
     /// "┌                ┐
@@ -1129,7 +1124,7 @@ pub mod utilities {
     ///       [3,3]\n";
     /// assert_eq!(&prt,expect);
     /// ```
-    pub fn f32_2d_prt(ndarray_param:&Array2<f32>) -> String {
+    pub fn array2_prt<T:Display+Copy>(ndarray_param:&Array2<T>) -> String {
         let mut prt_string:String = String::new();
         let shape = ndarray_param.shape(); // shape[0],shape[1]=row,column
         let spacing = 5*shape[1];
@@ -1150,7 +1145,7 @@ pub mod utilities {
     }
     /// Nicely prints `Array3<f32>`.
     /// ```
-    /// use rust_neural_network::utilities::f32_3d_prt;
+    /// use rust_neural_network::utilities::array3_prt;
     /// use ndarray::{array,Array3};
     /// 
     /// let array3:Array3<f32> = array![
@@ -1158,7 +1153,7 @@ pub mod utilities {
     ///     [[0.0f32,0.1f32],[0.2f32,0.3f32]],
     ///     [[1.0f32,1.1f32],[1.2f32,1.3f32]],
     /// ];
-    /// let prt:String = f32_3d_prt(&array3);
+    /// let prt:String = array3_prt(&array3);
     /// println!("{}",prt);
     /// let expect:&str = 
     /// "┌                                         ┐
@@ -1170,7 +1165,7 @@ pub mod utilities {
     ///                   [3,2,2]\n";
     /// assert_eq!(&prt,expect);
     /// ```
-    pub fn f32_3d_prt(ndarray_param:&Array3<f32>) -> String {
+    pub fn array3_prt<T:Display+Copy>(ndarray_param:&Array3<T>) -> String {
         let mut prt_string:String = String::new();
         let shape = ndarray_param.shape(); // shape[0],shape[1],shape[2]=layer,row,column
         let outer_spacing = (5*shape[0]*shape[2]) + (3*shape[0]) + 2;
