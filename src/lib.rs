@@ -440,6 +440,19 @@ pub mod core {
         /// .go();
         /// ```
         pub fn train(&mut self,training_data:&Vec<(Vec<f32>,Vec<f32>)>) -> Trainer {
+            // TODO Should we be helpful and do this check or not bother?
+            // Checks all examples fit the neural network.
+            for i in 0..training_data.len() {
+                let example = &training_data[i];
+                if example.0.len() != self.input_size {
+                    panic!("Input size of example {} != size of input layer.",i);
+                }
+                else if example.1.len() != self.layers[self.layers.len()-1].len() {
+                    panic!("Output size of example {} != size of output layer.",i);
+                }
+            }
+
+
             let mut rng = rand::thread_rng();
             let mut temp_training_data = training_data.clone();
             temp_training_data.shuffle(&mut rng);
