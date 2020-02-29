@@ -1103,7 +1103,7 @@ pub mod utilities {
     use std::fmt::Display;
     // TODO Use generics in these prints
     // TODO Figure out how to run rustdoc tests
-    /// Nicely prints `Array2<f32>`.
+    /// Returns pretty string of `Array2<T>`.
     /// ```
     /// use rust_neural_network::utilities::array2_prt;
     /// use ndarray::{array,Array2};
@@ -1143,7 +1143,7 @@ pub mod utilities {
 
         return prt_string;
     }
-    /// Nicely prints `Array3<f32>`.
+    /// Returns pretty string of `Array3<T>`.
     /// ```
     /// use rust_neural_network::utilities::array3_prt;
     /// use ndarray::{array,Array3};
