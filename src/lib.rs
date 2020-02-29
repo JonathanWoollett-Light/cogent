@@ -426,6 +426,7 @@ pub mod core {
         ///     Layer::new(2,Activation::Softmax)
         /// ]);
         /// // Sets data
+        /// // For output [0,1]=false and [1,0]=true.
         /// let data = vec![
         ///     (vec![0f32,0f32],vec![0f32,1f32]),
         ///     (vec![1f32,0f32],vec![1f32,0f32]),
@@ -944,12 +945,12 @@ pub mod core {
                 }
             });
             let matrix:Array2<f32> = cast_array1s_to_array2(classifications,alphabet_size);
-            // TODO Getting `diagonal` could porbably be improved, look into that.
+            // TODO Getting `diagonal` could probably be improved, look into that.
             let diagonal:Array1<f32> = matrix.clone().into_diag();
             return (diagonal,matrix);
 
-            // TODO Lots needs to be done to improve this.
-            // Returns Vec<(Array2<f32>,Array2<f32>)> with each tuple representing all examples of a character.
+            // TODO Should this be adapted to not require sorted data? Would require twice as much memory and would be a little slower.
+            // Returns Vec<(Array2<f32>,Array2<f32>)> with each tuple representing all examples of a class.
             fn symbol_chunks(test_data:&[(Vec<f32>,Vec<f32>)],alphabet_size:usize) -> Vec<(Array2<f32>,Array2<f32>)> {
                 let mut chunks:Vec<(Array2<f32>,Array2<f32>)> = Vec::with_capacity(alphabet_size);
                 let mut slice = (0usize,0usize); // (lower bound,upper bound)
@@ -959,7 +960,7 @@ pub mod core {
                         slice.1+=1;
                         if slice.1+1 == test_data.len() {
                             slice.1 += 1;
-                            break; 
+                            break;
                         }
                     } 
                     let chunk_holder = NeuralNetwork::matrixify(&test_data[slice.0..slice.1]);
@@ -1217,6 +1218,7 @@ pub mod utilities {
 
         return prt_string;
     }
+    // TODO Rework this to take `test_data:&[(Vec<f32>,usize)]`? This would greatly improve performance, would require reworking some other parts of library though.
     /// Counting sort.
     /// Implemented for use with `NeuralNetwork::evaluate_outputs`.
     /// Counting sort implemented since typically classification datasets have high `n` vs low `k`.
