@@ -43,10 +43,10 @@ mod tests {
             ]);
             // Sets training and testing data
             let data = vec![
-                (vec![0f32,0f32],vec![0f32,1f32]),
-                (vec![1f32,0f32],vec![1f32,0f32]),
-                (vec![0f32,1f32],vec![1f32,0f32]),
-                (vec![1f32,1f32],vec![0f32,1f32])
+                (vec![0f32,0f32],0usize),
+                (vec![1f32,0f32],1usize),
+                (vec![0f32,1f32],1usize),
+                (vec![1f32,1f32],0usize)
             ];
             // Execution
             // ------------------------------------------------
@@ -86,10 +86,10 @@ mod tests {
             ]);
             // Sets training and testing data
             let data = vec![
-                (vec![0f32,0f32],vec![0f32,1f32]),
-                (vec![1f32,0f32],vec![1f32,0f32]),
-                (vec![0f32,1f32],vec![1f32,0f32]),
-                (vec![1f32,1f32],vec![0f32,1f32])
+                (vec![0f32,0f32],0usize),
+                (vec![1f32,0f32],1usize),
+                (vec![0f32,1f32],1usize),
+                (vec![1f32,1f32],0usize)
             ];
 
             // Execution
@@ -190,7 +190,7 @@ mod tests {
     }
     
     // Gets MNIST dataset.
-    fn get_mnist_dataset(testing:bool) -> Vec<(Vec<f32>,Vec<f32>)> {
+    fn get_mnist_dataset(testing:bool) -> Vec<(Vec<f32>,usize)> {
         // Gets testing dataset.
         let (images,labels) = if testing {
             (get_images("data/MNIST/t10k-images.idx3-ubyte"),get_labels("data/MNIST/t10k-labels.idx1-ubyte"))
@@ -202,12 +202,11 @@ mod tests {
 
         let iterator = images.iter().zip(labels.iter());
         let mut examples = Vec::new();
-        let set_output_layer = |label:u8| -> Vec<f32> { let mut temp = vec!(0f32;10); temp[label as usize] = 1f32; temp};
         for (image,label) in iterator {
             examples.push(
                 (
                     image.clone(),
-                    set_output_layer(*label)
+                    label as usize
                 )
             );
         }

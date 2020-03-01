@@ -1,6 +1,8 @@
 /// Core functionality of training a neural network.
 pub mod core {
+    use rand::{thread_rng,rngs::ThreadRng};
     use rand::prelude::SliceRandom;
+    
     use std::time::{Duration,Instant};
     use itertools::izip;
 
@@ -8,7 +10,7 @@ pub mod core {
     use scoped_threadpool::Pool;
 
     extern crate ndarray;
-    use ndarray::{Array2,Array1,ArrayD,Axis};
+    use ndarray::{Array2,Array1,ArrayD,Axis,SliceInfo,ArrayView2,ArrayBase};
     use ndarray_rand::{RandomExt,rand_distr::Uniform};
 
     extern crate ndarray_einsum_beta;
@@ -19,12 +21,16 @@ pub mod core {
 
     use serde::{Serialize,Deserialize};
 
+    use std::collections::LinkedList;
+    use std::mem::swap;
+
     use std::fs::File;
     use std::fs;
     use std::path::Path;
     // Setting number of threads to use
     const THREAD_COUNT:usize = 12usize;
 
+    use std::option::IterMut;
     use std::f32;
 
     // Default percentage of training data to set as evaluation data (0.1=10%).
@@ -51,7 +57,7 @@ pub mod core {
     pub enum EvaluationData<'b> {
         Scaler(usize),
         Percent(f32),
-        Actual(&'b Vec<(Vec<f32>,Vec<f32>)>)
+        Actual(&'b Vec<(Vec<f32>,usize)>)
     }
     /// For setting a hyperparameter with measured intervals.
     #[derive(Clone,Copy)]
@@ -79,8 +85,9 @@ pub mod core {
     
     /// To practicaly implement optional setting of training hyperparameters.
     pub struct Trainer<'a> {
-        training_data: Vec<(Vec<f32>,Vec<f32>)>,
-        evaluation_data: Vec<(Vec<f32>,Vec<f32>)>,
+        training_data: Vec<(Vec<f32>,usize)>,
+        k:usize,
+        evaluation_data: Vec<(Vec<f32>,usize)>,
         // Will halt after at a certain iteration, accuracy or duration.
         halt_condition: Option<HaltCondition>,
         // Can log after a certain number of iterations, a certain duration, or not at all.
@@ -200,6 +207,7 @@ pub mod core {
         pub fn go(&mut self) -> () {
             self.neural_network.train_details(
                 &mut self.training_data,
+                self.k,
                 &self.evaluation_data,
                 self.halt_condition,
                 self.log_interval,
@@ -257,17 +265,17 @@ pub mod core {
         // ------------------------------------------------------------------------
         // TODO I am certain there are issues here.
         // Computes output layer errors, given outputs (`outputs`) and targets (`target`).
-        fn delta(&self,outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
+        fn delta(&self,outputs: &ArrayView2<f32>, targets: &ArrayView2<f32>) -> Array2<f32> {
             return match self {
                 Self::Sigmoid => sigmoid(outputs,targets),
                 Self::Softmax => softmax(outputs,targets),
             };
             // Cross entropy error of sigmoid activation output layer
-            fn sigmoid(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
+            fn sigmoid(outputs: &ArrayView2<f32>, targets: &ArrayView2<f32>) -> Array2<f32> {
                 return outputs-targets
             }
             // Cross entropy error of softmax activation output layer
-            fn softmax(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
+            fn softmax(outputs: &ArrayView2<f32>, targets: &ArrayView2<f32>) -> Array2<f32> {
                 return outputs-targets;
             }
         }
@@ -440,19 +448,18 @@ pub mod core {
         ///     .lambda(0f32)
         /// .go();
         /// ```
-        pub fn train(&mut self,training_data:&Vec<(Vec<f32>,Vec<f32>)>) -> Trainer {
+        pub fn train(&mut self,training_data:&Vec<(Vec<f32>,usize)>,k:usize) -> Trainer {
             // TODO Should we be helpful and do this check or not bother?
             // Checks all examples fit the neural network.
             for i in 0..training_data.len() {
                 let example = &training_data[i];
-                if example.0.len() != self.input_size {
+                if example.0.len() != self.inputs {
                     panic!("Input size of example {} != size of input layer.",i);
                 }
-                else if example.1.len() != self.layers[self.layers.len()-1].len() {
+                else if k != self.biases[self.biases.len()-1].len() {
                     panic!("Output size of example {} != size of output layer.",i);
                 }
             }
-
 
             let mut rng = rand::thread_rng();
             let mut temp_training_data = training_data.clone();
@@ -474,6 +481,7 @@ pub mod core {
 
             return Trainer {
                 training_data: temp_training_data,
+                k:k,
                 evaluation_data: temp_evaluation_data,
                 halt_condition: None,
                 log_interval: None,
@@ -494,8 +502,9 @@ pub mod core {
         // TODO Name this better
         /// Runs training.
         fn train_details(&mut self,
-            training_data: &mut [(Vec<f32>,Vec<f32>)], // TODO Look into `&mut [(Vec<f32>,Vec<f32>)]` vs `&mut Vec<(Vec<f32>,Vec<f32>)>`
-            evaluation_data: &[(Vec<f32>,Vec<f32>)],
+            training_data: &mut [(Vec<f32>,usize)], // TODO Look into `&mut [(Vec<f32>,Vec<f32>)]` vs `&mut Vec<(Vec<f32>,Vec<f32>)>`
+            k:usize,
+            evaluation_data: &[(Vec<f32>,usize)],
             halt_condition: Option<HaltCondition>,
             log_interval: Option<MeasuredCondition>,
             batch_size: usize,
@@ -534,7 +543,7 @@ pub mod core {
             let mut best_accuracy_instant = Instant::now();// Instant of best accuracy.
             let mut best_accuracy = 0u32; // Value of best accuracy.
 
-            let starting_evaluation = self.evaluate(evaluation_data); // Compute intial evaluation.
+            let starting_evaluation = self.evaluate(evaluation_data,k); // Compute intial evaluation.
 
             // If `log_interval` has been defined, print intial evaluation.
             if let Some(_) = log_interval {
@@ -552,12 +561,15 @@ pub mod core {
             let mut last_checkpointed_instant = Instant::now();
             let mut last_logged_instant = Instant::now();
 
+            training_data.shuffle(&mut rng);
+
+            let mut inner_training_data =  NeuralNetwork::matrixify(training_data,k);
+
             // Backpropgation loop
             // ------------------------------------------------
             loop {
-                training_data.shuffle(&mut rng); // Shuffle dataset.
-                let batches:Vec<_> = training_data.chunks(batch_size).collect(); // Split dataset into batches.
-                
+                shuffle_matrix_data(&mut rng,&mut inner_training_data);
+                let batches = NeuralNetwork::batch_chunks(&inner_training_data,batch_size); // Split dataset into batches.
                 // TODO Reduce code duplication here.
                 // Runs backpropagation on all batches:
                 //  If `tracking` output backpropagation percentage progress.
@@ -565,7 +577,7 @@ pub mod core {
                     let mut percentage:f32 = 0f32;
                     stdout.queue(cursor::SavePosition).unwrap();
                     let backprop_start_instant = Instant::now();
-                    let percent_change:f32 = 100f32 * batch_size as f32 / training_data.len() as f32;
+                    let percent_change:f32 = 100f32 * batch_size as f32 / inner_training_data.0.nrows() as f32;
 
                     for batch in batches {
                         stdout.write(format!("Backpropagating: {:.2}%",percentage).as_bytes()).unwrap();
@@ -573,21 +585,21 @@ pub mod core {
                         stdout.queue(cursor::RestorePosition).unwrap();
                         stdout.flush().unwrap();
 
-                        let (new_connections,new_biases) = self.update_batch(batch,learning_rate,lambda,training_data.len() as f32);
+                        let (new_connections,new_biases) = self.update_batch(&batch,learning_rate,lambda,training_data.len() as f32);
                         self.connections = new_connections;
                         self.biases = new_biases;
                     }
-                    stdout.write(format!("Backpropagating: {}\n",NeuralNetwork::time(backprop_start_instant)).as_bytes()).unwrap();
+                    stdout.write(format!("Backpropagated: {}\n",NeuralNetwork::time(backprop_start_instant)).as_bytes()).unwrap();
                 }
                 else {
                     for batch in batches {
-                        let (new_connections,new_biases) = self.update_batch(batch,learning_rate,lambda,training_data.len() as f32);
+                        let (new_connections,new_biases) = self.update_batch(&batch,learning_rate,lambda,training_data.len() as f32);
                         self.connections = new_connections;
                         self.biases = new_biases;
                     }
                 }
                 iterations_elapsed += 1;
-                let evaluation = self.evaluate(evaluation_data);
+                let evaluation = self.evaluate(evaluation_data,k);
 
                 // If `checkpoint_interval` number of iterations or length of duration passed, export weights  (`connections`) and biases (`biases`) to file.
                 match checkpoint_interval {// TODO Reduce code duplication here
@@ -666,7 +678,7 @@ pub mod core {
 
             // Compute and print final evaluation.
             // ------------------------------------------------
-            let evaluation = self.evaluate(evaluation_data); 
+            let evaluation = self.evaluate(evaluation_data,k); 
             let new_percent = (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32;
             let starting_percent = (starting_evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32;
             println!();
@@ -695,21 +707,46 @@ pub mod core {
                     learning_rate
                 ).as_bytes()).unwrap();
             }
-            
+            // Assumes `example.0.nrows()==example.1.nrows()`.
+            // n = example.0.nrows() = example.1.nrows()
+            // O(n+n/2) | O(1)
+            fn shuffle_matrix_data(rng: &mut ThreadRng,example:&mut (Array2<f32>,Array2<f32>)) {
+                let length = example.0.nrows();
+                let mut indexs:Vec<usize> = (0usize..length).collect();
+                indexs.shuffle(rng);
+
+                let mut i = 0usize;
+                let mut t = 0usize;
+                for i in 0..length/2 {
+                    if i <= indexs[i] {
+                        swap(&mut example.0.row(i),&mut example.0.row(indexs[t]));
+                        swap(&mut example.1.row(i),&mut example.1.row(indexs[t]));
+                    }
+                }
+            }
         }
         /// Runs batch through network to calculate weight and bias gradients.
         /// 
         /// Returns new weights and biases values.
-        fn update_batch(&self, batch: &[(Vec<f32>, Vec<f32>)], eta: f32, lambda:f32, n:f32) -> (Vec<Array2<f32>>,Vec<Array2<f32>>) {
+        fn update_batch(&self, batch: &(ArrayView2<f32>,ArrayView2<f32>), eta: f32, lambda:f32, n:f32) -> (Vec<Array2<f32>>,Vec<Array2<f32>>) {
             
             // TODO Look into a better way to setup 'bias_nabla' and 'weight_nabla'
             // Copies structure of self.neurons and self.connections with values of 0f32
             let nabla_b_zeros:Vec<Array2<f32>> = self.biases.clone().iter().map(|x| x.map(|_| 0f32) ).collect();
             let nabla_w_zeros:Vec<Array2<f32>> = self.connections.clone().iter().map(|x| x.map(|_| 0f32) ).collect();
 
+            let batch_len = batch.0.nrows();
+            let chunk_lengths:usize = if batch_len < THREAD_COUNT {
+                batch_len
+            } else {
+                (batch_len as f32 / THREAD_COUNT as f32).ceil() as usize
+            };
 
-            let chunks_length:usize = if batch.len() < THREAD_COUNT { batch.len() } else { batch.len() / THREAD_COUNT };
-            let chunks:Vec<_> = batch.chunks(chunks_length).collect(); // TODO Specify type further
+            // TODO Move these 3 lines into a function (ideally generalize this function so it can be used in place of `batch_chunks` aswell).
+            let input_chunks = batch.0.axis_chunks_iter(Axis(1),chunk_lengths);
+            let output_chunks = batch.1.axis_chunks_iter(Axis(1),chunk_lengths);
+            let chunks:Vec<(ArrayView2<f32>,ArrayView2<f32>)> = input_chunks.zip(output_chunks).collect();
+
             let mut pool = Pool::new(chunks.len() as u32);
 
             let mut out_nabla_b:Vec<Vec<Array2<f32>>> = vec!(nabla_b_zeros.clone();chunks.len());
@@ -718,8 +755,7 @@ pub mod core {
             pool.scoped(|scope| {
                 for (chunk,nabla_w,nabla_b) in izip!(chunks,&mut out_nabla_w,&mut out_nabla_b) {
                     scope.execute(move || {
-                        let batch_tuple_matrix = NeuralNetwork::matrixify(chunk);
-                        let (mut delta_nabla_b,mut delta_nabla_w):(Vec<Array2<f32>>,Vec<Array2<f32>>) = self.backpropagate(batch_tuple_matrix);
+                        let (mut delta_nabla_b,mut delta_nabla_w):(Vec<Array2<f32>>,Vec<Array2<f32>>) = self.backpropagate(&chunk);
                         
                         // TODO Why don't these work?
                         // *nabla_w = nabla_w.iter().zip(delta_nabla_w).map(|(x,y)| x + y).collect();
@@ -752,7 +788,7 @@ pub mod core {
 
             // TODO Look into removing `.clone()`s here
             let return_connections:Vec<Array2<f32>> = self.connections.iter().zip(nabla_w).map(
-                | (w,nw) | (1f32-eta*(lambda/n))*w - ((eta / batch.len() as f32)) * nw
+                | (w,nw) | (1f32-eta*(lambda/n))*w - ((eta / batch_len as f32)) * nw
             ).collect();
 
             // TODO Make this work
@@ -763,7 +799,7 @@ pub mod core {
             let mut return_biases:Vec<Array2<f32>> = self.biases.clone();
             for i in 0..self.biases.len() {
                 // TODO Improve this
-                return_biases[i] = &self.biases[i] - &((eta / batch.len() as f32)  * nabla_b[i].clone());
+                return_biases[i] = &self.biases[i] - &((eta / batch_len as f32)  * nabla_b[i].clone());
             }
 
             return (return_connections,return_biases);
@@ -771,21 +807,21 @@ pub mod core {
         /// Runs backpropgation on chunk of batch.
         /// 
         /// Returns weight and bias partial derivatives (errors).
-        fn backpropagate(&self, example:(Array2<f32>,Array2<f32>)) -> (Vec<Array2<f32>>,Vec<Array2<f32>>) {
+        fn backpropagate(&self, example:&(ArrayView2<f32>,ArrayView2<f32>)) -> (Vec<Array2<f32>>,Vec<Array2<f32>>) {
 
             // Feeds forward
             // --------------
 
-            let number_of_examples = example.0.shape()[0]; // Number of examples (rows)
+            let number_of_examples = example.0.nrows(); // Number of examples (rows)
             let mut inputs:Vec<Array2<f32>> = Vec::with_capacity(self.biases.len()); // Name more intuitively
-            let mut activations:Vec<Array2<f32>> = Vec::with_capacity(self.biases.len()+1);
+            let mut activations:Vec<ArrayView2<f32>> = Vec::with_capacity(self.biases.len()+1);
             activations.push(example.0);
             //println!("activations[{}]:{}",0,&activations[0].clone());
             for i in 0..self.layers.len() {
                 let weighted_inputs = activations[i].dot(&self.connections[i].t());
                 let bias_matrix:Array2<f32> = Array2::ones((number_of_examples,1)).dot(&self.biases[i]); // TODO consider precomputing these
                 inputs.push(weighted_inputs + bias_matrix);
-                activations.push(self.layers[i].run(&inputs[i]));
+                activations.push(self.layers[i].run(&inputs[i]).view());
             }
 
             // Backpropagates
@@ -859,11 +895,22 @@ pub mod core {
                 outputs - targets
             }
         }
+        // TODO Rename this better.
+        // TODO Make this more efficient.
+        fn batch_chunks(data:&(Array2<f32>,Array2<f32>),batch_size:usize) -> Vec<(ArrayView2<f32>,ArrayView2<f32>)>{
+            let input_chunks = data.0.axis_chunks_iter(Axis(1),batch_size);
+            let output_chunks = data.1.axis_chunks_iter(Axis(1),batch_size);
+            return input_chunks.zip(output_chunks).collect();
+        }
         
         /// Returns tuple: (Average cost across batch, Number of examples correctly classified).
-        pub fn evaluate(&self, test_data:&[(Vec<f32>,Vec<f32>)]) -> (f32,u32) {
-            let chunks_length:usize = if test_data.len() < THREAD_COUNT { test_data.len() } else { test_data.len() / THREAD_COUNT };
-            let chunks:Vec<_> = test_data.chunks(chunks_length).collect(); // Specify type further
+        pub fn evaluate(&self, test_data:&[(Vec<f32>,usize)],k:usize) -> (f32,u32) {
+            let chunk_len:usize = if test_data.len() < THREAD_COUNT { 
+                test_data.len() 
+            } else {
+                (test_data.len() as f32 / THREAD_COUNT as f32).ceil() as usize 
+            };
+            let chunks:Vec<_> = test_data.chunks(chunk_len).collect(); // Specify type further
             let mut pool = Pool::new(chunks.len() as u32);
 
             let mut cost_vec = vec!(0f32;chunks.len());
@@ -871,14 +918,14 @@ pub mod core {
             pool.scoped(|scope| {
                 for (chunk,cost,classified) in izip!(chunks,&mut cost_vec,&mut classified_vec) {
                     scope.execute(move || {
-                        let batch_tuple_matrix = NeuralNetwork::matrixify(&chunk);
+                        let batch_tuple_matrix = NeuralNetwork::matrixify(&chunk,k);
                         let out = self.run(&batch_tuple_matrix.0);
                         let target = batch_tuple_matrix.1;
                         *cost = cross_entropy(&out,&target);
 
-                        let mx_out_indxs = get_max_indexs(&out);
-                        let mx_tar_indxs = get_max_indexs(&target);
-                        *classified = izip!(mx_out_indxs.iter(),mx_tar_indxs.iter()).fold(0u32,|acc,(a,b)| {if a==b { acc+1u32 } else { acc }});
+                        let output_class_indxs = max_output_indexs(&out); // Array1 of result classes.
+                        let target_class_indxs:Vec<usize> = chunk.iter().map(|x|x.1).collect(); // Vec of target classes.
+                        *classified = izip!(output_class_indxs.iter(),target_class_indxs.iter()).fold(0u32,|acc,(a,b)| {if a==b { acc+1u32 } else { acc }});
                     });
                 }
             });
@@ -886,8 +933,8 @@ pub mod core {
             let cost:f32 = cost_vec.iter().sum();
             let classified:u32 = classified_vec.iter().sum();
 
-
-            return (cost / test_data.len() as f32, classified);
+            // TODO Double check it is `cost / chunks.len()` and not `cost / test_data.len()`.
+            return (cost / chunk_len as f32, classified);
 
             
             // Linear cost (I don't know if this is even a thing, but it's useful for some debugging)
@@ -908,7 +955,7 @@ pub mod core {
                 return cost;
             }
             // Gets index of max value in each row (each row representing an example) of `Array2<f32>`
-            fn get_max_indexs(matrix:&Array2<f32>) -> Array1<usize> {
+            fn max_output_indexs(matrix:&Array2<f32>) -> Array1<usize> {
                 let examples = matrix.shape()[0];
                 let mut max_indexs:Array1<usize> = Array1::zeros(examples);
                 let mut max_values:Array1<f32> = Array1::zeros(examples);
@@ -927,55 +974,57 @@ pub mod core {
         /// Requires ordered test_data.
         /// 
         /// Returns tuple of: (List of correctly classified percentage for each class. Confusion matrix of percentages).
-        pub fn evaluate_outputs(&self, test_data:&[(Vec<f32>,Vec<f32>)]) -> (Array1<f32>,Array2<f32>) {
-            let alphabet_size = test_data[0].1.len();
-            let chunks = symbol_chunks(test_data,alphabet_size);
+        pub fn evaluate_outputs(&self, test_data:&[(Vec<f32>,usize)],k:usize) -> (Array1<f32>,Array2<f32>) {
+            let chunks:Vec<Array2<f32>> = symbol_chunks(test_data,k);
             let mut pool = Pool::new(chunks.len() as u32);
 
-            let mut classifications:Vec<Array1<f32>> = vec!(Array1::zeros(alphabet_size);alphabet_size);
+            let mut classifications:Vec<Array1<f32>> = vec!(Array1::zeros(k);k);
             pool.scoped(|scope| {
                 for (chunk,classification) in izip!(chunks,&mut classifications) {
                     scope.execute(move || {
-                        let results = self.run(&chunk.0);
+                        let results = self.run(&chunk);
                         let classes:Array2<u32> = set_nonmax_zero(&results);
                         let class_sums:Array1<u32> = classes.sum_axis(Axis(0));
-                        let sum:f32 = class_sums.sum() as f32;
-                        *classification = class_sums.mapv(|val| (val as f32 / sum));
+                        let number_of_examples = chunk.len_of(Axis(0));
+                        *classification = class_sums.mapv(|val| (val as f32 / number_of_examples as f32));
                     });
                 }
             });
-            let matrix:Array2<f32> = cast_array1s_to_array2(classifications,alphabet_size);
+            let matrix:Array2<f32> = NeuralNetwork::cast_array1s_to_array2(classifications,k);
             // TODO Getting `diagonal` could probably be improved, look into that.
             let diagonal:Array1<f32> = matrix.clone().into_diag();
             return (diagonal,matrix);
 
             // TODO Should this be adapted to not require sorted data? Would require twice as much memory and would be a little slower.
             // Returns Vec<(Array2<f32>,Array2<f32>)> with each tuple representing all examples of a class.
-            fn symbol_chunks(test_data:&[(Vec<f32>,Vec<f32>)],alphabet_size:usize) -> Vec<(Array2<f32>,Array2<f32>)> {
-                let mut chunks:Vec<(Array2<f32>,Array2<f32>)> = Vec::with_capacity(alphabet_size);
+            fn symbol_chunks(test_data:&[(Vec<f32>,usize)],k:usize) -> Vec<Array2<f32>> {
+                let mut chunks:Vec<Array2<f32>> = Vec::with_capacity(k);
                 let mut slice = (0usize,0usize); // (lower bound,upper bound)
                 loop {
                     slice.1+=1;
-                    while test_data[slice.1].1 == test_data[slice.1+1].1 {
+                    while test_data[slice.0].1 == test_data[slice.1+1].1 {
                         slice.1+=1;
                         if slice.1+1 == test_data.len() {
                             slice.1 += 1;
                             break;
                         }
                     } 
-                    let chunk_holder = NeuralNetwork::matrixify(&test_data[slice.0..slice.1]);
+                    let chunk_holder = NeuralNetwork::matrixify_inputs(&test_data[slice.0..slice.1]);
                     chunks.push(chunk_holder);
-                    if chunks.len() == alphabet_size { break };
+                    if chunks.len() == k { break };
                     slice.0 = slice.1;
                 }
 
                 // If `test_data` not sorted.
                 if slice.1 != test_data.len() {
-                    panic!("`evaluate outputs` requires sorted data (sorted by output)");
+                    panic!("`evaluate outputs` requires data sorted by output.");
                 }
                 return chunks;
+
+                
             }
-            // Sets all non-max values in row to 0 and max to 1 for each row in matrix.
+            
+            // Sets all non-max values in row to 0 and max to 1 for each row in Array2.
             fn set_nonmax_zero(matrix:&Array2<f32>) -> Array2<u32> {
                 let mut max_indx = 0usize;
                 let shape = matrix.shape();
@@ -992,38 +1041,50 @@ pub mod core {
                 }
                 return zero_matrix;
             }
-            // TODO Need better way to caste than this
-            // Returns Array2<_> casted from Vec<Array1<_>>
-            fn cast_array1s_to_array2(vec:Vec<Array1<f32>>,alphabet_size:usize) -> Array2<f32> {
-                let mut arr2 = Array2::default((alphabet_size,alphabet_size));
-                for i in 0..vec.len() {
-                    for t in 0..vec[i].shape()[0] {
-                        arr2[[i,t]] = vec[i][[t]];
-                    }
-                }
-                return arr2; 
-            }
         }
-
-        /// Converts `[(Vec<f32>,Vec<f32>)]` to `(Array2<f32>,Array2<f32>)`.
-        pub fn matrixify(examples:&[(Vec<f32>,Vec<f32>)]) -> (Array2<f32>,Array2<f32>) {
-            //println!("began here");
+        // Given set of examples return Array2<f32> of inputs.
+        fn matrixify_inputs(examples:&[(Vec<f32>,usize)]) -> Array2<f32> {
             let input_len = examples[0].0.len();
-            let output_len = examples[0].1.len();
+            let example_len = examples.len();
+            let mut input_vec:Vec<f32> = Vec::with_capacity(example_len * input_len);
+            for example in examples {
+                input_vec.append(&mut example.0.clone());
+            }
+            let input_array:Array2<f32> = Array2::from_shape_vec((example_len,input_len),input_vec).unwrap();
+            return input_array;
+        }
+        // TODO Need better way to caste than this
+
+        /// Returns Array2<T> from Vec<Array1<T>>
+        pub fn cast_array1s_to_array2<T:Default+Copy>(vec:Vec<Array1<T>>,k:usize) -> Array2<T> {
+            let mut arr2 = Array2::default((vec.len(),k));
+            let k = vec[0].len();
+            for i in 0..vec.len() {
+                for t in 0..k {
+                    arr2[[i,t]] = vec[i][t];
+                }
+            }
+            return arr2;
+        }
+        /// Converts `[(Vec<f32>,usize)]` to `(Array2<f32>,Array2<f32>)`.
+        pub fn matrixify(examples:&[(Vec<f32>,usize)],k:usize) -> (Array2<f32>,Array2<f32>) {
+            let input_len = examples[0].0.len();
             let example_len = examples.len();
 
             let mut input_vec:Vec<f32> = Vec::with_capacity(example_len * input_len);
-            let mut output_vec:Vec<f32> = Vec::with_capacity(example_len * output_len);
+            let mut output_vec:Vec<f32> = Vec::with_capacity(example_len * k);
             for example in examples {
-                // TODO Remove the `.clone()`s here,
+                // TODO Can I remove the `.clone()`s here?
                 input_vec.append(&mut example.0.clone());
-                output_vec.append(&mut example.1.clone());
+                let mut class_vec:Vec<f32> = vec!(0f32;k);
+                class_vec[example.1] = 1f32;
+                output_vec.append(&mut class_vec);
             }
-            //println!("got here");
+
             // TODO Look inot better way to do this
             let input:Array2<f32> = Array2::from_shape_vec((example_len,input_len),input_vec).unwrap();
-            let output:Array2<f32>  = Array2::from_shape_vec((example_len,output_len),output_vec).unwrap();
-            //println!("finished here");
+            let output:Array2<f32>  = Array2::from_shape_vec((example_len,k),output_vec).unwrap();
+
             return (input,output);
         }
 
@@ -1218,39 +1279,29 @@ pub mod utilities {
 
         return prt_string;
     }
-    // TODO Rework this to take `test_data:&[(Vec<f32>,usize)]`? This would greatly improve performance, would require reworking some other parts of library though.
     /// Counting sort.
+    /// 
     /// Implemented for use with `NeuralNetwork::evaluate_outputs`.
+    /// 
     /// Counting sort implemented since typically classification datasets have high `n` vs low `k`.
-    /// Counting sort Onotation being `O(n+k)`.
-    pub fn counting_sort(test_data:&[(Vec<f32>,Vec<f32>)]) -> Vec<(Vec<f32>,Vec<f32>)> {
-        let alphabet_size = test_data[0].1.len();
-        let mut count:Vec<usize> = vec!(0usize;alphabet_size);
-        let mut output_vals:Vec<usize> = vec!(0usize;test_data.len());
+    /// 
+    /// Counting sort: `O(n+k)`.
+    pub fn counting_sort(data:&[(Vec<f32>,usize)],k:usize) -> Vec<(Vec<f32>,usize)> {
+        let mut count:Vec<usize> = vec!(0;k);
 
-        for i in 0..test_data.len() {
-            // TODO Put this in function: Had difficultly putting this in function.
-            let mut one:usize = 0usize;
-            for t in 0..alphabet_size {
-                if test_data[i].1[t] == 1f32 { 
-                    one = t;
-                    break;
-                }
-            }
-
-            count[one] += 1usize;
-            output_vals[i] = one;
+        for i in 0..data.len() {
+            count[data[i].1] += 1;
         }
         for i in 1..count.len() {
             count[i] += count[i-1];
         }
 
-        let input_size = test_data[0].0.len();
-        let mut sorted_data:Vec<(Vec<f32>,Vec<f32>)> = vec!((vec!(0f32;input_size),vec!(0f32;alphabet_size));test_data.len());
+        let input_size = data[0].0.len();
+        let mut sorted_data:Vec<(Vec<f32>,usize)> = vec!((vec!(0f32;input_size),0usize);data.len());
 
-        for i in 0..test_data.len() {
-            sorted_data[count[output_vals[i]]-1] = test_data[i].clone();
-            count[output_vals[i]] -= 1;
+        for i in 0..data.len() {
+            sorted_data[count[data[i].1]-1] = data[i].clone();
+            count[data[i].1] -= 1;
         }
 
         return sorted_data;
