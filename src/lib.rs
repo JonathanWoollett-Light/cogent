@@ -265,17 +265,17 @@ pub mod core {
         // ------------------------------------------------------------------------
         // TODO I am certain there are issues here.
         // Computes output layer errors, given outputs (`outputs`) and targets (`target`).
-        fn delta(&self,outputs: &ArrayView2<f32>, targets: &ArrayView2<f32>) -> Array2<f32> {
+        fn delta(&self,outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
             return match self {
                 Self::Sigmoid => sigmoid(outputs,targets),
                 Self::Softmax => softmax(outputs,targets),
             };
             // Cross entropy error of sigmoid activation output layer
-            fn sigmoid(outputs: &ArrayView2<f32>, targets: &ArrayView2<f32>) -> Array2<f32> {
+            fn sigmoid(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
                 return outputs-targets
             }
             // Cross entropy error of softmax activation output layer
-            fn softmax(outputs: &ArrayView2<f32>, targets: &ArrayView2<f32>) -> Array2<f32> {
+            fn softmax(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
                 return outputs-targets;
             }
         }
@@ -434,15 +434,15 @@ pub mod core {
         ///     Layer::new(2,Activation::Softmax)
         /// ]);
         /// // Sets data
-        /// // For output [0,1]=false and [1,0]=true.
+        /// // For output 0=false and 1=true.
         /// let data = vec![
-        ///     (vec![0f32,0f32],vec![0f32,1f32]),
-        ///     (vec![1f32,0f32],vec![1f32,0f32]),
-        ///     (vec![0f32,1f32],vec![1f32,0f32]),
-        ///     (vec![1f32,1f32],vec![0f32,1f32])
+        ///     (vec![0f32,0f32],0),
+        ///     (vec![1f32,0f32],1),
+        ///     (vec![0f32,1f32],1),
+        ///     (vec![1f32,1f32],0)
         /// ];
         /// // Trains network
-        /// neural_network.train(&data)
+        /// neural_network.train(&data,2)
         ///     .learning_rate(2f32)
         ///     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
         ///     .lambda(0f32)
@@ -715,12 +715,10 @@ pub mod core {
                 let mut indexs:Vec<usize> = (0usize..length).collect();
                 indexs.shuffle(rng);
 
-                let mut i = 0usize;
-                let mut t = 0usize;
                 for i in 0..length/2 {
                     if i <= indexs[i] {
-                        swap(&mut example.0.row(i),&mut example.0.row(indexs[t]));
-                        swap(&mut example.1.row(i),&mut example.1.row(indexs[t]));
+                        swap(&mut example.0.row(i),&mut example.0.row(indexs[i]));
+                        swap(&mut example.1.row(i),&mut example.1.row(indexs[i]));
                     }
                 }
             }
@@ -743,8 +741,8 @@ pub mod core {
             };
 
             // TODO Move these 3 lines into a function (ideally generalize this function so it can be used in place of `batch_chunks` aswell).
-            let input_chunks = batch.0.axis_chunks_iter(Axis(1),chunk_lengths);
-            let output_chunks = batch.1.axis_chunks_iter(Axis(1),chunk_lengths);
+            let input_chunks = batch.0.axis_chunks_iter(Axis(0),chunk_lengths);
+            let output_chunks = batch.1.axis_chunks_iter(Axis(0),chunk_lengths);
             let chunks:Vec<(ArrayView2<f32>,ArrayView2<f32>)> = input_chunks.zip(output_chunks).collect();
 
             let mut pool = Pool::new(chunks.len() as u32);
@@ -814,14 +812,14 @@ pub mod core {
 
             let number_of_examples = example.0.nrows(); // Number of examples (rows)
             let mut inputs:Vec<Array2<f32>> = Vec::with_capacity(self.biases.len()); // Name more intuitively
-            let mut activations:Vec<ArrayView2<f32>> = Vec::with_capacity(self.biases.len()+1);
-            activations.push(example.0);
-            //println!("activations[{}]:{}",0,&activations[0].clone());
+            let mut activations:Vec<Array2<f32>> = Vec::with_capacity(self.biases.len()+1);
+            // TODO Is `.to_owned()` the best way to do this?
+            activations.push(example.0.to_owned());
             for i in 0..self.layers.len() {
                 let weighted_inputs = activations[i].dot(&self.connections[i].t());
                 let bias_matrix:Array2<f32> = Array2::ones((number_of_examples,1)).dot(&self.biases[i]); // TODO consider precomputing these
                 inputs.push(weighted_inputs + bias_matrix);
-                activations.push(self.layers[i].run(&inputs[i]).view());
+                activations.push(self.layers[i].run(&inputs[i]));
             }
 
             // Backpropagates
@@ -837,8 +835,8 @@ pub mod core {
             let mut nabla_w:Vec<ArrayD<f32>> = Vec::with_capacity(self.connections.len()); // this should really be 3d matrix instead of 'Vec<DMatrix<f32>>', its a bad workaround
 
             let last_layer = self.layers[self.layers.len()-1];
-            // TODO: This is the biggest thing wrong rn in the library, fix it.
-            let mut error:Array2<f32> = last_layer.delta(&activations[last_index+1],&target);
+            // TODO Is `.to_owned()` a good solution here?
+            let mut error:Array2<f32> = last_layer.delta(&activations[last_index+1],&target.to_owned());
 
             // Sets gradients in output layer
             nabla_b.insert(0,error.clone());
@@ -898,8 +896,8 @@ pub mod core {
         // TODO Rename this better.
         // TODO Make this more efficient.
         fn batch_chunks(data:&(Array2<f32>,Array2<f32>),batch_size:usize) -> Vec<(ArrayView2<f32>,ArrayView2<f32>)>{
-            let input_chunks = data.0.axis_chunks_iter(Axis(1),batch_size);
-            let output_chunks = data.1.axis_chunks_iter(Axis(1),batch_size);
+            let input_chunks = data.0.axis_chunks_iter(Axis(0),batch_size);
+            let output_chunks = data.1.axis_chunks_iter(Axis(0),batch_size);
             return input_chunks.zip(output_chunks).collect();
         }
         

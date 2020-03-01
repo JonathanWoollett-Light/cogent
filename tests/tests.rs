@@ -11,7 +11,7 @@ mod tests {
     // TODO Figure out better name for this
     const TESTING_MIN_ACCURACY:f32 = 0.90f32; // approx 10% min inaccuracy
     // Returns `TESTING_MIN_ACCURACY` percentage as scaler as number of example in dataset.
-    fn required_accuracy(test_data:&[(Vec<f32>,Vec<f32>)]) -> u32 {
+    fn required_accuracy(test_data:&[(Vec<f32>,usize)]) -> u32 {
         ((test_data.len() as f32) * TESTING_MIN_ACCURACY).ceil() as u32
     }
     // Exports test result to `test_report.txt`.
@@ -50,7 +50,7 @@ mod tests {
             ];
             // Execution
             // ------------------------------------------------
-            neural_network.train(&data)
+            neural_network.train(&data,2)
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .lambda(0f32)
@@ -60,7 +60,7 @@ mod tests {
             // ------------------------------------------------
             total_time += start.elapsed().as_secs();
 
-            let evaluation = neural_network.evaluate(&data);
+            let evaluation = neural_network.evaluate(&data,2);
             assert!(evaluation.1 as usize == data.len());
 
             total_accuracy += evaluation.1;
@@ -94,7 +94,7 @@ mod tests {
 
             // Execution
             // ------------------------------------------------
-            neural_network.train(&data)
+            neural_network.train(&data,2)
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .lambda(0f32)
@@ -104,7 +104,7 @@ mod tests {
             // ------------------------------------------------
             total_time += start.elapsed().as_secs();
 
-            let evaluation = neural_network.evaluate(&data);
+            let evaluation = neural_network.evaluate(&data,2);
             assert!(evaluation.1 as usize == data.len());
 
             total_accuracy += evaluation.1;
@@ -134,7 +134,7 @@ mod tests {
 
             // Execution
             // ------------------------------------------------
-            neural_network.train(&training_data)
+            neural_network.train(&training_data,10)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(0.95f32))
                 .go();
@@ -143,7 +143,7 @@ mod tests {
             // ------------------------------------------------
             total_time += start.elapsed().as_secs();
 
-            let evaluation = neural_network.evaluate(&testing_data);
+            let evaluation = neural_network.evaluate(&testing_data,10);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
             total_accuracy += evaluation.1;
         }
@@ -173,7 +173,7 @@ mod tests {
 
             // Execution
             // ------------------------------------------------
-            neural_network.train(&training_data)
+            neural_network.train(&training_data,10)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(0.95f32))
             .go();
@@ -182,7 +182,7 @@ mod tests {
             // ------------------------------------------------
             total_time += start.elapsed().as_secs();
 
-            let evaluation = neural_network.evaluate(&testing_data);
+            let evaluation = neural_network.evaluate(&testing_data,10);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
             total_accuracy += evaluation.1;
         }
@@ -206,7 +206,7 @@ mod tests {
             examples.push(
                 (
                     image.clone(),
-                    label as usize
+                    *label as usize
                 )
             );
         }
