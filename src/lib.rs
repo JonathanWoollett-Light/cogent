@@ -255,12 +255,6 @@ pub mod core {
                 return softmax;
             }
         }
-
-        // ------------------------------------------------------------------------
-        // ------------------------------------------------------------------------
-        // \/ THIS IS THE BIT I AM CONCERNED ABOUT, AND WANT YOU TO CHECK OVER \/
-        // ------------------------------------------------------------------------
-        // ------------------------------------------------------------------------
         // TODO I am certain there are issues here.
         // Computes output layer errors, given outputs (`outputs`) and targets (`target`).
         fn delta(&self,outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
@@ -269,9 +263,11 @@ pub mod core {
                 Self::Softmax => softmax(outputs,targets),
             };
             // Cross entropy error of sigmoid activation output layer
+            // (simplification of derivative of sigmoid activation by derivative of cross entropy)
             fn sigmoid(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
                 return outputs-targets
             }
+            // TODO: THIS IS WRONG, FIX IT
             // Cross entropy error of softmax activation output layer
             fn softmax(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
                 return outputs-targets;
