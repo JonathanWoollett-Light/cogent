@@ -6,6 +6,8 @@ edition = "2018"
 description = "Basic neural network library for classification"
 license = "Apache-2.0"
 exclude = ["tests","data"]
+repository = "https://github.com/JonathanWoollett-Light/cogent"
+documentation = "https://docs.rs/cogent/"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
