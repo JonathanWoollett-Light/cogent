@@ -3,6 +3,8 @@ name = "cogent"
 version = "0.1.0"
 authors = ["Jonathan Woollett-Light <jonathanwoollettlight@gmail.com>"]
 edition = "2018"
+description = "Basic neural network library for classification"
+license = "Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
