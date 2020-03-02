@@ -51,6 +51,7 @@ If you find any issues I would really appreciate if you could let me know (and p
 
 ## TODO
 
-1. Automatic net creation and layer setting from given dataset.
-2. Convolutional layers.
-3. Learn more.
+1. Fix the output layer error for a softmax activation output layer.
+2. Automatic net creation and layer setting from given dataset.
+3. Convolutional layers.
+4. Learn more.
