@@ -38,7 +38,7 @@ neural_network.train(&training_data,10) // `10`=number of classes
 
 // `.evaluation_data(...)` sets the evaluation data. 
 // If evaluation data is not set it will simply shuffle and split off a random group from training data to be evaluation data.
-// In the case of MNIST where training adn evaluation datasets are given seperately, it makes sense to set it as such.
+// In the case of MNIST where training and evaluation datasets are given seperately, it makes sense to set it as such.
 
 // Evaluation
 // ----------
