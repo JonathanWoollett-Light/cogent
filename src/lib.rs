@@ -1150,7 +1150,7 @@ pub mod core {
             return deserialized;
         }
     }
-    /// Returns Array2<T> from Vec<Array1<T>>
+    /// Returns `Array2<T>` from `Vec<Array1<T>>`
     pub fn cast_array1s_to_array2<T:Default+Copy>(vec:Vec<Array1<T>>,k:usize) -> Array2<T> {
         let mut arr2 = Array2::default((vec.len(),k));
         let k = vec[0].len();
