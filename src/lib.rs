@@ -10,7 +10,7 @@ pub mod core {
     use scoped_threadpool::Pool;
 
     extern crate ndarray;
-    use ndarray::{Array2,Array1,ArrayD,Axis,SliceInfo,ArrayView2,ArrayBase};
+    use ndarray::{Array2,Array1,ArrayD,Axis,ArrayView2};
     use ndarray_rand::{RandomExt,rand_distr::Uniform};
 
     extern crate ndarray_einsum_beta;
@@ -21,7 +21,6 @@ pub mod core {
 
     use serde::{Serialize,Deserialize};
 
-    use std::collections::LinkedList;
     use std::mem::swap;
 
     use std::fs::File;
@@ -30,7 +29,6 @@ pub mod core {
     // Setting number of threads to use
     const THREAD_COUNT:usize = 12usize;
 
-    use std::option::IterMut;
     use std::f32;
 
     // Default percentage of training data to set as evaluation data (0.1=10%).
@@ -988,7 +986,7 @@ pub mod core {
                     });
                 }
             });
-            let matrix:Array2<f32> = NeuralNetwork::cast_array1s_to_array2(classifications,k);
+            let matrix:Array2<f32> = cast_array1s_to_array2(classifications,k);
             // TODO Getting `diagonal` could probably be improved, look into that.
             let diagonal:Array1<f32> = matrix.clone().into_diag();
             return (diagonal,matrix);
@@ -1051,21 +1049,8 @@ pub mod core {
             let input_array:Array2<f32> = Array2::from_shape_vec((example_len,input_len),input_vec).unwrap();
             return input_array;
         }
-        // TODO Need better way to caste than this
-
-        /// Returns Array2<T> from Vec<Array1<T>>
-        pub fn cast_array1s_to_array2<T:Default+Copy>(vec:Vec<Array1<T>>,k:usize) -> Array2<T> {
-            let mut arr2 = Array2::default((vec.len(),k));
-            let k = vec[0].len();
-            for i in 0..vec.len() {
-                for t in 0..k {
-                    arr2[[i,t]] = vec[i][t];
-                }
-            }
-            return arr2;
-        }
         /// Converts `[(Vec<f32>,usize)]` to `(Array2<f32>,Array2<f32>)`.
-        pub fn matrixify(examples:&[(Vec<f32>,usize)],k:usize) -> (Array2<f32>,Array2<f32>) {
+        fn matrixify(examples:&[(Vec<f32>,usize)],k:usize) -> (Array2<f32>,Array2<f32>) {
             let input_len = examples[0].0.len();
             let example_len = examples.len();
 
@@ -1167,6 +1152,18 @@ pub mod core {
             let deserialized:NeuralNetwork = serde_json::from_str(&string_contents).unwrap();
             return deserialized;
         }
+    }
+    /// Returns Array2<T> from Vec<Array1<T>>
+    pub fn cast_array1s_to_array2<T:Default+Copy>(vec:Vec<Array1<T>>,k:usize) -> Array2<T> {
+        let mut arr2 = Array2::default((vec.len(),k));
+        let k = vec[0].len();
+        for i in 0..vec.len() {
+            if vec[i].len() != k { panic!("Cannot convert `Vec<Array1<T>>` to `Array2<T>`. vec[{}].len() ({}) does not equal k ({})",i,vec[i].len(),k); }
+            for t in 0..k {
+                arr2[[i,t]] = vec[i][t];
+            }
+        }
+        return arr2;
     }
 }
 /// Some uneccessary utility functions not fundementally linked to `core::NeuralNetwork`
