@@ -41,7 +41,7 @@ pub mod core {
     const DEFAULT_LAMBDA:f32 = 0.1f32;
     // Default seconds to set duration for early stopping condition. 
     // early stopping = default early stopping * (size of examples / number of examples) seconds
-    const DEFAULT_EARLY_STOPPING:f32 = 5000f32;
+    const DEFAULT_EARLY_STOPPING:f32 = 400f32;
     // Default percentage minimum positive accuracy change required to prevent early stopping or learning rate decay (0.005=0.5%).
     const DEFAULT_EVALUATION_MIN_CHANGE:f32 = 0.005f32;
     // Default amount to decay learning rate after period of un-notable (what word should I use here?) change.
@@ -49,7 +49,7 @@ pub mod core {
     const DEFAULT_LEARNING_RATE_DECAY:f32 = 0.5f32;
     // Default interval to go without notable importment before learning rate decay.
     // interval = default learning rate interval * (size of examples / number of examples) iterations.
-    const DEFAULT_LEARNING_RATE_INTERVAL:f32 = 2000f32;
+    const DEFAULT_LEARNING_RATE_INTERVAL:f32 = 200f32;
 
     /// For setting `evaluation_data`.
     pub enum EvaluationData<'b> {

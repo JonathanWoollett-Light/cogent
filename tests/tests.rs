@@ -24,16 +24,6 @@ mod tests {
         
         file.unwrap().write_all(result.as_bytes());
     }
-    #[test]
-    fn test_print() {
-        let mut net = NeuralNetwork::new(2,&[
-            Layer::new(3,Activation::Sigmoid),
-            Layer::new(2,Activation::Softmax)
-        ]);
-        let string = net.print();
-        println!("{}",string);
-        assert!(false);
-    }
     // Tests network to learn an XOR gate.
     // Softmax output.
     #[test]
@@ -64,6 +54,7 @@ mod tests {
             neural_network.train(&data,2)
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
+                .early_stopping_condition(MeasuredCondition::Iteration(3000))
                 .lambda(0f32)
             .go();
 
@@ -108,6 +99,7 @@ mod tests {
             neural_network.train(&data,2)
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
+                .early_stopping_condition(MeasuredCondition::Iteration(3000))
                 .lambda(0f32)
             .go();
 
