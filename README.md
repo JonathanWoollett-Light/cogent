@@ -36,6 +36,9 @@ neural_network.train(&training_data,10) // `10`=number of classes
     .evaluation_data(EvaluationData::Actual(&testing_data))
     .go();
 
+// `.evaluation_data(...)` sets the evaluation data if evaluation data is not set it will simply shuffle and split off a random group from training data to be evaluation data.
+//  In the case of MNIST where it is given seperately it makes sense to set it as such.
+
 // Evaluation
 // ----------
 let evaluation:(f32,u32) = neural_network.evaluate(&testing_data,10); // (cost,accuracy)
