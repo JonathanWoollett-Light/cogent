@@ -48,3 +48,10 @@ let evaluation:(f32,u32) = neural_network.evaluate(&testing_data,10); // (cost,e
 While a huge amount of my work has gone into making this and learning the basics of neural networks along the way, I am immensely (and I cannot stress this enough) amateur in inumerable ways.
 
 If you find any issues I would really appreciate if you could let me know (and possibly suggest any solutions).
+
+## TODO
+
+1. Fix the output layer error for a softmax activation output layer.
+2. Automatic net creation and layer setting from given dataset.
+3. Convolutional layers.
+4. Learn more.
