@@ -6,13 +6,13 @@ Cogent is a very basic library for training basic neural networks for classifica
 It is designed to be as simple as feasible.
 Hyperparameters in neural network training can be set automitcally, so why not?
 Ideally you could simply do:
-```
+```rust
 let net = NeuralNetwork::Train(&data);
 ```
 This is the most basic and not quite there yet implementation of that idea.
 
 Training a network to classify MNIST:
-```
+```rust
 // Setup
 // ----------
 let mut neural_network = NeuralNetwork::new(784,&[
