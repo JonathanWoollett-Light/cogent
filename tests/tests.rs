@@ -31,6 +31,7 @@ mod tests {
         let mut total_accuracy = 0u32;
         let mut total_time = 0u64;
         let runs = 10 * TEST_RERUN_MULTIPLIER;
+        
         for _ in 0..runs {
             let start = Instant::now();
 

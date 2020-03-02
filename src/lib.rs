@@ -1,6 +1,6 @@
 /// Core functionality of training a neural network.
 pub mod core {
-    use rand::{thread_rng,rngs::ThreadRng};
+    use rand::{rngs::ThreadRng};
     use rand::prelude::SliceRandom;
     
     use std::time::{Duration,Instant};
