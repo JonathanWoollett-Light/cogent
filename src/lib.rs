@@ -336,7 +336,7 @@ pub mod core {
         /// 
         /// Returns constructed network.
         /// ```
-        /// use rust_neural_network::core::{NeuralNetwork,Layer,Activation};
+        /// use cogent::core::{NeuralNetwork,Layer,Activation};
         /// 
         /// let mut net = NeuralNetwork::new(2,&[
         ///     Layer::new(3,Activation::Sigmoid),
@@ -378,7 +378,7 @@ pub mod core {
         }
         /// Sets activation of layer specified by index (excluding input layer).
         /// ```
-        /// use rust_neural_network::core::{NeuralNetwork,Layer,Activation};
+        /// use cogent::core::{NeuralNetwork,Layer,Activation};
         /// 
         /// let mut net = NeuralNetwork::new(2,&[
         ///     Layer::new(3,Activation::Sigmoid),
@@ -393,7 +393,7 @@ pub mod core {
         /// 
         /// Returns outputs from batch of examples.
         /// ```
-        /// use rust_neural_network::core::{NeuralNetwork,Layer,Activation};
+        /// use cogent::core::{NeuralNetwork,Layer,Activation};
         /// use ndarray::{Array2,array};
         /// 
         /// let mut net = NeuralNetwork::new(2,&[
@@ -424,7 +424,7 @@ pub mod core {
         /// 
         /// Training a network to learn an XOR gate:
         /// ```
-        /// use rust_neural_network::core::{NeuralNetwork,Layer,Activation,EvaluationData};
+        /// use cogent::core::{NeuralNetwork,Layer,Activation,EvaluationData};
         /// 
         /// // Sets network
         /// let mut neural_network = NeuralNetwork::new(2,&[
@@ -854,8 +854,6 @@ pub mod core {
                 let ein_sum = einsum("ai,aj->aji", &[&error, &activations[i-1]]).unwrap();
                 nabla_w.insert(0,ein_sum);
             }
-            //println!("done that");
-
             // Sum along columns (rows represent each example), push to `nabla_b_sum`.
             let nabla_b_sum = nabla_b.iter().map(|x| cast_1_to_2(x.sum_axis(Axis(0)))).collect();
             
@@ -1082,61 +1080,64 @@ pub mod core {
             return time;
         }
         // TODO General improvement, specifically allow printing to variable accuracy.
-        /// Prints the weights ands biases of the neural net.
-        pub fn print(&self) -> () {
+        /// Returns pretty string of wieghts (`self.connections`) and biases (`self.biases`).
+        pub fn print(&self) -> String {
+            let mut prt_string:String = String::new();
             let max:usize = self.biases.iter().map(|x|x.shape()[1]).max().unwrap();
             let width = self.connections.len(); // == self.biases.len()
-            //println!("max:{}",max);
+
             for row in 0..max+2 {
                 for t in 0..width {
                     //println!("\nrow:{}\n",self.biases[t].shape()[1]);
                     let diff = (max - self.biases[t].shape()[1]) / 2;
                     let spacing = 6*self.connections[t].shape()[1];
                     if row == diff {
-                        print!("  ");
-                        print!("┌ {: <1$}┐","",spacing);
-                        print!("   ");
-                        print!("┌       ┐");
-                        print!(" ");
+                        prt_string.push_str("  ");
+                        prt_string.push_str(&format!("┌ {: <1$}┐","",spacing));
+                        prt_string.push_str("   ");
+                        prt_string.push_str("┌       ┐");
+                        prt_string.push_str(" ");
                     }
                     else if row == self.biases[t].shape()[1] + diff + 1 {
-                        print!("  ");
-                        print!("└ {: <1$}┘","",spacing);
-                        print!("   ");
-                        print!("└       ┘");
-                        print!(" ");
+                        prt_string.push_str("  ");
+                        prt_string.push_str(&format!("└ {: <1$}┘","",spacing));
+                        prt_string.push_str("   ");
+                        prt_string.push_str("└       ┘");
+                        prt_string.push_str(" ");
                     }
                     else if row < diff || row > self.biases[t].shape()[1] + diff + 1 {
-                        print!("  ");
-                        print!("  {: <1$} ","",spacing);
-                        print!("   ");
-                        print!("         ");
-                        print!(" ");
+                        prt_string.push_str("  ");
+                        prt_string.push_str(&format!("  {: <1$} ","",spacing));
+                        prt_string.push_str("   ");
+                        prt_string.push_str("         ");
+                        prt_string.push_str(" ");
                     }
                     else {
                         let inner_row = row-diff-1;
-                        if self.biases[t].shape()[1] / 2 == inner_row { print!("* "); }
-                        else { print!("  "); }
-                        print!("│ ");
+                        if self.biases[t].shape()[1] / 2 == inner_row { prt_string.push_str("* "); }
+                        else { prt_string.push_str("  "); }
+                        prt_string.push_str("│ ");
                         
                         for val in self.connections[t].row(inner_row) {
-                            print!("{:+.2} ",val);
+                            prt_string.push_str(&format!("{:+.2} ",val));
                             
                         }
                         if inner_row == self.biases[t].shape()[1] / 2 {
-                            print!("│ + │ ");
-                        } else { print!("│   │ "); }
+                            prt_string.push_str("│ + │ ");
+                        } else { prt_string.push_str("│   │ "); }
                         
                         let val = self.biases[t][[0,inner_row]];
-                        print!("{:+.2} ",val);
+                        prt_string.push_str(&format!("{:+.2} ",val));
     
                         
-                        print!("│ ");
+                        prt_string.push_str("│ ");
                     }
                 }
-                println!();
+                prt_string.push_str("\n");
             }
-            println!();
+            prt_string.push_str("\n");
+
+            return prt_string;
         }
         /// Exports neural network to `path`.
         pub fn export(&self,path:&str) -> () {
@@ -1175,7 +1176,7 @@ pub mod utilities {
     // TODO Figure out how to run rustdoc tests
     /// Returns pretty string of `Array2<T>`.
     /// ```
-    /// use rust_neural_network::utilities::array2_prt;
+    /// use cogent::utilities::array2_prt;
     /// use ndarray::{array,Array2};
     /// 
     /// let array2:Array2<f32> = array![
@@ -1215,7 +1216,7 @@ pub mod utilities {
     }
     /// Returns pretty string of `Array3<T>`.
     /// ```
-    /// use rust_neural_network::utilities::array3_prt;
+    /// use cogent::utilities::array3_prt;
     /// use ndarray::{array,Array3};
     /// 
     /// let array3:Array3<f32> = array![

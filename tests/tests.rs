@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::time::Instant;
-    use rust_neural_network::core::{HaltCondition,EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
+    use cogent::core::{HaltCondition,EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
     use std::io::Read;
     use std::io::prelude::*;
     use std::fs::{File,OpenOptions};
@@ -23,6 +23,16 @@ mod tests {
         let result = format!("{} : {} * {:.2} mins, {}%, {}/{}\n",test,runs,avg_time,avg_accuracy_percent,avg_accuracy,dataset_length);
         
         file.unwrap().write_all(result.as_bytes());
+    }
+    #[test]
+    fn test_print() {
+        let mut net = NeuralNetwork::new(2,&[
+            Layer::new(3,Activation::Sigmoid),
+            Layer::new(2,Activation::Softmax)
+        ]);
+        let string = net.print();
+        println!("{}",string);
+        assert!(false);
     }
     // Tests network to learn an XOR gate.
     // Softmax output.
@@ -150,7 +160,6 @@ mod tests {
         }
         export_result("train_digits_0",runs,10000u32,total_time,total_accuracy);
     }
-
     // This test fails, the cost becomes NAN, which means it is outside the floating point range, my guess is large weights and biases leading to too small activations.
     // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
     // Softmax output.
@@ -189,7 +198,6 @@ mod tests {
         }
         export_result("train_digits_1",runs,10000u32,total_time,total_accuracy);
     }
-    
     // Gets MNIST dataset.
     fn get_mnist_dataset(testing:bool) -> Vec<(Vec<f32>,usize)> {
         // Gets testing dataset.
