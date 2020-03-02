@@ -1,3 +1,0 @@
-train_xor_0 : 10 * 0.00 mins, 100%, 4/4
-train_xor_1 : 10 * 0.00 mins, 100%, 4/4
-train_digits_0 : 1 * 19.72 mins, 94.57%, 9457/10000
