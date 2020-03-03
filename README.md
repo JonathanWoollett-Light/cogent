@@ -1,7 +1,7 @@
 # Cogent
 
-[Cargo](https://crates.io/crates/cogent)
-
+ - [Cargo](https://crates.io/crates/cogent)
+ - [Documentation](https://docs.rs/cogent/0.1.1/cogent/)
 ## Introduction
 
 Cogent is a very basic library for training basic neural networks for classification tasks.
