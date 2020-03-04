@@ -23,8 +23,8 @@ let mut neural_network = NeuralNetwork::new(784,&[
 ]);
 
 // Setting training and testing data
-// `get_mnist_dataset(bool)` simply gets MNIST data in format of `Vec<(Vec<f32>,usize)>` where each entry is an example and tuple.0=input and tuple.1=class.
-// The boolean specifiers if it is the MNIST testing data (`true`) or training data (`false`).
+// `get_mnist_dataset(bool)` simply gets MNIST data in format of `Vec<(Vec<f32>,usize)>` where each entry is an example (tuple.0=input and tuple.1=class).
+// The boolean specifies if it is the MNIST testing data (`true`) or training data (`false`).
 
 let training_data:Vec<(Vec<f32>,usize)> = get_mnist_dataset(false);
 let testing_data:Vec<(Vec<f32>,usize)> = get_mnist_dataset(true);
