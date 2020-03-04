@@ -55,13 +55,13 @@ If you find any issues I would really appreciate if you could let me know (and p
 
 Task types:
 
- - :white_check_mark: = Completable
+ - :ballot_box_with_check: = Completable
  - :repeat: = Perpetual
  
 Tasks:
 
-1. :white_check_mark: Fix the output layer error for a softmax activation output layer.
-2. :white_check_mark: Automatic net creation and layer setting from given dataset.
-3. :white_check_mark: Convolutional layers.
+1. :ballot_box_with_check: Fix the output layer error for a softmax activation output layer.
+2. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
+3. :ballot_box_with_check: Convolutional layers.
 3. :repeat: Improve defaults.
 4. :repeat: Learn more.
