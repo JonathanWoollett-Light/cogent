@@ -53,10 +53,15 @@ If you find any issues I would really appreciate if you could let me know (and p
 
 ## TODO
 
-:repeat: = Perpetual task
+Task types:
 
-1. Fix the output layer error for a softmax activation output layer.
-2. Automatic net creation and layer setting from given dataset.
-3. Convolutional layers.
+ - :white_check_mark: = Completable
+ - :repeat: = Perpetual
+ 
+Tasks:
+
+1. :white_check_mark: Fix the output layer error for a softmax activation output layer.
+2. :white_check_mark: Automatic net creation and layer setting from given dataset.
+3. :white_check_mark: Convolutional layers.
 3. :repeat: Improve defaults.
 4. :repeat: Learn more.
