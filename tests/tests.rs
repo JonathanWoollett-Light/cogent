@@ -14,15 +14,17 @@ mod tests {
     fn required_accuracy(test_data:&[(Vec<f32>,usize)]) -> u32 {
         ((test_data.len() as f32) * TESTING_MIN_ACCURACY).ceil() as u32
     }
-    // Exports test result to `test_report.txt`.
-    fn export_result(test:&str,runs:u32,dataset_length:u32,total_time:u64,total_accuracy:u32,) -> () {
-        let avg_time = (total_time / runs as u64) as f32 / 60f32;
-        let avg_accuracy = total_accuracy / runs;
-        let avg_accuracy_percent = 100f32 * avg_accuracy as f32 / dataset_length as f32;
-        let file = OpenOptions::new().append(true).open("test_report.txt");
-        let result = format!("{} : {} * {:.2} mins, {}%, {}/{}\n",test,runs,avg_time,avg_accuracy_percent,avg_accuracy,dataset_length);
+    // Tests changing activation of layer using out of range index.
+    //#[test]
+    //#[should_panic]
+    fn activation() {
+        use cogent::core::{NeuralNetwork,Layer,Activation};
         
-        file.unwrap().write_all(result.as_bytes());
+        let mut net = NeuralNetwork::new(2,&[
+            Layer::new(3,Activation::Sigmoid),
+            Layer::new(2,Activation::Sigmoid)
+        ]);
+        net.activation(2,Activation::Softmax); // Changes activation of output layer.
     }
     // Tests network to learn an XOR gate.
     // Softmax output.
@@ -67,7 +69,6 @@ mod tests {
 
             total_accuracy += evaluation.1;
         }
-        export_result("train_xor_0",runs,4u32,total_time,total_accuracy);
     }
     // Tests network to learn an XOR gate.
     // Sigmoid output.
@@ -112,7 +113,6 @@ mod tests {
 
             total_accuracy += evaluation.1;
         }
-        export_result("train_xor_1",runs,4u32,total_time,total_accuracy);
     }
     // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
     // Sigmoid output.
@@ -150,7 +150,6 @@ mod tests {
             assert!(evaluation.1 >= required_accuracy(&testing_data));
             total_accuracy += evaluation.1;
         }
-        export_result("train_digits_0",runs,10000u32,total_time,total_accuracy);
     }
     // This test fails, the cost becomes NAN, which means it is outside the floating point range, my guess is large weights and biases leading to too small activations.
     // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
@@ -188,7 +187,6 @@ mod tests {
             assert!(evaluation.1 >= required_accuracy(&testing_data));
             total_accuracy += evaluation.1;
         }
-        export_result("train_digits_1",runs,10000u32,total_time,total_accuracy);
     }
     // Gets MNIST dataset.
     fn get_mnist_dataset(testing:bool) -> Vec<(Vec<f32>,usize)> {

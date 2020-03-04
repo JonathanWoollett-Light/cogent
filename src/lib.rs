@@ -383,7 +383,10 @@ pub mod core {
         /// net.activation(1,Activation::Softmax); // Changes activation of output layer.
         /// ```
         pub fn activation(&mut self, index:usize, activation:Activation) {
-            if index >= layers.len() { panic!("Layer {} does not exist. Give layer index where 0 <= index < {}",index,layers.len()); } // TODO Make better panic message here.
+            if index >= self.layers.len() {
+                // TODO Make better panic message here.
+                panic!("Layer {} does not exist. Give layer index where 0 <= index < {}",index,self.layers.len()); 
+            } 
             self.layers[index] = activation;
         }
         /// Runs batch of examples through network.
