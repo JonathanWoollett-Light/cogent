@@ -6,7 +6,7 @@
 
 Cogent is a very basic library for training basic neural networks for classification tasks.
 It is designed to be as simple as feasible.
-Hyperparameters in neural network training can be set automitcally, so why not?
+Hyperparameters in neural network training can be set automatically, so why not?
 Ideally you could simply do:
 ```rust
 let net = NeuralNetwork::Train(&data);
