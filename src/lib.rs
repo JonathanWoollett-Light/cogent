@@ -10,7 +10,7 @@ pub mod core {
     use scoped_threadpool::Pool;
 
     extern crate ndarray;
-    use ndarray::{Array2,Array1,ArrayD,Axis,ArrayView2};
+    use ndarray::{Array2,Array1,ArrayD,Axis,ArrayView2,azip,Zip};
     use ndarray_rand::{RandomExt,rand_distr::Uniform};
 
     extern crate ndarray_einsum_beta;
@@ -248,11 +248,12 @@ pub mod core {
             fn sigmoid(y:f32) -> f32 {
                 return Activation::sigmoid(y) * (1f32 - Activation::sigmoid(y));
             }
+            // TODO Is this correct?
             // Derivative of softmax
             fn softmax(y:&Array2<f32>) -> Array2<f32> {
-                let mut softmax = Activation::softmax(y);
-                softmax.mapv_inplace(|x|x*(1f32-x));
-                return softmax;
+                let softmax = Activation::softmax(y);
+                let derivative = softmax * (1f32 - y);
+                return derivative;
             }
         }
         // TODO I am certain there are issues here.
