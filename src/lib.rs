@@ -248,7 +248,7 @@ pub mod core {
             fn sigmoid(y:f32) -> f32 {
                 return Activation::sigmoid(y) * (1f32 - Activation::sigmoid(y));
             }
-            // TODO Is this correct?
+            // TODO Is this correct?/Is there a better way?
             // Derivative of softmax
             fn softmax(y:&Array2<f32>) -> Array2<f32> {
                 let softmax = Activation::softmax(y);
@@ -386,7 +386,7 @@ pub mod core {
         pub fn activation(&mut self, index:usize, activation:Activation) {
             if index >= self.layers.len() {
                 // TODO Make better panic message here.
-                panic!("Layer {} does not exist. Give layer index where 0 <= index < {}",index,self.layers.len()); 
+                panic!("Layer {} does not exist. 0 <= given index < {}",index,self.layers.len()); 
             } 
             self.layers[index] = activation;
         }
@@ -847,6 +847,7 @@ pub mod core {
             // (self.layers.len()=self.biases.len()=self.connections.len())
             for i in (1..self.layers.len()).rev() {
                 // Calculates error
+                // `mat1.dot(mat2)` performs matrix multiplication of `mat1` by `mat2`
                 error = self.layers[i-1].derivative(&inputs[i-1]) *
                     error.dot(&self.connections[i]);
 

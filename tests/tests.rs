@@ -15,10 +15,9 @@ mod tests {
         ((test_data.len() as f32) * TESTING_MIN_ACCURACY).ceil() as u32
     }
     // Tests changing activation of layer using out of range index.
-    //#[test]
-    //#[should_panic]
+    #[test]
+    #[should_panic="Layer 2 does not exist. 0 <= given index < 2"]
     fn activation() {
-        use cogent::core::{NeuralNetwork,Layer,Activation};
         
         let mut net = NeuralNetwork::new(2,&[
             Layer::new(3,Activation::Sigmoid),
@@ -30,13 +29,9 @@ mod tests {
     // Softmax output.
     #[test]
     fn train_xor_0() {
-        let mut total_accuracy = 0u32;
-        let mut total_time = 0u64;
         let runs = 10 * TEST_RERUN_MULTIPLIER;
         
         for _ in 0..runs {
-            let start = Instant::now();
-
             // Setup
             // ------------------------------------------------
             // Sets network
@@ -62,24 +57,16 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-            total_time += start.elapsed().as_secs();
-
             let evaluation = neural_network.evaluate(&data,2);
             assert!(evaluation.1 as usize == data.len());
-
-            total_accuracy += evaluation.1;
         }
     }
     // Tests network to learn an XOR gate.
     // Sigmoid output.
     #[test]
     fn train_xor_1() {
-        let mut total_accuracy = 0u32;
-        let mut total_time = 0u64;
         let runs = 10 * TEST_RERUN_MULTIPLIER;
         for _ in 0..runs {
-            let start = Instant::now();
-
             // Setup
             // ------------------------------------------------
             // Sets network
@@ -106,24 +93,16 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-            total_time += start.elapsed().as_secs();
-
             let evaluation = neural_network.evaluate(&data,2);
             assert!(evaluation.1 as usize == data.len());
-
-            total_accuracy += evaluation.1;
         }
     }
     // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
     // Sigmoid output.
     #[test]
     fn train_digits_0() {
-        let mut total_accuracy = 0u32;
-        let mut total_time = 0u64;
         let runs = TEST_RERUN_MULTIPLIER;
         for _ in 0..runs {
-            let start = Instant::now();
-
             // Setup
             // ------------------------------------------------
             // Sets network
@@ -144,11 +123,9 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-            total_time += start.elapsed().as_secs();
 
             let evaluation = neural_network.evaluate(&testing_data,10);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
-            total_accuracy += evaluation.1;
         }
     }
     // This test fails, the cost becomes NAN, which means it is outside the floating point range, my guess is large weights and biases leading to too small activations.
@@ -156,12 +133,8 @@ mod tests {
     // Softmax output.
     #[test]
     fn train_digits_1() {
-        let mut total_accuracy = 0u32;
-        let mut total_time = 0u64;
         let runs = TEST_RERUN_MULTIPLIER;
         for _ in 0..runs {
-            let start = Instant::now();
-
             // Setup
             // ------------------------------------------------
             let mut neural_network = NeuralNetwork::new(784,&[
@@ -181,11 +154,9 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-            total_time += start.elapsed().as_secs();
 
             let evaluation = neural_network.evaluate(&testing_data,10);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
-            total_accuracy += evaluation.1;
         }
     }
     // Gets MNIST dataset.
