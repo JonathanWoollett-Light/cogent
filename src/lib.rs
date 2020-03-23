@@ -268,7 +268,7 @@ pub mod core {
             fn sigmoid(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
                 return outputs-targets
             }
-            // TODO: THIS IS WRONG, FIX IT
+            // TODO Is this correct?/Is there a better way?
             // Cross entropy error of softmax activation output layer
             fn softmax(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
                 return outputs-targets;
