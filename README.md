@@ -60,7 +60,7 @@ Task types:
  
 Tasks:
 
-1. :ballot_box_with_check: Fix the output layer error for a softmax activation output layer.
+1. :ballot_box_with_check: Fix/Check softmax activation delta and derivative.
 2. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
 3. :ballot_box_with_check: Convolutional layers.
 3. :repeat: Improve defaults.
