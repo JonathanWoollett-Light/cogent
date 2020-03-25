@@ -61,7 +61,8 @@ Task types:
 Tasks:
 
 1. :ballot_box_with_check: Fix/Check softmax activation delta and derivative.
-2. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
-3. :ballot_box_with_check: Convolutional layers.
-3. :repeat: Improve defaults.
-4. :repeat: Learn more.
+2. :ballot_box_with_check: Add ReLU activation type.
+3. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
+4. :ballot_box_with_check: Convolutional layers.
+5. :repeat: Improve defaults.
+6. :repeat: Learn more.
