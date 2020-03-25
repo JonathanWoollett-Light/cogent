@@ -12,6 +12,8 @@ pub mod core {
     extern crate ndarray;
     use ndarray::{Array2,Array1,ArrayD,Axis,ArrayView2,azip,Zip};
     use ndarray_rand::{RandomExt,rand_distr::Uniform};
+    use ndarray::{Array, arr1};
+    use std::iter::FromIterator;
 
     extern crate ndarray_einsum_beta;
     use ndarray_einsum_beta::*;
@@ -20,6 +22,7 @@ pub mod core {
     use crossterm::{QueueableCommand, cursor};
 
     use serde::{Serialize,Deserialize};
+    
 
     use std::mem::swap;
 
@@ -222,7 +225,43 @@ pub mod core {
             );
         }
     }
-
+    #[derive(Clone,Copy,Serialize,Deserialize)]
+    pub enum Cost {
+        Quadratic,Crossentropy
+    }
+    impl Cost {
+        /// Runs cost functions
+        /// 
+        /// y: Target out, a: Actual out
+        fn run(&self,y:&Array2<f32>,a:&Array2<f32>) -> f32 {
+            return match self {
+                Self::Quadratic => { quadratic(y,a) },
+                Self::Crossentropy => { cross_entropy(y,a) }
+            };
+            // Quadratic cost
+            fn quadratic(y: &Array2<f32>, a: &Array2<f32>) -> f32 {
+                (y - a).mapv(|x| x.powi(2)).sum() / (2f32*a.nrows() as f32)
+            }
+            // Cross entropy cost
+            // TODO Need to double check this
+            fn cross_entropy(y: &Array2<f32>, a: &Array2<f32>) -> f32 {
+                let part1 = a.mapv(f32::ln) * y;
+                let part2 = (1f32 - a).mapv(f32::ln) * (1f32 - y);
+                let mut cost:f32 = (part1 + part2).sum();
+                cost /= -(a.shape()[1] as f32);
+                return cost;
+            }
+        }
+        /// Derivative wrt layer output (∂C/∂a)
+        /// 
+        /// y: Target out, a: Actual out
+        fn derivative(&self,y:&Array2<f32>,a:&Array2<f32>) -> Array2<f32> {
+            return match self {
+                Self::Quadratic => { a-y },
+                Self::Crossentropy => { -1f32 * ((1f32/a)*y) + (1f32-y) * (1f32/(1f32-a)) } // (-1 * (y*(1/a))) + (1-y) * (1/(1-a))
+            }
+        }
+    }
     /// Used to define each layer's activation.
     #[derive(Clone,Copy,Serialize,Deserialize)]
     pub enum Activation {
@@ -236,47 +275,56 @@ pub mod core {
                 Self::Softmax => Activation::softmax(y),
             };
         }
-        /// Applies derivative function of activation to given `y`.
-        fn derivative(&self,y:&Array2<f32>) -> Array2<f32> {
+        /// Derivative wrt layer input (∂a/∂z)
+        /// 
+        /// z: Input
+        fn derivative(&self,z:&Array2<f32>) -> Array2<f32> {
+            // What should we name the derivative functions?
             return match self {
-                Self::Sigmoid => y.mapv(|x| -> f32 { sigmoid(x) }),
-                Self::Softmax => softmax(y),
+                Self::Sigmoid => z.mapv(|x| -> f32 { sigmoid_derivative(x) }),
+                Self::Softmax => softmax_derivative(z),
             };
-            // TODO Should we names things `x` like `sigmoid` or `x_derivative` like `sigmoid_derivative`?
-            // TODO Look into why this is called `sigmoid prime` in some cases?
+
             // Derivative of sigmoid
-            fn sigmoid(y:f32) -> f32 {
-                return Activation::sigmoid(y) * (1f32 - Activation::sigmoid(y));
+            // s' = s(1-s)
+            fn sigmoid_derivative(z:f32) -> f32 {
+                let s:f32 = Activation::sigmoid(z);
+                return s*(1f32-s);
             }
-            // TODO Is this correct?/Is there a better way?
             // Derivative of softmax
-            fn softmax(y:&Array2<f32>) -> Array2<f32> {
-                let softmax = Activation::softmax(y);
-                let derivative = softmax * (1f32 - y);
-                return derivative;
-            }
-        }
-        // TODO I am certain there are issues here.
-        // Computes output layer errors, given outputs (`outputs`) and targets (`target`).
-        fn delta(&self,outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
-            return match self {
-                Self::Sigmoid => sigmoid(outputs,targets),
-                Self::Softmax => softmax(outputs,targets),
-            };
-            // Cross entropy error of sigmoid activation output layer
-            // (simplification of derivative of sigmoid activation by derivative of cross entropy)
-            fn sigmoid(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
-                return outputs-targets
-            }
-            // TODO Is this correct?/Is there a better way?
-            // Cross entropy error of softmax activation output layer
-            fn softmax(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
-                return outputs-targets;
+            // e^z * (sum of other inputs e^input) / (sum of all inputs e^input)^2 = e^z * (exp_sum-e^z) / (exp_sum)^2
+            fn softmax_derivative(z:&Array2<f32>) -> Array2<f32> {
+                
+
+                let mut derivatives:Array2<f32> = z.mapv(|x|x.exp());
+                //println!("derivatives.nrows(): {}",derivatives.nrows());
+                //println!("derivatives.ncols(): {}",derivatives.ncols());
+
+                // Gets sum of each row
+                let sums:Array1<f32> = derivatives.sum_axis(Axis(1));
+                //println!("sums.len(): {}",sums.len());
+                //println!("sums:{:.?}",sums);
+                // Sets squared sum of each row
+                let sqrd_sums:Array1<f32> = &sums * &sums;
+                //println!("sqrd_sums.len(): {}",sqrd_sums.len());
+                //println!("sqrd_sums:{:.?}",sqrd_sums);
+
+                for (mut row,sum,sqrd_sum) in izip!(
+                    derivatives.axis_iter_mut(Axis(0)),
+                    sums.iter(),
+                    sqrd_sums.iter()
+                ) {
+                    row.mapv_inplace(|val| (val*(sum-val))/sqrd_sum);
+                    //println!("how many times this trigger?");
+                }
+
+                //panic!("testing stuff");
+                return derivatives;
             }
         }
         // Applies sigmoid function
-        fn sigmoid(y: f32) -> f32 {
-            1f32 / (1f32 + (-y).exp())
+        fn sigmoid(x: f32) -> f32 {
+            1f32 / (1f32 + (-x).exp())
         }
         // TODO Make this better
         // Applies softmax activation
@@ -290,7 +338,7 @@ pub mod core {
             // Get max value in each row (each example).
             let max_axis_vals = exp_matrix.fold_axis(Axis(1),0f32,|acc,x| (if acc > x { *acc } else { *x }));
             // Subtracts row max from every value in matrix.
-            for i in 0..exp_matrix.shape()[0] {
+            for i in 0..exp_matrix.nrows() {
                 exp_matrix.row_mut(i).mapv_inplace(|x| x-max_axis_vals[i]); 
             }
 
@@ -327,6 +375,7 @@ pub mod core {
         biases: Vec<Array2<f32>>,
         connections: Vec<Array2<f32>>,
         layers: Vec<Activation>,
+        cost: Cost,
     }
     impl NeuralNetwork {
         /// Constructs network of given layers.
@@ -338,9 +387,9 @@ pub mod core {
         /// let mut net = NeuralNetwork::new(2,&[
         ///     Layer::new(3,Activation::Sigmoid),
         ///     Layer::new(2,Activation::Softmax)
-        /// ]);
+        /// ],None);
         /// ```
-        pub fn new(inputs:usize,layers: &[Layer]) -> NeuralNetwork {
+        pub fn new(inputs:usize,layers: &[Layer],cost:Option<Cost>) -> NeuralNetwork {
             if layers.len() == 0 {
                 panic!("Requires >1 layers");
             }
@@ -352,6 +401,12 @@ pub mod core {
                     panic!("All layer sizes must be >0");
                 }
             }
+
+            let mut cost_function = Cost::Crossentropy;
+            if let Some(function) = cost {
+                cost_function = function;
+            }
+
             let mut connections: Vec<Array2<f32>> = Vec::with_capacity(layers.len());
             let mut biases: Vec<Array2<f32>> = Vec::with_capacity(layers.len());
 
@@ -371,7 +426,7 @@ pub mod core {
                 biases.push(Array2::random((1,layers[i].size),range));
             }
             let layers:Vec<Activation> = layers.iter().map(|x|x.activation).collect();
-            NeuralNetwork{ inputs, biases, connections, layers}
+            NeuralNetwork{ inputs, biases, connections, layers, cost:cost_function}
         }
         /// Sets activation of layer specified by index (excluding input layer).
         /// ```
@@ -380,7 +435,7 @@ pub mod core {
         /// let mut net = NeuralNetwork::new(2,&[
         ///     Layer::new(3,Activation::Sigmoid),
         ///     Layer::new(2,Activation::Sigmoid)
-        /// ]);
+        /// ],None);
         /// net.activation(1,Activation::Softmax); // Changes activation of output layer.
         /// ```
         pub fn activation(&mut self, index:usize, activation:Activation) {
@@ -400,7 +455,7 @@ pub mod core {
         /// let mut net = NeuralNetwork::new(2,&[
         ///     Layer::new(3,Activation::Sigmoid),
         ///     Layer::new(2,Activation::Softmax)
-        /// ]);
+        /// ],None);
         /// let input:Array2<f32> = array![
         ///     [0f32,0f32],
         ///     [1f32,0f32],
@@ -431,7 +486,7 @@ pub mod core {
         /// let mut neural_network = NeuralNetwork::new(2,&[
         ///     Layer::new(3,Activation::Sigmoid),
         ///     Layer::new(2,Activation::Softmax)
-        /// ]);
+        /// ],None);
         /// // Sets data
         /// // For output 0=false and 1=true.
         /// let data = vec![
@@ -572,13 +627,17 @@ pub mod core {
                 // TODO Reduce code duplication here.
                 // Runs backpropagation on all batches:
                 //  If `tracking` output backpropagation percentage progress.
+
                 if tracking {
+                    
+
                     let mut percentage:f32 = 0f32;
                     stdout.queue(cursor::SavePosition).unwrap();
                     let backprop_start_instant = Instant::now();
                     let percent_change:f32 = 100f32 * batch_size as f32 / inner_training_data.0.nrows() as f32;
 
                     for batch in batches {
+                        
                         stdout.write(format!("Backpropagating: {:.2}%",percentage).as_bytes()).unwrap();
                         percentage += percent_change;
                         stdout.queue(cursor::RestorePosition).unwrap();
@@ -587,8 +646,12 @@ pub mod core {
                         let (new_connections,new_biases) = self.update_batch(&batch,learning_rate,lambda,training_data.len() as f32);
                         self.connections = new_connections;
                         self.biases = new_biases;
+
+                        let evaluation = self.evaluate(evaluation_data,k);
+                        //stdout.write(format!("\nc:{}\n",evaluation.0).as_bytes()).unwrap();
                     }
                     stdout.write(format!("Backpropagated: {}\n",NeuralNetwork::time(backprop_start_instant)).as_bytes()).unwrap();
+                    
                 }
                 else {
                     for batch in batches {
@@ -835,7 +898,10 @@ pub mod core {
 
             let last_layer = self.layers[self.layers.len()-1];
             // TODO Is `.to_owned()` a good solution here?
-            let mut error:Array2<f32> = last_layer.delta(&activations[last_index+1],&target.to_owned());
+
+            //let mut error:Array2<f32> = last_layer.delta(&activations[last_index+1],&target.to_owned());
+            //let mut error:Array2<f32> = self.cost.derivative(&target.to_owned(),&activations[last_index+1]) * last_layer.derivative(&activations[last_index+1]);
+            let mut error:Array2<f32> = self.cost.derivative(&target.to_owned(),&activations[activations.len()-1]) * last_layer.derivative(&inputs[inputs.len()-1]);
 
             // Sets gradients in output layer
             nabla_b.insert(0,error.clone());
@@ -887,9 +953,6 @@ pub mod core {
                 }
                 return arr2;
             }
-            fn quadratic_cost_derivative(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array2<f32> {
-                outputs - targets
-            }
         }
         // TODO Rename this better.
         // TODO Make this more efficient.
@@ -917,7 +980,7 @@ pub mod core {
                         let batch_tuple_matrix = NeuralNetwork::matrixify(&chunk,k);
                         let out = self.run(&batch_tuple_matrix.0);
                         let target = batch_tuple_matrix.1;
-                        *cost = cross_entropy(&out,&target);
+                        *cost = self.cost.run(&target,&out);
 
                         let output_class_indxs = max_output_indexs(&out); // Array1 of result classes.
                         let target_class_indxs:Vec<usize> = chunk.iter().map(|x|x.1).collect(); // Vec of target classes.
@@ -930,26 +993,12 @@ pub mod core {
             let classified:u32 = classified_vec.iter().sum();
 
             // TODO Double check it is `cost / chunks.len()` and not `cost / test_data.len()`.
+            if cost.is_nan() {
+                panic!("cost is nan");
+            }
+
             return (cost / chunk_len as f32, classified);
 
-            
-            // Linear cost (I don't know if this is even a thing, but it's useful for some debugging)
-            fn linear(outputs: &Array2<f32>, targets: &Array2<f32>) -> Array1<f32> {
-                (targets - outputs).mapv(f32::abs).sum_axis(Axis(1))
-            }
-            // Quadratic cost
-            fn quadratic(outputs: &Array2<f32>, targets: &Array2<f32>) -> f32 {
-                (targets - outputs).mapv(|x| x.powi(2)).sum() / (2f32*outputs.shape()[1] as f32)
-            }
-            // TODO Need to double check this
-            // Cross entropy cost
-            fn cross_entropy(outputs: &Array2<f32>, targets: &Array2<f32>) -> f32 {
-                let part1 = outputs.mapv(f32::ln) * targets;
-                let part2 = (1f32 - outputs).mapv(f32::ln) * (1f32 - targets);
-                let mut cost:f32 = (part1 + part2).sum();
-                cost /= -(outputs.shape()[1] as f32);
-                return cost;
-            }
             // Gets index of max value in each row (each row representing an example) of `Array2<f32>`
             fn max_output_indexs(matrix:&Array2<f32>) -> Array1<usize> {
                 let examples = matrix.shape()[0];
