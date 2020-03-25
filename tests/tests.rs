@@ -61,7 +61,6 @@ mod tests {
             // ------------------------------------------------
             let evaluation = neural_network.evaluate(&data,2);
             assert!(evaluation.1 as usize == data.len());
-            //assert!(false);
         }
     }
     // Tests network to learn an XOR gate.
@@ -102,7 +101,7 @@ mod tests {
     }
     // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
     // Sigmoid output.
-    //#[test]
+    #[test]
     fn train_digits_0() {
         let runs = TEST_RERUN_MULTIPLIER;
         for _ in 0..runs {
@@ -136,7 +135,7 @@ mod tests {
     }
     // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
     // Softmax output.
-    //#[test]
+    #[test]
     fn train_digits_1() {
         let runs = TEST_RERUN_MULTIPLIER;
         for _ in 0..runs {
@@ -159,7 +158,6 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-
             let evaluation = neural_network.evaluate(&testing_data,10);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
         }

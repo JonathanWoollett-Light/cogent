@@ -10,10 +10,8 @@ pub mod core {
     use scoped_threadpool::Pool;
 
     extern crate ndarray;
-    use ndarray::{Array2,Array1,ArrayD,Axis,ArrayView2,azip,Zip};
+    use ndarray::{Array2,Array1,ArrayD,Axis,ArrayView2};
     use ndarray_rand::{RandomExt,rand_distr::Uniform};
-    use ndarray::{Array, arr1};
-    use std::iter::FromIterator;
 
     extern crate ndarray_einsum_beta;
     use ndarray_einsum_beta::*;
@@ -297,17 +295,12 @@ pub mod core {
                 
 
                 let mut derivatives:Array2<f32> = z.mapv(|x|x.exp());
-                //println!("derivatives.nrows(): {}",derivatives.nrows());
-                //println!("derivatives.ncols(): {}",derivatives.ncols());
 
                 // Gets sum of each row
                 let sums:Array1<f32> = derivatives.sum_axis(Axis(1));
-                //println!("sums.len(): {}",sums.len());
-                //println!("sums:{:.?}",sums);
+
                 // Sets squared sum of each row
                 let sqrd_sums:Array1<f32> = &sums * &sums;
-                //println!("sqrd_sums.len(): {}",sqrd_sums.len());
-                //println!("sqrd_sums:{:.?}",sqrd_sums);
 
                 for (mut row,sum,sqrd_sum) in izip!(
                     derivatives.axis_iter_mut(Axis(0)),
@@ -315,7 +308,6 @@ pub mod core {
                     sqrd_sums.iter()
                 ) {
                     row.mapv_inplace(|val| (val*(sum-val))/sqrd_sum);
-                    //println!("how many times this trigger?");
                 }
 
                 //panic!("testing stuff");
@@ -629,15 +621,12 @@ pub mod core {
                 //  If `tracking` output backpropagation percentage progress.
 
                 if tracking {
-                    
-
                     let mut percentage:f32 = 0f32;
                     stdout.queue(cursor::SavePosition).unwrap();
                     let backprop_start_instant = Instant::now();
                     let percent_change:f32 = 100f32 * batch_size as f32 / inner_training_data.0.nrows() as f32;
 
                     for batch in batches {
-                        
                         stdout.write(format!("Backpropagating: {:.2}%",percentage).as_bytes()).unwrap();
                         percentage += percent_change;
                         stdout.queue(cursor::RestorePosition).unwrap();
@@ -646,12 +635,8 @@ pub mod core {
                         let (new_connections,new_biases) = self.update_batch(&batch,learning_rate,lambda,training_data.len() as f32);
                         self.connections = new_connections;
                         self.biases = new_biases;
-
-                        let evaluation = self.evaluate(evaluation_data,k);
-                        //stdout.write(format!("\nc:{}\n",evaluation.0).as_bytes()).unwrap();
                     }
                     stdout.write(format!("Backpropagated: {}\n",NeuralNetwork::time(backprop_start_instant)).as_bytes()).unwrap();
-                    
                 }
                 else {
                     for batch in batches {
@@ -899,8 +884,6 @@ pub mod core {
             let last_layer = self.layers[self.layers.len()-1];
             // TODO Is `.to_owned()` a good solution here?
 
-            //let mut error:Array2<f32> = last_layer.delta(&activations[last_index+1],&target.to_owned());
-            //let mut error:Array2<f32> = self.cost.derivative(&target.to_owned(),&activations[last_index+1]) * last_layer.derivative(&activations[last_index+1]);
             let mut error:Array2<f32> = self.cost.derivative(&target.to_owned(),&activations[activations.len()-1]) * last_layer.derivative(&inputs[inputs.len()-1]);
 
             // Sets gradients in output layer
@@ -991,11 +974,6 @@ pub mod core {
             // Sum costs and correctly classified
             let cost:f32 = cost_vec.iter().sum();
             let classified:u32 = classified_vec.iter().sum();
-
-            // TODO Double check it is `cost / chunks.len()` and not `cost / test_data.len()`.
-            if cost.is_nan() {
-                panic!("cost is nan");
-            }
 
             return (cost / chunk_len as f32, classified);
 
@@ -1139,7 +1117,6 @@ pub mod core {
 
             for row in 0..max+2 {
                 for t in 0..width {
-                    //println!("\nrow:{}\n",self.biases[t].shape()[1]);
                     let diff = (max - self.biases[t].shape()[1]) / 2;
                     let spacing = 6*self.connections[t].shape()[1];
                     if row == diff {
