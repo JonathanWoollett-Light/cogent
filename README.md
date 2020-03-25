@@ -20,7 +20,7 @@ Training a network to classify MNIST:
 let mut neural_network = NeuralNetwork::new(784,&[
     Layer::new(100,Activation::Sigmoid),
     Layer::new(10,Activation::Softmax)
-]);
+],None);
 
 // Setting training and testing data
 // `get_mnist_dataset(bool)` simply gets MNIST data in format of `Vec<(Vec<f32>,usize)>` where each entry is an example (tuple.0=input and tuple.1=class).
