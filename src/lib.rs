@@ -6,14 +6,11 @@ pub mod core {
     use std::time::{Duration,Instant};
     use itertools::izip;
 
-    extern crate scoped_threadpool;
     use scoped_threadpool::Pool;
 
-    extern crate ndarray;
     use ndarray::{Array2,Array1,ArrayD,Axis,ArrayView2};
     use ndarray_rand::{RandomExt,rand_distr::Uniform};
 
-    extern crate ndarray_einsum_beta;
     use ndarray_einsum_beta::*;
 
     use std::io::{Read,Write, stdout};
@@ -21,12 +18,12 @@ pub mod core {
 
     use serde::{Serialize,Deserialize};
     
-
     use std::mem::swap;
 
     use std::fs::File;
     use std::fs;
     use std::path::Path;
+
     // Setting number of threads to use
     const THREAD_COUNT:usize = 12usize;
 
@@ -73,11 +70,9 @@ pub mod core {
         Duration(Duration),
         Accuracy(f32)
     }
-    /// For setting `evaluation_min_change`. 
-    /// 
-    /// The minimum change required to log positive evaluation change.
+    /// For setting a hyperparameter as a proportion of another.
     #[derive(Clone,Copy)]
-    pub enum EvaluationChange {
+    pub enum Proportion {
         Scaler(u32),
         Percent(f32),
     }
@@ -99,7 +94,7 @@ pub mod core {
         // Can stop after a lack of cost improvement over a certain number of iterations/durations, or not at all.
         early_stopping_condition: MeasuredCondition,
         // Minimum change required to log positive evaluation change.
-        evaluation_min_change: EvaluationChange, 
+        evaluation_min_change: Proportion, 
         // Amount to decrease learning rate by (less than 1)(`learning_rate` *= learning_rate_decay`).
         learning_rate_decay: f32, 
         // Time without notable improvement to wait until decreasing learning rate.
@@ -139,8 +134,11 @@ pub mod core {
             return self;
         }
         /// Sets `batch_size`.
-        pub fn batch_size(&mut self, batch_size:usize) -> &mut Trainer<'a> {
-            self.batch_size = batch_size;
+        pub fn batch_size(&mut self, batch_size:Proportion) -> &mut Trainer<'a> {
+            self.batch_size = match batch_size {
+                Proportion::Percent(percent) => { (self.training_data.len() as f32 * percent) as usize },
+                Proportion::Scaler(scaler) => { scaler as usize } 
+            };
             return self;
         }
         /// Sets `learning_rate`.
@@ -165,7 +163,7 @@ pub mod core {
         /// Sets `evaluation_min_change`.
         /// 
         /// Minimum change required to log positive evaluation change.
-        pub fn evaluation_min_change(&mut self, evaluation_min_change:EvaluationChange) -> &mut Trainer<'a> {
+        pub fn evaluation_min_change(&mut self, evaluation_min_change:Proportion) -> &mut Trainer<'a> {
             self.evaluation_min_change = evaluation_min_change;
             return self;
         }
@@ -535,7 +533,7 @@ pub mod core {
                 learning_rate: DEFAULT_LEARNING_RATE,
                 lambda: DEFAULT_LAMBDA,
                 early_stopping_condition: MeasuredCondition::Iteration(early_stopping_condition),
-                evaluation_min_change: EvaluationChange::Percent(DEFAULT_EVALUATION_MIN_CHANGE),
+                evaluation_min_change: Proportion::Percent(DEFAULT_EVALUATION_MIN_CHANGE),
                 learning_rate_decay: DEFAULT_LEARNING_RATE_DECAY,
                 learning_rate_interval: MeasuredCondition::Iteration(learning_rate_interval),
                 checkpoint_interval: None,
@@ -557,7 +555,7 @@ pub mod core {
             mut learning_rate: f32,
             lambda: f32,
             early_stopping_n: MeasuredCondition,
-            evaluation_min_change: EvaluationChange,
+            evaluation_min_change: Proportion,
             learning_rate_decay: f32,
             learning_rate_interval: MeasuredCondition,
             checkpoint_interval: Option<MeasuredCondition>,
@@ -698,12 +696,12 @@ pub mod core {
                 // TODO Reduce code duplication here
                 // If change in evaluation more than `evaluation_min_change` update `best_accuracy`,`best_accuracy_iteration` and `best_accuracy_instant`.
                 match evaluation_min_change {
-                    EvaluationChange::Percent(percent) => if (evaluation.1 as f32 / evaluation_data.len() as f32) > (best_accuracy as f32 / evaluation_data.len() as f32) + percent {
+                    Proportion::Percent(percent) => if (evaluation.1 as f32 / evaluation_data.len() as f32) > (best_accuracy as f32 / evaluation_data.len() as f32) + percent {
                         best_accuracy = evaluation.1;
                         best_accuracy_iteration = iterations_elapsed;
                         best_accuracy_instant = Instant::now();
                     }
-                    EvaluationChange::Scaler(scaler) => if evaluation.1 > best_accuracy + scaler {
+                    Proportion::Scaler(scaler) => if evaluation.1 > best_accuracy + scaler {
                         best_accuracy = evaluation.1;
                         best_accuracy_iteration = iterations_elapsed;
                         best_accuracy_instant = Instant::now();
