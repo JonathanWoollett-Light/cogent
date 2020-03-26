@@ -221,6 +221,7 @@ pub mod core {
             );
         }
     }
+    
     #[derive(Clone,Copy,Serialize,Deserialize)]
     pub enum Cost {
         Quadratic,Crossentropy

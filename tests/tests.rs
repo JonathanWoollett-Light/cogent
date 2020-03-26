@@ -1,10 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
     use cogent::core::{HaltCondition,EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
     use std::io::Read;
-    use std::io::prelude::*;
-    use std::fs::{File,OpenOptions};
+    use std::fs::File;
 
     // TODO Figure out better name for this
     const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be > 0)
