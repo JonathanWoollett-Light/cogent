@@ -221,10 +221,13 @@ pub mod core {
             );
         }
     }
-    
+    /// Defines cost function of neural network.
     #[derive(Clone,Copy,Serialize,Deserialize)]
     pub enum Cost {
-        Quadratic,Crossentropy
+        /// Quadratic cost function.
+        Quadratic,
+        /// Crossentropy cost function.
+        Crossentropy
     }
     impl Cost {
         /// Runs cost functions
@@ -259,23 +262,26 @@ pub mod core {
             }
         }
     }
-    /// Used to define each layer's activation.
+    /// Defines activations of layers in neural network.
     #[derive(Clone,Copy,Serialize,Deserialize)]
     pub enum Activation {
-        Sigmoid,Softmax,ReLU // Name it 'ReLU' or 'Relu'?
+        /// Sigmoid activation functions.
+        Sigmoid,
+        /// Softmax activation function.
+        Softmax,
+        /// ReLU activation function.
+        ReLU // Name it 'ReLU' or 'Relu'?
     }
     impl Activation {
-        /// Computes activations given inputs (`y`).
-        fn run(&self,y:&Array2<f32>) -> Array2<f32> {
+        /// Computes activations given inputs.
+        fn run(&self,z:&Array2<f32>) -> Array2<f32> {
             return match self {
-                Self::Sigmoid => y.mapv(|x| Activation::sigmoid(x)),
-                Self::Softmax => Activation::softmax(y),
-                Self::ReLU => y.mapv(|x| Activation::relu(x)),
+                Self::Sigmoid => z.mapv(|x| Activation::sigmoid(x)),
+                Self::Softmax => Activation::softmax(z),
+                Self::ReLU => z.mapv(|x| Activation::relu(x)),
             };
         }
-        /// Derivative wrt layer input (∂a/∂z)
-        /// 
-        /// z: Input
+        // Derivative wrt layer input (∂a/∂z)
         fn derivative(&self,z:&Array2<f32>) -> Array2<f32> {
             // What should we name the derivative functions?
             return match self {
@@ -334,7 +340,6 @@ pub mod core {
             // Subtracts row max from all values.
             //  Allowing softmax to handle large values in y.
             // ------------------------------------------------
-
             // Get max value in each row (each example).
             let max_axis_vals = exp_matrix.fold_axis(Axis(1),0f32,|acc,x| (if acc > x { *acc } else { *x }));
             // Subtracts row max from every value in matrix.
@@ -344,7 +349,6 @@ pub mod core {
 
             // Applies softmax
             // ------------------------------------------------
-
             // Apply e^(x) to every value in matrix
             exp_matrix.mapv_inplace(|x|x.exp());
             // Calculates sums of rows
@@ -372,6 +376,7 @@ pub mod core {
         activation: Activation,
     }
     impl Layer {
+        /// Creates new layer
         pub fn new(size:usize,activation:Activation) -> Layer {
             Layer {size,activation}
         }
@@ -380,10 +385,15 @@ pub mod core {
     /// Neural network.
     #[derive(Serialize,Deserialize,Clone)]
     pub struct NeuralNetwork {
+        // Inputs to network
         inputs: usize,
+        // Layer biases
         biases: Vec<Array2<f32>>,
+        // Connections between layers
         connections: Vec<Array2<f32>>,
+        // Activations of layers
         layers: Vec<Activation>,
+        // Cost function
         cost: Cost,
     }
     impl NeuralNetwork {
@@ -563,7 +573,7 @@ pub mod core {
         }
 
         // TODO Name this better
-        /// Runs training.
+        // Runs training.
         fn train_details(&mut self,
             training_data: &mut [(Vec<f32>,usize)], // TODO Look into `&mut [(Vec<f32>,Vec<f32>)]` vs `&mut Vec<(Vec<f32>,Vec<f32>)>`
             k:usize,
@@ -787,9 +797,8 @@ pub mod core {
                 }
             }
         }
-        /// Runs batch through network to calculate weight and bias gradients.
-        /// 
-        /// Returns new weights and biases values.
+        // Runs batch through network to calculate weight and bias gradients.
+        // Returns new weight and bias values.
         fn update_batch(&self, batch: &(ArrayView2<f32>,ArrayView2<f32>), eta: f32, lambda:f32, n:f32) -> (Vec<Array2<f32>>,Vec<Array2<f32>>) {
             
             // TODO Look into a better way to setup 'bias_nabla' and 'weight_nabla'
@@ -866,9 +875,8 @@ pub mod core {
 
             return (return_connections,return_biases);
         }
-        /// Runs backpropgation on chunk of batch.
-        /// 
-        /// Returns weight and bias partial derivatives (errors).
+        // Runs backpropgation on chunk of batch.
+        // Returns weight and bias partial derivatives (errors).
         fn backpropagate(&self, example:&(ArrayView2<f32>,ArrayView2<f32>)) -> (Vec<Array2<f32>>,Vec<Array2<f32>>) {
 
             // Feeds forward
@@ -954,8 +962,7 @@ pub mod core {
                 return arr2;
             }
         }
-        // TODO Rename this better.
-        // TODO Make this more efficient.
+        // Splits data into chunks of examples (rows).
         fn batch_chunks(data:&(Array2<f32>,Array2<f32>),batch_size:usize) -> Vec<(ArrayView2<f32>,ArrayView2<f32>)>{
             let input_chunks = data.0.axis_chunks_iter(Axis(0),batch_size);
             let output_chunks = data.1.axis_chunks_iter(Axis(0),batch_size);
@@ -1013,9 +1020,9 @@ pub mod core {
         // TODO Lot of stuff could be done to improve this function
         /// Requires ordered test_data.
         /// 
-        /// Returns tuple of: (List of correctly classified percentage for each class. Confusion matrix of percentages).
+        /// Returns tuple of: (List of correctly classified percentage for each class, Confusion matrix of percentages).
         pub fn evaluate_outputs(&self, test_data:&[(Vec<f32>,usize)],k:usize) -> (Array1<f32>,Array2<f32>) {
-            let chunks:Vec<Array2<f32>> = symbol_chunks(test_data,k);
+            let chunks:Vec<Array2<f32>> = class_chunks(test_data,k);
             let mut pool = Pool::new(chunks.len() as u32);
 
             let mut classifications:Vec<Array1<f32>> = vec!(Array1::zeros(k);k);
@@ -1031,13 +1038,13 @@ pub mod core {
                 }
             });
             let matrix:Array2<f32> = cast_array1s_to_array2(classifications,k);
-            // TODO Getting `diagonal` could probably be improved, look into that.
+            // TODO Is there a better way to set this?
             let diagonal:Array1<f32> = matrix.clone().into_diag();
             return (diagonal,matrix);
 
             // TODO Should this be adapted to not require sorted data? Would require twice as much memory and would be a little slower.
-            // Returns Vec<(Array2<f32>,Array2<f32>)> with each tuple representing all examples of a class.
-            fn symbol_chunks(test_data:&[(Vec<f32>,usize)],k:usize) -> Vec<Array2<f32>> {
+            // Splits `test_data` into chunks based on class.
+            fn class_chunks(test_data:&[(Vec<f32>,usize)],k:usize) -> Vec<Array2<f32>> {
                 let mut chunks:Vec<Array2<f32>> = Vec::with_capacity(k);
                 let mut slice = (0usize,0usize); // (lower bound,upper bound)
                 loop {
@@ -1060,18 +1067,15 @@ pub mod core {
                     panic!("`evaluate outputs` requires data sorted by output.");
                 }
                 return chunks;
-
-                
             }
             
             // Sets all non-max values in row to 0 and max to 1 for each row in Array2.
             fn set_nonmax_zero(matrix:&Array2<f32>) -> Array2<u32> {
                 let mut max_indx = 0usize;
-                let shape = matrix.shape();
-                let mut zero_matrix = Array2::zeros((shape[0],shape[1]));
+                let mut zero_matrix:Array2<u32> = Array2::zeros((matrix.nrows(),matrix.ncols()));
 
-                for i in 0..shape[0] {
-                    for t in 1..shape[1] {
+                for i in 0..matrix.nrows() {
+                    for t in 1..matrix.ncols() {
                         if matrix[[i,t]] > matrix[[i,max_indx]] {
                             max_indx=t;
                         }
@@ -1093,7 +1097,7 @@ pub mod core {
             let input_array:Array2<f32> = Array2::from_shape_vec((example_len,input_len),input_vec).unwrap();
             return input_array;
         }
-        /// Converts `[(Vec<f32>,usize)]` to `(Array2<f32>,Array2<f32>)`.
+        // Converts `[(Vec<f32>,usize)]` to `(Array2<f32>,Array2<f32>)`.
         fn matrixify(examples:&[(Vec<f32>,usize)],k:usize) -> (Array2<f32>,Array2<f32>) {
             let input_len = examples[0].0.len();
             let example_len = examples.len();
@@ -1115,7 +1119,7 @@ pub mod core {
             return (input,output);
         }
 
-        /// Returns Instant::elapsed() as hh:mm:ss string.
+        // Returns Instant::elapsed() as hh:mm:ss string.
         fn time(instant:Instant) -> String {
             let mut seconds = instant.elapsed().as_secs();
             let hours = (seconds as f32 / 3600f32).floor();
@@ -1125,6 +1129,7 @@ pub mod core {
             let time = format!("{:#02}:{:#02}:{:#02}",hours,minutes,seconds);
             return time;
         }
+
         // TODO General improvement, specifically allow printing to variable accuracy.
         /// Returns pretty string of wieghts (`self.connections`) and biases (`self.biases`).
         pub fn print(&self) -> String {
@@ -1185,7 +1190,7 @@ pub mod core {
             return prt_string;
         }
         /// Exports neural network to `path`.
-        pub fn export(&self,path:&str) -> () {
+        pub fn export(&self,path:&str) {
             let file = File::create(format!("{}.json",path));
             let serialized:String = serde_json::to_string(self).unwrap();
             file.unwrap().write_all(serialized.as_bytes()).unwrap();
@@ -1217,8 +1222,7 @@ pub mod utilities {
     extern crate ndarray;
     use ndarray::{Array2,Array3};
     use std::fmt::Display;
-    // TODO Use generics in these prints
-    // TODO Figure out how to run rustdoc tests
+    // TODO: Generalise these pretty prints for an array of any number of dimensions.
     /// Returns pretty string of `Array2<T>`.
     /// ```
     /// use cogent::utilities::array2_prt;
