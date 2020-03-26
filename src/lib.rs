@@ -1017,7 +1017,6 @@ pub mod core {
                 return max_indexs;
             }
         }
-        // TODO Lot of stuff could be done to improve this function
         /// Requires ordered test_data.
         /// 
         /// Returns tuple of: (List of correctly classified percentage for each class, Confusion matrix of percentages).
@@ -1031,9 +1030,9 @@ pub mod core {
                     scope.execute(move || {
                         let results = self.run(&chunk);
                         let classes:Array2<u32> = set_nonmax_zero(&results);
-                        let class_sums:Array1<u32> = classes.sum_axis(Axis(0));
+                        let class_sums:Array1<u32> = classes.sum_axis(Axis(0)); // Number of examples classified as each class
                         let number_of_examples = chunk.len_of(Axis(0));
-                        *classification = class_sums.mapv(|val| (val as f32 / number_of_examples as f32));
+                        *classification = class_sums.mapv(|val| (val as f32 / number_of_examples as f32)); // Percentage of examples classified as each class
                     });
                 }
             });
@@ -1042,8 +1041,8 @@ pub mod core {
             let diagonal:Array1<f32> = matrix.clone().into_diag();
             return (diagonal,matrix);
 
-            // TODO Should this be adapted to not require sorted data? Would require twice as much memory and would be a little slower.
             // Splits `test_data` into chunks based on class.
+            // This is the part which requires `test_data` to be sorted.
             fn class_chunks(test_data:&[(Vec<f32>,usize)],k:usize) -> Vec<Array2<f32>> {
                 let mut chunks:Vec<Array2<f32>> = Vec::with_capacity(k);
                 let mut slice = (0usize,0usize); // (lower bound,upper bound)
@@ -1064,7 +1063,7 @@ pub mod core {
 
                 // If `test_data` not sorted.
                 if slice.1 != test_data.len() {
-                    panic!("`evaluate outputs` requires data sorted by output.");
+                    panic!("`evaluate outputs` requires given data to be sorted by output.");
                 }
                 return chunks;
             }
