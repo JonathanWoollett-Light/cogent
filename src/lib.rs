@@ -23,6 +23,7 @@ pub mod core {
     use std::fs::File;
     use std::fs;
     use std::path::Path;
+    use std::cmp::max;
 
     // Setting number of threads to use
     const THREAD_COUNT:usize = 12usize;
@@ -262,7 +263,7 @@ pub mod core {
     /// Used to define each layer's activation.
     #[derive(Clone,Copy,Serialize,Deserialize)]
     pub enum Activation {
-        Sigmoid,Softmax
+        Sigmoid,Softmax,ReLU // Name it 'ReLU' or 'Relu'?
     }
     impl Activation {
         /// Computes activations given inputs (`y`).
@@ -270,6 +271,7 @@ pub mod core {
             return match self {
                 Self::Sigmoid => y.mapv(|x| Activation::sigmoid(x)),
                 Self::Softmax => Activation::softmax(y),
+                Self::ReLU => y.mapv(|x| Activation::relu(x)),
             };
         }
         /// Derivative wrt layer input (∂a/∂z)
@@ -278,8 +280,9 @@ pub mod core {
         fn derivative(&self,z:&Array2<f32>) -> Array2<f32> {
             // What should we name the derivative functions?
             return match self {
-                Self::Sigmoid => z.mapv(|x| -> f32 { sigmoid_derivative(x) }),
+                Self::Sigmoid => z.mapv(|x| sigmoid_derivative(x)),
                 Self::Softmax => softmax_derivative(z),
+                Self::ReLU => z.mapv(|x| relu_derivative(x)),
             };
 
             // Derivative of sigmoid
@@ -291,8 +294,6 @@ pub mod core {
             // Derivative of softmax
             // e^z * (sum of other inputs e^input) / (sum of all inputs e^input)^2 = e^z * (exp_sum-e^z) / (exp_sum)^2
             fn softmax_derivative(z:&Array2<f32>) -> Array2<f32> {
-                
-
                 let mut derivatives:Array2<f32> = z.mapv(|x|x.exp());
 
                 // Gets sum of each row
@@ -311,6 +312,15 @@ pub mod core {
 
                 //panic!("testing stuff");
                 return derivatives;
+            }
+            //Deritvative of ReLU
+            // ReLU(z)/1 = if >0 1 else 0
+            fn relu_derivative(z:f32) -> f32 {
+                if z > 0f32 { 
+                    return 1f32; 
+                } else { 
+                    return 0f32; 
+                }
             }
         }
         // Applies sigmoid function
@@ -345,6 +355,15 @@ pub mod core {
                 row.mapv_inplace(|x| x / sum);
             }
             return exp_matrix;
+        }
+        // Applies ReLU activation
+        fn relu(x:f32) -> f32 {
+            if x > 0f32 {
+                return x;
+            }
+            else {
+                return 0f32;
+            }
         }
     }
     

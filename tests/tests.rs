@@ -24,7 +24,7 @@ mod tests {
         net.activation(2,Activation::Softmax); // Changes activation of output layer.
     }
     // Tests network to learn an XOR gate.
-    // Softmax output.
+    // Sigmoid
     #[test]
     fn train_xor_0() {
         let runs = 10 * TEST_RERUN_MULTIPLIER;
@@ -35,7 +35,7 @@ mod tests {
             // Sets network
             let mut neural_network = NeuralNetwork::new(2,&[
                 Layer::new(3,Activation::Sigmoid),
-                Layer::new(2,Activation::Softmax)
+                Layer::new(2,Activation::Sigmoid)
             ],None);
             // Sets training and testing data
             let data = vec![
@@ -51,7 +51,6 @@ mod tests {
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
                 .lambda(0f32)
-                //.log_interval(MeasuredCondition::Iteration(1)).halt_condition(HaltCondition::Iteration(3)).tracking()
             .go();
 
 
@@ -62,7 +61,7 @@ mod tests {
         }
     }
     // Tests network to learn an XOR gate.
-    // Sigmoid output.
+    // Softmax
     #[test]
     fn train_xor_1() {
         let runs = 10 * TEST_RERUN_MULTIPLIER;
@@ -88,7 +87,47 @@ mod tests {
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
-                .lambda(0f32)//.log_interval(MeasuredCondition::Iteration(100))
+                .lambda(0f32)
+            .go();
+
+            // Evaluation
+            // ------------------------------------------------
+            let evaluation = neural_network.evaluate(&data,2);
+            assert!(evaluation.1 as usize == data.len());
+        }
+    }
+
+    // ReLU doesn't seem to work with such small networks
+    // My idea is that it effectively leads to 0 activations which lead to 0 gradients which stop it learning
+
+    // Tests network to learn an XOR gate.
+    // Mixed (Sigmoid->Softmax)
+    #[test]
+    fn train_xor_3() {
+        let runs = 10 * TEST_RERUN_MULTIPLIER;
+        for _ in 0..runs {
+            // Setup
+            // ------------------------------------------------
+            // Sets network
+            let mut neural_network = NeuralNetwork::new(2,&[
+                Layer::new(3,Activation::Sigmoid),
+                Layer::new(2,Activation::Softmax)
+            ],None);
+            // Sets training and testing data
+            let data = vec![
+                (vec![0f32,0f32],0usize),
+                (vec![1f32,0f32],1usize),
+                (vec![0f32,1f32],1usize),
+                (vec![1f32,1f32],0usize)
+            ];
+
+            // Execution
+            // ------------------------------------------------
+            neural_network.train(&data,2)
+                .learning_rate(2f32)
+                .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
+                .early_stopping_condition(MeasuredCondition::Iteration(3000))
+                .lambda(0f32)
             .go();
 
             // Evaluation
@@ -98,7 +137,7 @@ mod tests {
         }
     }
     // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
-    // Sigmoid output.
+    // Sigmoid->Softmax
     #[test]
     fn train_digits_0() {
         let runs = TEST_RERUN_MULTIPLIER;
@@ -108,7 +147,7 @@ mod tests {
             // Sets network
             let mut neural_network = NeuralNetwork::new(784,&[
                 Layer::new(100,Activation::Sigmoid),
-                Layer::new(10,Activation::Sigmoid)
+                Layer::new(10,Activation::Softmax)
             ],None);
             // Sets training and testing data
             let training_data = get_mnist_dataset(false);
@@ -119,10 +158,7 @@ mod tests {
             neural_network.train(&training_data,10)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(0.95f32))
-                //.batch_size(1000)
-                //.log_interval(MeasuredCondition::Iteration(1))
-                //.tracking()
-                .go();
+            .go();
 
             // Evaluation
             // ------------------------------------------------
@@ -132,7 +168,7 @@ mod tests {
         }
     }
     // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
-    // Softmax output.
+    // ReLU->Softmax
     #[test]
     fn train_digits_1() {
         let runs = TEST_RERUN_MULTIPLIER;
@@ -140,6 +176,36 @@ mod tests {
             // Setup
             // ------------------------------------------------
             let mut neural_network = NeuralNetwork::new(784,&[
+                Layer::new(100,Activation::ReLU),
+                Layer::new(10,Activation::Softmax) // You can't have a ReLU output layer
+            ],None);
+            // Sets training and testing data
+            let training_data = get_mnist_dataset(false);
+            let testing_data = get_mnist_dataset(true);
+
+            // Execution
+            // ------------------------------------------------
+            neural_network.train(&training_data,10)
+                .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
+                .halt_condition(HaltCondition::Accuracy(0.95f32))
+            .go();
+
+            // Evaluation
+            // ------------------------------------------------
+            let evaluation = neural_network.evaluate(&testing_data,10);
+            assert!(evaluation.1 >= required_accuracy(&testing_data));
+        }
+    }
+    // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
+    // Mixed (ReLU -> Sigmoid -> Softmax)
+    #[test]
+    fn train_digits_2() {
+        let runs = TEST_RERUN_MULTIPLIER;
+        for _ in 0..runs {
+            // Setup
+            // ------------------------------------------------
+            let mut neural_network = NeuralNetwork::new(784,&[
+                Layer::new(300,Activation::ReLU),
                 Layer::new(100,Activation::Sigmoid),
                 Layer::new(10,Activation::Softmax)
             ],None);
