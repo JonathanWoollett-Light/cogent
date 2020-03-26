@@ -23,7 +23,6 @@ pub mod core {
     use std::fs::File;
     use std::fs;
     use std::path::Path;
-    use std::cmp::max;
 
     // Setting number of threads to use
     const THREAD_COUNT:usize = 12usize;
