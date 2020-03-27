@@ -113,6 +113,7 @@ mod tests {
                 Layer::new(3,Activation::Sigmoid),
                 Layer::new(2,Activation::Softmax)
             ],None);
+
             // Sets training and testing data
             let data = vec![
                 (vec![0f32,0f32],0usize),
@@ -209,6 +210,7 @@ mod tests {
                 Layer::new(100,Activation::Sigmoid),
                 Layer::new(10,Activation::Softmax)
             ],None);
+
             // Sets training and testing data
             let training_data = get_mnist_dataset(false);
             let testing_data = get_mnist_dataset(true);

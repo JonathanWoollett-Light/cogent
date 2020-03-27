@@ -48,6 +48,8 @@ pub mod core {
     // Default interval to go without notable importment before learning rate decay.
     // interval = default learning rate interval * (size of examples / number of examples) iterations.
     const DEFAULT_LEARNING_RATE_INTERVAL:f32 = 200f32;
+    // ...
+    const DEFAULT_MIN_LEARNING_RATE:f32 = 0.01f32;
 
     /// For setting `evaluation_data`.
     pub enum EvaluationData<'b> {
@@ -105,6 +107,8 @@ pub mod core {
         name: Option<&'a str>,
         // Whether to print percantage progress in each iteration of backpropagation
         tracking: bool,
+        // Minimum learning rate before adding new layer and resetting learning rate
+        min_learning_rate: f32,
         neural_network: &'a mut NeuralNetwork
     }
     impl<'a> Trainer<'a> {
@@ -200,6 +204,13 @@ pub mod core {
             self.tracking = true;
             return self;
         }
+        /// Sets `min_learning_rate`
+        /// 
+        /// ...
+        pub fn min_learning_rate(&mut self,min_learning_rate:f32) -> &mut Trainer<'a> {
+            self.min_learning_rate = min_learning_rate;
+            return self;
+        }
         /// Begins training.
         pub fn go(&mut self) -> () {
             self.neural_network.train_details(
@@ -217,7 +228,8 @@ pub mod core {
                 self.learning_rate_interval,
                 self.checkpoint_interval,
                 self.name,
-                self.tracking
+                self.tracking,
+                self.min_learning_rate
             );
         }
     }
@@ -568,6 +580,7 @@ pub mod core {
                 checkpoint_interval: None,
                 name: None,
                 tracking: false,
+                min_learning_rate: DEFAULT_MIN_LEARNING_RATE,
                 neural_network:self
             };
         }
@@ -581,7 +594,7 @@ pub mod core {
             halt_condition: Option<HaltCondition>,
             log_interval: Option<MeasuredCondition>,
             batch_size: usize,
-            mut learning_rate: f32,
+            intial_learning_rate: f32,
             lambda: f32,
             early_stopping_n: MeasuredCondition,
             evaluation_min_change: Proportion,
@@ -589,7 +602,8 @@ pub mod core {
             learning_rate_interval: MeasuredCondition,
             checkpoint_interval: Option<MeasuredCondition>,
             name: Option<&str>,
-            tracking:bool
+            tracking:bool,
+            min_learning_rate:f32
         ) -> (){
             if let Some(_) = checkpoint_interval {
                 if !Path::new("checkpoints").exists() {
@@ -604,7 +618,9 @@ pub mod core {
                     }
                     fs::create_dir(&path).unwrap(); // Create folder
                 }
-            }   
+            }
+
+            let mut learning_rate:f32 = intial_learning_rate;
 
             let mut stdout = stdout(); // Handle for standard output for this process.
             let mut rng = rand::thread_rng(); // Random number generator.
@@ -747,6 +763,13 @@ pub mod core {
                 match learning_rate_interval {
                     MeasuredCondition::Iteration(interval_iteration) =>  if iterations_elapsed - best_accuracy_iteration == interval_iteration { learning_rate *= learning_rate_decay },
                     MeasuredCondition::Duration(interval_duration) => if best_accuracy_instant.elapsed() >= interval_duration { learning_rate *= learning_rate_decay }
+                }
+                if learning_rate < min_learning_rate {
+                    learning_rate = intial_learning_rate;
+                    self.add_layer(Layer::new(
+                        self.biases[self.biases.len()-2].ncols(),
+                        self.layers[self.layers.len()-2]
+                    ));
                 }
             }
 
@@ -969,6 +992,35 @@ pub mod core {
             return input_chunks.zip(output_chunks).collect();
         }
         
+        pub fn add_layer(&mut self, layer:Layer) {
+            let prev_neurons:usize = if let Some(indx) = self.biases.len().checked_sub(2) {
+                self.biases[indx].ncols()
+            } else { 
+                self.inputs
+            };
+
+            let range = Uniform::new(-1f32, 1f32);
+            
+            // Insert new layer
+            self.layers.insert(self.layers.len()-1,layer.activation);
+            self.connections.insert(self.connections.len()-1,
+                Array2::random((layer.size,prev_neurons),range)
+                / (prev_neurons as f32).sqrt()
+            );
+            self.biases.insert(self.biases.len()-1,Array2::random((1,layer.size),range));
+
+            // Update output layer
+            let connection_indx = self.connections.len()-1;
+            let bias_indx = self.biases.len()-1;
+            let outputs = self.biases[bias_indx].ncols();
+
+            self.connections[connection_indx] = 
+                Array2::random((outputs,layer.size),range)
+                / (layer.size as f32).sqrt();
+
+            self.biases[bias_indx] = Array2::random((1,outputs),range);
+        }
+
         /// Returns tuple: (Average cost across batch, Number of examples correctly classified).
         pub fn evaluate(&self, test_data:&[(Vec<f32>,usize)],k:usize) -> (f32,u32) {
             let chunk_len:usize = if test_data.len() < THREAD_COUNT { 
@@ -1085,6 +1137,7 @@ pub mod core {
                 return zero_matrix;
             }
         }
+
         // Given set of examples return Array2<f32> of inputs.
         fn matrixify_inputs(examples:&[(Vec<f32>,usize)]) -> Array2<f32> {
             let input_len = examples[0].0.len();
