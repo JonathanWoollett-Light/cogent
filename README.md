@@ -60,8 +60,8 @@ Task types:
  
 Tasks:
 
-1. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
-2. :ballot_box_with_check: Convolutional layers.
-3. :ballot_box_with_check: GPU Compute.
+1. :ballot_box_with_check: Convolutional layers.
+2. :ballot_box_with_check: GPU Compute.
+3. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
 4. :repeat: Improve defaults.
 5. :repeat: Learn more.
