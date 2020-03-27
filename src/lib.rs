@@ -992,6 +992,7 @@ pub mod core {
             return input_chunks.zip(output_chunks).collect();
         }
         
+        /// Inserts new layer before output layer in network.
         pub fn add_layer(&mut self, layer:Layer) {
             let prev_neurons:usize = if let Some(indx) = self.biases.len().checked_sub(2) {
                 self.biases[indx].ncols()
