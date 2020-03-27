@@ -1,6 +1,6 @@
 [package]
 name = "cogent"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Jonathan Woollett-Light <jonathanwoollettlight@gmail.com>"]
 edition = "2018"
 description = "Basic neural network library for classification"
