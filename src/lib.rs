@@ -49,7 +49,7 @@ pub mod core {
     // interval = default learning rate interval * (size of examples / number of examples) iterations.
     const DEFAULT_LEARNING_RATE_INTERVAL:f32 = 200f32;
     // ...
-    const DEFAULT_MIN_LEARNING_RATE:f32 = 0.01f32;
+    const DEFAULT_MIN_LEARNING_RATE:f32 = 0.001f32;
 
     /// For setting `evaluation_data`.
     pub enum EvaluationData<'b> {
