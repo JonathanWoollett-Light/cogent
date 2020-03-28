@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use cogent::core::{HaltCondition,EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
+    use cogent::utilities::{counting_sort,array2_prt};
     use std::io::Read;
     use std::fs::File;
 
@@ -22,6 +23,72 @@ mod tests {
             Layer::new(2,Activation::Sigmoid)
         ],None);
         net.activation(2,Activation::Softmax); // Changes activation of output layer.
+    }
+    #[test]
+    fn counting_sort0() {
+        let data = vec![
+            (vec![0f32,0f32],0usize),
+            (vec![1f32,0f32],1usize),
+            (vec![0f32,1f32],1usize),
+            (vec![1f32,1f32],0usize)
+        ];
+        let sorted_data = counting_sort(&data,2);
+        
+        let check_data = vec![
+            (vec![1f32,1f32],0usize),
+            (vec![0f32,0f32],0usize),
+            (vec![0f32,1f32],1usize),
+            (vec![1f32,0f32],1usize)
+        ];
+
+        println!("{:.?}",sorted_data);
+
+        assert_eq!(sorted_data,check_data);
+    }
+    #[test]
+    fn counting_sort1() {
+        let data = vec![
+            (vec![0f32,0f32],0usize),
+            (vec![1f32,1f32],0usize),
+            (vec![1f32,0f32],1usize),
+            (vec![0f32,1f32],1usize)
+        ];
+        let sorted_data = counting_sort(&data,2);
+
+        let check_data = vec![
+            (vec![1f32,1f32],0usize),
+            (vec![0f32,0f32],0usize),
+            (vec![0f32,1f32],1usize),
+            (vec![1f32,0f32],1usize)
+        ];
+
+        println!("{:.?}",sorted_data);
+
+        assert_eq!(sorted_data,check_data);
+    }
+    #[test]
+    fn evaluate_outputs0() {
+        let data = vec![
+            (vec![0f32,0f32],0usize),
+            (vec![1f32,0f32],1usize),
+            (vec![0f32,1f32],1usize),
+            (vec![1f32,1f32],0usize)
+        ];
+        let sorted_data = counting_sort(&data,2);
+
+        println!("{:.?}",sorted_data);
+
+        let net = NeuralNetwork::new(2,&[
+            Layer::new(3,Activation::Sigmoid),
+            Layer::new(2,Activation::Softmax)
+        ],None);
+
+        let eval = net.evaluate_outputs(&sorted_data,2);
+
+        println!("{}",eval.0);
+        println!("{}",array2_prt(&eval.1));
+
+        // Just checking it runs.
     }
     // Tests network to learn an XOR gate.
     // Sigmoid

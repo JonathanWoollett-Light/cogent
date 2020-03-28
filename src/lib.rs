@@ -1101,20 +1101,19 @@ pub mod core {
                 let mut slice = (0usize,0usize); // (lower bound,upper bound)
                 loop {
                     slice.1+=1;
-                    while test_data[slice.0].1 == test_data[slice.1+1].1 {
+                    while test_data[slice.0].1 == test_data[slice.1].1 {
                         slice.1+=1;
-                        if slice.1+1 == test_data.len() {
-                            slice.1 += 1;
+                        if slice.1 == test_data.len() {
+                            //slice.1 += 1;
                             break;
                         }
                     } 
                     let chunk_holder = NeuralNetwork::matrixify_inputs(&test_data[slice.0..slice.1]);
                     chunks.push(chunk_holder);
-                    
-                    slice.0 = slice.1;
                     if chunks.len() == k { break };
+                    slice.0 = slice.1;
                 }
-
+                println!("{}|{}",slice.1,test_data.len());
                 // If `test_data` not sorted.
                 if slice.1 != test_data.len() {
                     panic!("`evaluate outputs` requires given data to be sorted by output.");
