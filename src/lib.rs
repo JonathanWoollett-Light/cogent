@@ -1070,8 +1070,8 @@ pub mod core {
             }
         }
         // TODO Name this better
-        /// Returns tuple of: (Class labels, List of correctly classified percentage for each class, Confusion matrix of percentages).
-        pub fn evaluate_outputs(&self, test_data:&[(Vec<f32>,usize)]) -> (Vec<usize>,Array1<f32>,Array2<f32>) {
+        /// Returns tuple of: (List of correctly classified percentage for each class, Confusion matrix of percentages).
+        pub fn evaluate_outputs(&self, test_data:&[(Vec<f32>,usize)]) -> (Array1<f32>,Array2<f32>) {
             let chunks:Vec<(usize,Array2<f32>)> = class_chunks(test_data);
 
             let mut pool = Pool::new(chunks.len() as u32);
@@ -1100,7 +1100,7 @@ pub mod core {
             // TODO Is there a better way to set this?
             let diagonal:Array1<f32> = matrix.clone().into_diag();
 
-            return (class_list,diagonal,matrix);
+            return (diagonal,matrix);
 
             // Creates class chunks from `test_data`
             fn class_chunks(test_data:&[(Vec<f32>,usize)]) -> Vec<(usize,Array2<f32>)> {

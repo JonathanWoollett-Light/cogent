@@ -43,9 +43,8 @@ mod tests {
 
         let eval = net.evaluate_outputs(&data);
 
-        println!("{:.?}",eval.0);
-        println!("{}",array1_prt(&eval.1));
-        println!("{}",array2_prt(&eval.2));
+        println!("{}",array1_prt(&eval.0));
+        println!("{}",array2_prt(&eval.1));
 
         // Just checking it runs.
     }
@@ -72,9 +71,8 @@ mod tests {
 
         let eval = net.evaluate_outputs(&testing_data);
 
-        println!("{:.?}",eval.0);
-        println!("{}",array1_prt(&eval.1));
-        println!("{}",array2_prt(&eval.2));
+        println!("{}",array1_prt(&eval.0));
+        println!("{}",array2_prt(&eval.1));
 
         // Just checking it runs.
     }
