@@ -25,7 +25,7 @@ mod tests {
         net.activation(2,Activation::Softmax); // Changes activation of output layer.
     }
     #[test]
-    fn counting_sort0() {
+    fn counting_sort_0() {
         let data = vec![
             (vec![0f32,0f32],0usize),
             (vec![1f32,0f32],1usize),
@@ -46,7 +46,7 @@ mod tests {
         assert_eq!(sorted_data,check_data);
     }
     #[test]
-    fn counting_sort1() {
+    fn counting_sort_1() {
         let data = vec![
             (vec![0f32,0f32],0usize),
             (vec![1f32,1f32],0usize),
@@ -67,7 +67,7 @@ mod tests {
         assert_eq!(sorted_data,check_data);
     }
     #[test]
-    fn evaluate_outputs0() {
+    fn evaluate_outputs() {
         let data = vec![
             (vec![0f32,0f32],0usize),
             (vec![1f32,0f32],1usize),
