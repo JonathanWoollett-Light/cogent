@@ -1078,7 +1078,7 @@ pub mod core {
 
             let output_classes = self.biases[self.biases.len()-1].len();
 
-            let mut classifications:Vec<Array1<f32>> = vec!(Array1::zeros(output_classes);output_classes);
+            let mut classifications:Vec<Array1<f32>> = vec!(Array1::default(output_classes);output_classes);
             let mut class_list:Vec<usize> = vec!(usize::default();chunks.len());
             pool.scoped(|scope| {
                 for (chunk,classification,class_list) in izip!(chunks.iter(),&mut classifications,&mut class_list) {
@@ -1093,7 +1093,7 @@ pub mod core {
                 }
             });
 
-            let sorted_classifications = sort_classifications(&class_list,&classifications);
+            let sorted_classifications = sort_classifications(output_classes,&class_list,&classifications);
 
             let matrix:Array2<f32> = cast_array1s_to_array2(sorted_classifications);
 
@@ -1152,10 +1152,10 @@ pub mod core {
                 }
                 return zero_matrix;
             }
-            fn sort_classifications(class_list:&Vec<usize>,classifications:&Vec<Array1<f32>>) -> Vec<Array1<f32>> {
+            fn sort_classifications(output_classes:usize,class_list:&Vec<usize>,classifications:&Vec<Array1<f32>>) -> Vec<Array1<f32>> {
                 // Is there a better way to initialise `Array1::default(0)`?
-                let mut sorted:Vec<Array1<f32>> = vec!(Array1::default(0);classifications.len());
-                for i in 0..classifications.len() {
+                let mut sorted:Vec<Array1<f32>> = vec!(Array1::default(output_classes);classifications.len());
+                for i in 0..class_list.len() {
                     sorted[class_list[i]] = classifications[i].clone();
                 }
                 return sorted;
