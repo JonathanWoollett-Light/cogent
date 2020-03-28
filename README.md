@@ -34,7 +34,7 @@ let testing_data:Vec<(Vec<f32>,usize)> = get_mnist_dataset(true);
 // Trains until no notable accuracy improvements are being made over a number of iterations.
 // By default this would end training if 0.5% accuracy improvement was not seen over 6 iterations (often referred to as 'epochs').
 
-neural_network.train(&training_data,10) // `10`=number of classes
+neural_network.train(&training_data)
     .evaluation_data(EvaluationData::Actual(&testing_data))
     .go();
 
@@ -44,7 +44,7 @@ neural_network.train(&training_data,10) // `10`=number of classes
 
 // Evaluation
 // ----------
-let evaluation:(f32,u32) = neural_network.evaluate(&testing_data,10); // (cost,example correctly classified)
+let evaluation:(f32,u32) = neural_network.evaluate(&testing_data); // (cost,example correctly classified)
 ```
 
 While a huge amount of my work has gone into making this and learning the basics of neural networks along the way, I am immensely (and I cannot stress this enough) amateur in inumerable ways.
