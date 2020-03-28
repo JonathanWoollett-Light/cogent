@@ -1110,8 +1110,9 @@ pub mod core {
                     } 
                     let chunk_holder = NeuralNetwork::matrixify_inputs(&test_data[slice.0..slice.1]);
                     chunks.push(chunk_holder);
-                    if chunks.len() == k { break };
+                    
                     slice.0 = slice.1;
+                    if chunks.len() == k { break };
                 }
 
                 // If `test_data` not sorted.
