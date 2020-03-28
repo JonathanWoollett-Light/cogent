@@ -17,6 +17,7 @@ pub mod core {
     use crossterm::{QueueableCommand, cursor};
 
     use serde::{Serialize,Deserialize};
+    use std::fmt::Display;
     
     use std::mem::swap;
 
@@ -1068,6 +1069,7 @@ pub mod core {
                 return max_indexs;
             }
         }
+        // TODO Name this better
         /// Returns tuple of: (Class labels, List of correctly classified percentage for each class, Confusion matrix of percentages).
         pub fn evaluate_outputs(&self, test_data:&[(Vec<f32>,usize)]) -> (Vec<usize>,Array1<f32>,Array2<f32>) {
             let chunks:Vec<(usize,Array2<f32>)> = class_chunks(test_data);
@@ -1090,7 +1092,11 @@ pub mod core {
                     });
                 }
             });
-            let matrix:Array2<f32> = cast_array1s_to_array2(classifications);
+
+            let sorted_classifications = sort_classifications(&class_list,&classifications);
+
+            let matrix:Array2<f32> = cast_array1s_to_array2(sorted_classifications);
+
             // TODO Is there a better way to set this?
             let diagonal:Array1<f32> = matrix.clone().into_diag();
 
@@ -1146,7 +1152,14 @@ pub mod core {
                 }
                 return zero_matrix;
             }
-            
+            fn sort_classifications(class_list:&Vec<usize>,classifications:&Vec<Array1<f32>>) -> Vec<Array1<f32>> {
+                // Is there a better way to initialise `Array1::default(0)`?
+                let mut sorted:Vec<Array1<f32>> = vec!(Array1::default(0);classifications.len());
+                for i in 0..classifications.len() {
+                    sorted[class_list[i]] = classifications[i].clone();
+                }
+                return sorted;
+            }
         }
 
         

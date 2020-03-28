@@ -25,6 +25,7 @@ mod tests {
         ],None);
         net.activation(2,Activation::Softmax); // Changes activation of output layer.
     }
+    // TODO Properly test `evaluate_outputs`
     // Evaluates outputs for XOR
     #[test]
     fn evaluate_outputs_0() {
@@ -51,11 +52,23 @@ mod tests {
     // Evaluates outputs for MNIST
     #[test]
     fn evaluate_outputs_1() {
-        let net = NeuralNetwork::new(784,&[
+        let mut net = NeuralNetwork::new(784,&[
             Layer::new(100,Activation::ReLU),
             Layer::new(10,Activation::Softmax)
         ],None);
+        let training_data = get_mnist_dataset(false);
         let testing_data = get_mnist_dataset(true);
+
+        net.train(&training_data)
+            .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
+            .halt_condition(HaltCondition::Accuracy(0.90f32))
+            .log_interval(MeasuredCondition::Iteration(1)).tracking()
+        .go();
+
+        // Evaluation
+        // ------------------------------------------------
+        let evaluation = net.evaluate(&testing_data);
+        println!("Cost {}, Accuracy: {}/{} ({}%)",evaluation.0,evaluation.1,testing_data.len(),(100f32 * evaluation.1 as f32 / testing_data.len() as f32) as u8);
 
         let eval = net.evaluate_outputs(&testing_data);
 
