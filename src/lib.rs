@@ -1104,7 +1104,6 @@ pub mod core {
                     while test_data[slice.0].1 == test_data[slice.1].1 {
                         slice.1+=1;
                         if slice.1 == test_data.len() {
-                            //slice.1 += 1;
                             break;
                         }
                     } 
@@ -1113,7 +1112,7 @@ pub mod core {
                     if chunks.len() == k { break };
                     slice.0 = slice.1;
                 }
-                println!("{}|{}",slice.1,test_data.len());
+                
                 // If `test_data` not sorted.
                 if slice.1 != test_data.len() {
                     panic!("`evaluate outputs` requires given data to be sorted by output.");
