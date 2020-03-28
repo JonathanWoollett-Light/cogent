@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use cogent::core::{HaltCondition,EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
-    use cogent::utilities::array2_prt;
+    use cogent::utilities::{array1_prt,array2_prt};
     use std::io::Read;
     use std::fs::File;
 
@@ -13,6 +13,7 @@ mod tests {
     fn required_accuracy(test_data:&[(Vec<f32>,usize)]) -> u32 {
         ((test_data.len() as f32) * TESTING_MIN_ACCURACY).ceil() as u32
     }
+
     // Tests changing activation of layer using out of range index.
     #[test]
     #[should_panic="Layer 2 does not exist. 0 <= given index < 2"]
@@ -42,9 +43,9 @@ mod tests {
         let eval = net.evaluate_outputs(&data);
 
         println!("{:.?}",eval.0);
-        println!("{}",eval.1);
+        println!("{}",array1_prt(&eval.1));
         println!("{}",array2_prt(&eval.2));
-        
+
         // Just checking it runs.
     }
     // Evaluates outputs for MNIST
@@ -59,7 +60,7 @@ mod tests {
         let eval = net.evaluate_outputs(&testing_data);
 
         println!("{:.?}",eval.0);
-        println!("{}",eval.1);
+        println!("{}",array1_prt(&eval.1));
         println!("{}",array2_prt(&eval.2));
 
         // Just checking it runs.

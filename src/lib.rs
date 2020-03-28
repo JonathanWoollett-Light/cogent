@@ -1272,9 +1272,39 @@ pub mod core {
 /// Some uneccessary utility functions not fundementally linked to `core::NeuralNetwork`
 pub mod utilities {
     extern crate ndarray;
-    use ndarray::{Array2,Array3};
+    use ndarray::{Array1,Array2,Array3};
     use std::fmt::Display;
     // TODO: Generalise these pretty prints for an array of any number of dimensions.
+    /// Returns pretty string of `Array1<T>`.
+    /// ```
+    /// use cogent::utilities::array1_prt;
+    /// use ndarray::{array,Array1};
+    /// 
+    /// let array1:Array1<f32> = array![-1.666f32,-1f32,-0.5f32,0.5f32,1f32,1.666f32];
+    /// let prt:String = array1_prt(&array1);
+    /// println!("{}",prt);
+    /// let expect:&str = 
+    /// "┌                               ┐
+    /// │ -1.7 -1.0 -0.5 +0.5 +1.0 +1.7 │
+    /// └                               ┘
+    ///                [6]\n";
+    /// assert_eq!(&prt,expect);
+    /// ```
+    pub fn array1_prt<T:Display+Copy>(vector:&Array1<T>) -> String {
+        let mut prt_string:String = String::new();
+        let spacing = 5*vector.len();
+        prt_string.push_str(&format!("┌ {: <1$}┐\n","",spacing));
+        prt_string.push_str("│ ");
+        for val in vector {
+            prt_string.push_str(&format!("{:+.1} ",val));
+        }
+        prt_string.push_str("│\n");
+        prt_string.push_str(&format!("└ {:<1$}┘\n","",spacing));
+        prt_string.push_str(&format!("{:<1$}","",(spacing/2)));
+        prt_string.push_str(&format!("[{}]\n",vector.len()));
+
+        return prt_string;
+    }
     /// Returns pretty string of `Array2<T>`.
     /// ```
     /// use cogent::utilities::array2_prt;
@@ -1296,14 +1326,13 @@ pub mod utilities {
     ///       [3,3]\n";
     /// assert_eq!(&prt,expect);
     /// ```
-    pub fn array2_prt<T:Display+Copy>(ndarray_param:&Array2<T>) -> String {
+    pub fn array2_prt<T:Display+Copy>(matrix:&Array2<T>) -> String {
         let mut prt_string:String = String::new();
-        let shape = ndarray_param.shape(); // shape[0],shape[1]=row,column
-        let spacing = 5*shape[1];
+        let spacing = 5*matrix.ncols();
         prt_string.push_str(&format!("┌ {: <1$}┐\n","",spacing));
-        for row in 0..shape[0] {
+        for row in 0..matrix.nrows() {
             prt_string.push_str("│ ");
-            for val in ndarray_param.row(row) {
+            for val in matrix.row(row) {
                 prt_string.push_str(&format!("{:+.1} ",val));
                 
             }
@@ -1311,7 +1340,7 @@ pub mod utilities {
         }
         prt_string.push_str(&format!("└ {:<1$}┘\n","",spacing));
         prt_string.push_str(&format!("{:<1$}","",(spacing/2)-1));
-        prt_string.push_str(&format!("[{},{}]\n",shape[0],shape[1]));
+        prt_string.push_str(&format!("[{},{}]\n",matrix.nrows(),matrix.ncols()));
 
         return prt_string;
     }
@@ -1337,9 +1366,9 @@ pub mod utilities {
     ///                   [3,2,2]\n";
     /// assert_eq!(&prt,expect);
     /// ```
-    pub fn array3_prt<T:Display+Copy>(ndarray_param:&Array3<T>) -> String {
+    pub fn array3_prt<T:Display+Copy>(tensor:&Array3<T>) -> String {
         let mut prt_string:String = String::new();
-        let shape = ndarray_param.shape(); // shape[0],shape[1],shape[2]=layer,row,column
+        let shape = tensor.shape(); // shape[0],shape[1],shape[2]=layer,row,column
         let outer_spacing = (5*shape[0]*shape[2]) + (3*shape[0]) + 2;
         prt_string.push_str(&format!("┌{: <1$}┐\n","",outer_spacing));
 
@@ -1357,7 +1386,7 @@ pub mod utilities {
             for t in 0..shape[0] {
                 prt_string.push_str("│ ");
                 for p in 0..shape[2] {
-                    let val = ndarray_param[[t,i,p]];
+                    let val = tensor[[t,i,p]];
                     prt_string.push_str(&format!("{:+.1} ",val));
                 }
                 prt_string.push_str("│");
