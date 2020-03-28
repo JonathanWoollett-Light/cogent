@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use cogent::core::{HaltCondition,EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
-    use cogent::utilities::{counting_sort,array2_prt};
+    use cogent::utilities::array2_prt;
     use std::io::Read;
     use std::fs::File;
 
@@ -24,69 +24,43 @@ mod tests {
         ],None);
         net.activation(2,Activation::Softmax); // Changes activation of output layer.
     }
+    // Evaluates outputs for XOR
     #[test]
-    fn counting_sort_0() {
+    fn evaluate_outputs_0() {
         let data = vec![
             (vec![0f32,0f32],0usize),
             (vec![1f32,0f32],1usize),
             (vec![0f32,1f32],1usize),
             (vec![1f32,1f32],0usize)
         ];
-        let sorted_data = counting_sort(&data,2);
-        
-        let check_data = vec![
-            (vec![1f32,1f32],0usize),
-            (vec![0f32,0f32],0usize),
-            (vec![0f32,1f32],1usize),
-            (vec![1f32,0f32],1usize)
-        ];
-
-        println!("{:.?}",sorted_data);
-
-        assert_eq!(sorted_data,check_data);
-    }
-    #[test]
-    fn counting_sort_1() {
-        let data = vec![
-            (vec![0f32,0f32],0usize),
-            (vec![1f32,1f32],0usize),
-            (vec![1f32,0f32],1usize),
-            (vec![0f32,1f32],1usize)
-        ];
-        let sorted_data = counting_sort(&data,2);
-
-        let check_data = vec![
-            (vec![1f32,1f32],0usize),
-            (vec![0f32,0f32],0usize),
-            (vec![0f32,1f32],1usize),
-            (vec![1f32,0f32],1usize)
-        ];
-
-        println!("{:.?}",sorted_data);
-
-        assert_eq!(sorted_data,check_data);
-    }
-    #[test]
-    fn evaluate_outputs() {
-        let data = vec![
-            (vec![0f32,0f32],0usize),
-            (vec![1f32,0f32],1usize),
-            (vec![0f32,1f32],1usize),
-            (vec![1f32,1f32],0usize)
-        ];
-        let sorted_data = counting_sort(&data,2);
-
-        println!("{:.?}",sorted_data);
 
         let net = NeuralNetwork::new(2,&[
             Layer::new(3,Activation::Sigmoid),
             Layer::new(2,Activation::Softmax)
         ],None);
 
-        let eval = net.evaluate_outputs(&sorted_data,2);
+        let eval = net.evaluate_outputs(&data);
 
-        println!("{}",eval.0);
-        println!("{}",array2_prt(&eval.1));
+        println!("{:.?}",eval.0);
+        println!("{}",eval.1);
+        println!("{}",array2_prt(&eval.2));
+        
+        // Just checking it runs.
+    }
+    // Evaluates outputs for MNIST
+    #[test]
+    fn evaluate_outputs_1() {
+        let net = NeuralNetwork::new(784,&[
+            Layer::new(100,Activation::ReLU),
+            Layer::new(10,Activation::Softmax)
+        ],None);
+        let testing_data = get_mnist_dataset(true);
+
+        let eval = net.evaluate_outputs(&testing_data);
+
+        println!("{:.?}",eval.0);
+        println!("{}",eval.1);
+        println!("{}",array2_prt(&eval.2));
 
         // Just checking it runs.
     }
@@ -113,7 +87,7 @@ mod tests {
             ];
             // Execution
             // ------------------------------------------------
-            neural_network.train(&data,2)
+            neural_network.train(&data)
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
@@ -123,7 +97,7 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = neural_network.evaluate(&data,2);
+            let evaluation = neural_network.evaluate(&data);
             assert!(evaluation.1 as usize == data.len());
         }
     }
@@ -150,7 +124,7 @@ mod tests {
 
             // Execution
             // ------------------------------------------------
-            neural_network.train(&data,2)
+            neural_network.train(&data)
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
@@ -159,7 +133,7 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = neural_network.evaluate(&data,2);
+            let evaluation = neural_network.evaluate(&data);
             assert!(evaluation.1 as usize == data.len());
         }
     }
@@ -191,7 +165,7 @@ mod tests {
 
             // Execution
             // ------------------------------------------------
-            neural_network.train(&data,2)
+            neural_network.train(&data)
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
@@ -200,7 +174,7 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = neural_network.evaluate(&data,2);
+            let evaluation = neural_network.evaluate(&data);
             assert!(evaluation.1 as usize == data.len());
         }
     }
@@ -223,7 +197,7 @@ mod tests {
 
             // Execution
             // ------------------------------------------------
-            neural_network.train(&training_data,10)
+            neural_network.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(0.95f32))
             .go();
@@ -231,7 +205,7 @@ mod tests {
             // Evaluation
             // ------------------------------------------------
 
-            let evaluation = neural_network.evaluate(&testing_data,10);
+            let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
         }
     }
@@ -253,14 +227,14 @@ mod tests {
 
             // Execution
             // ------------------------------------------------
-            neural_network.train(&training_data,10)
+            neural_network.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(0.95f32))
             .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = neural_network.evaluate(&testing_data,10);
+            let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
         }
     }
@@ -284,14 +258,14 @@ mod tests {
 
             // Execution
             // ------------------------------------------------
-            neural_network.train(&training_data,10)
+            neural_network.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(0.95f32))
             .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = neural_network.evaluate(&testing_data,10);
+            let evaluation = neural_network.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
         }
     }
