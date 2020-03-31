@@ -5,6 +5,8 @@ mod tests {
     use std::io::Read;
     use std::fs::File;
 
+    use arrayfire::{constant,randn,randu,Dim4,af_print,print_gen};
+
     // TODO Figure out better name for this
     const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be > 0)
     // TODO Figure out better name for this
@@ -43,8 +45,8 @@ mod tests {
 
         let eval = net.evaluate_outputs(&data);
 
-        println!("{}",array1_prt(&eval.0));
-        println!("{}",array2_prt(&eval.1));
+        af_print!("accuracies:",eval.0);
+        af_print!("confusion matrix:",eval.1);
 
         // Just checking it runs.
     }
@@ -71,8 +73,8 @@ mod tests {
 
         let eval = net.evaluate_outputs(&testing_data);
 
-        println!("{}",array1_prt(&eval.0));
-        println!("{}",array2_prt(&eval.1));
+        af_print!("accuracies:",eval.0);
+        af_print!("confusion matrix:",eval.1);
 
         // Just checking it runs.
     }
@@ -103,7 +105,7 @@ mod tests {
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
-                .lambda(0f32)
+                .lambda(0f32).log_interval(MeasuredCondition::Iteration(100))
             .go();
 
 
