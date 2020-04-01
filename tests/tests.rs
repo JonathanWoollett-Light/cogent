@@ -88,7 +88,7 @@ mod tests {
             // Setup
             // ------------------------------------------------
             // Sets network
-            let mut neural_network = NeuralNetwork::new(2,&[
+            let mut net = NeuralNetwork::new(2,&[
                 Layer::new(3,Activation::Sigmoid),
                 Layer::new(2,Activation::Sigmoid)
             ],None);
@@ -101,17 +101,17 @@ mod tests {
             ];
             // Execution
             // ------------------------------------------------
-            neural_network.train(&data)
+            net.train(&data)
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
-                .early_stopping_condition(MeasuredCondition::Iteration(3000))
-                .lambda(0f32).log_interval(MeasuredCondition::Iteration(100))
+                .early_stopping_condition(MeasuredCondition::Iteration(2000))
+                .lambda(0f32)
             .go();
 
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = neural_network.evaluate(&data);
+            let evaluation = net.evaluate(&data);
             assert!(evaluation.1 as usize == data.len());
         }
     }
@@ -124,7 +124,7 @@ mod tests {
             // Setup
             // ------------------------------------------------
             // Sets network
-            let mut neural_network = NeuralNetwork::new(2,&[
+            let mut net = NeuralNetwork::new(2,&[
                 Layer::new(3,Activation::Sigmoid),
                 Layer::new(2,Activation::Sigmoid)
             ],None);
@@ -138,7 +138,7 @@ mod tests {
 
             // Execution
             // ------------------------------------------------
-            neural_network.train(&data)
+            net.train(&data)
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
@@ -147,7 +147,7 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = neural_network.evaluate(&data);
+            let evaluation = net.evaluate(&data);
             assert!(evaluation.1 as usize == data.len());
         }
     }
@@ -164,7 +164,7 @@ mod tests {
             // Setup
             // ------------------------------------------------
             // Sets network
-            let mut neural_network = NeuralNetwork::new(2,&[
+            let mut net = NeuralNetwork::new(2,&[
                 Layer::new(3,Activation::Sigmoid),
                 Layer::new(2,Activation::Softmax)
             ],None);
@@ -179,7 +179,7 @@ mod tests {
 
             // Execution
             // ------------------------------------------------
-            neural_network.train(&data)
+            net.train(&data)
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
@@ -188,7 +188,7 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = neural_network.evaluate(&data);
+            let evaluation = net.evaluate(&data);
             assert!(evaluation.1 as usize == data.len());
         }
     }
@@ -201,7 +201,7 @@ mod tests {
             // Setup
             // ------------------------------------------------
             // Sets network
-            let mut neural_network = NeuralNetwork::new(784,&[
+            let mut net = NeuralNetwork::new(784,&[
                 Layer::new(100,Activation::Sigmoid),
                 Layer::new(10,Activation::Softmax)
             ],None);
@@ -211,7 +211,7 @@ mod tests {
 
             // Execution
             // ------------------------------------------------
-            neural_network.train(&training_data)
+            net.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(0.95f32))
             .go();
@@ -219,7 +219,7 @@ mod tests {
             // Evaluation
             // ------------------------------------------------
 
-            let evaluation = neural_network.evaluate(&testing_data);
+            let evaluation = net.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
         }
     }
@@ -231,7 +231,7 @@ mod tests {
         for _ in 0..runs {
             // Setup
             // ------------------------------------------------
-            let mut neural_network = NeuralNetwork::new(784,&[
+            let mut net = NeuralNetwork::new(784,&[
                 Layer::new(100,Activation::ReLU),
                 Layer::new(10,Activation::Softmax) // You can't have a ReLU output layer
             ],None);
@@ -241,14 +241,16 @@ mod tests {
 
             // Execution
             // ------------------------------------------------
-            neural_network.train(&training_data)
+            net.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(0.95f32))
+                .log_interval(MeasuredCondition::Iteration(1))
+                .tracking()
             .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = neural_network.evaluate(&testing_data);
+            let evaluation = net.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
         }
     }
@@ -260,7 +262,7 @@ mod tests {
         for _ in 0..runs {
             // Setup
             // ------------------------------------------------
-            let mut neural_network = NeuralNetwork::new(784,&[
+            let mut net = NeuralNetwork::new(784,&[
                 Layer::new(300,Activation::ReLU),
                 Layer::new(100,Activation::Sigmoid),
                 Layer::new(10,Activation::Softmax)
@@ -272,14 +274,14 @@ mod tests {
 
             // Execution
             // ------------------------------------------------
-            neural_network.train(&training_data)
+            net.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(0.95f32))
             .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = neural_network.evaluate(&testing_data);
+            let evaluation = net.evaluate(&testing_data);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
         }
     }
