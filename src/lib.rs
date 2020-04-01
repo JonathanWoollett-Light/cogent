@@ -730,6 +730,8 @@ pub mod core {
                 }
                 iterations_elapsed += 1;
 
+
+                println!("pre eval");
                 // for (b_layer,w_layer) in izip!(self.biases.iter(),self.connections.iter()) {
                 //     af_print!("current w_layer",w_layer);
                 //     af_print!("current b_layer",b_layer);
@@ -737,6 +739,8 @@ pub mod core {
                 // panic!("checked update");
 
                 let evaluation = self.evaluate(evaluation_data);
+
+                println!("post eval");
 
                 //println!("{} {}",evaluation.0,evaluation.1);
                 //panic!("completed evaluation");
@@ -1237,7 +1241,7 @@ pub mod core {
         pub fn export(&self,path:&str) {
             let mut biases:Vec<Vec<f32>> = Vec::with_capacity(self.biases.len());
             for i in 0..self.biases.len() {
-                let len = self.biases[i].dims().get()[0] as usize;
+                let len = self.biases[i].dims().get()[1] as usize;
                 let vec:Vec<f32> = vec!(f32::default();len);
                 biases.push(vec);
                 self.biases[i].host(&mut biases[i]);
