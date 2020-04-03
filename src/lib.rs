@@ -17,7 +17,7 @@ pub mod core {
         Array,randu,Dim4,matmul,MatProp,constant,
         sigmoid,max,set_row,row,rows,exp,maxof,sum,pow,
         transpose,af_print,print_gen,imax,eq,sum_all,log,
-        join_many,diag_extract
+        join_many,diag_extract,sum_by_key,div
     };
 
     use std::io::{Read,Write, stdout};
@@ -347,7 +347,14 @@ pub mod core {
             //Deritvative of ReLU
             // ReLU(z)/1 = if >0 1 else 0
             fn relu_derivative(z:&Array<f32>) -> Array<f32> {
-                return Activation::relu(z) / z; // TODO This is suspectible to floating point error, but does it matter?
+                // return Activation::relu(z) / z;
+                // Follow code replaces the above line.
+                // Above line replaced becuase it is prone to floating point error leading to f32:NAN.
+                // Similar performance.
+                let gt = arrayfire::gt(z,&0f32,false);
+                return arrayfire::and(z,&gt,false);
+            
+                
             }
         }
         // TODO Make this better
@@ -374,6 +381,7 @@ pub mod core {
 
             return softmax;
         }
+        // TODO Is this the best way to do this?
         // Applies ReLU activation
         fn relu(y: &Array<f32>) -> Array<f32> {
             let zeros = constant(0f32,y.dims());
@@ -676,10 +684,9 @@ pub mod core {
             // TODO Can we only define these if we need them?
             let mut last_checkpointed_instant = Instant::now();
             let mut last_logged_instant = Instant::now();
-            //println!("got here 2.04");
 
-
-            //println!("got here 2.06");
+            // self.export(&format!("checkpoints/1"));
+            // panic!("checking first");
 
             // Backpropgation loop
             // ------------------------------------------------
@@ -690,18 +697,11 @@ pub mod core {
                 training_data.shuffle(&mut rng);
                 let training_data_matrix = self.matrixify(training_data);
 
-                // if iterations_elapsed % 100 == 0 {
-                //     af_print!("out:",training_data_matrix.0);
-                //     af_print!("tar:",training_data_matrix.1);
-                // }
-
-                //println!("got here 2.15");
                 let batches = NeuralNetwork::batch_chunks(&training_data_matrix,batch_size); // Split dataset into batches.
-                //println!("got here 2.2");
+
                 // TODO Reduce code duplication here.
                 // Runs backpropagation on all batches:
                 //  If `tracking` output backpropagation percentage progress.
-
                 if tracking {
                     let mut percentage:f32 = 0f32;
                     stdout.queue(cursor::SavePosition).unwrap();
@@ -731,7 +731,7 @@ pub mod core {
                 iterations_elapsed += 1;
 
 
-                println!("pre eval");
+                //println!("pre eval");
                 // for (b_layer,w_layer) in izip!(self.biases.iter(),self.connections.iter()) {
                 //     af_print!("current w_layer",w_layer);
                 //     af_print!("current b_layer",b_layer);
@@ -740,7 +740,9 @@ pub mod core {
 
                 let evaluation = self.evaluate(evaluation_data);
 
-                println!("post eval");
+                
+
+                //println!("post eval");
 
                 //println!("{} {}",evaluation.0,evaluation.1);
                 //panic!("completed evaluation");
@@ -1073,6 +1075,24 @@ pub mod core {
 
             return chunks;
         }
+        fn batch_chunks_indxs(data:&(Array<f32>,Array<f32>),batch_size:usize) -> Vec<(u64,u64)>{
+            let examples = data.0.dims().get()[0];
+            let batches = (examples as f32 / batch_size as f32).ceil() as usize;
+
+            let mut chunks:Vec<(u64,u64)> = Vec::with_capacity(batches as usize);
+            for i in 0..batches-1 {
+                let batch_indx:usize = i * batch_size;
+                chunks.push((batch_indx as u64,(batch_indx+batch_size-1) as u64));
+            }
+            //println!("nearly");
+            let batch_indx:usize = (batches-1) * batch_size;
+            chunks.push((batch_indx as u64,examples-1));
+            //println!("done");
+            //println!("{} = {}",total,examples);
+            // TODO MAY NEED TO CHECK THIS
+
+            return chunks;
+        }
         
         /// Inserts new layer before output layer in network.
         pub fn add_layer(&mut self, layer:Layer) {
@@ -1106,7 +1126,6 @@ pub mod core {
         /// Returns tuple: (Average cost across batch, Number of examples correctly classified).
         pub fn evaluate(&self, test_data:&[(Vec<f32>,usize)]) -> (f32,u32) {
             let (input,target) = self.matrixify(test_data);
-            //println!("done matrixify");
             let output = self.run(&input);
 
             let cost:f32 = self.cost.run(&target,&output);
@@ -1126,81 +1145,34 @@ pub mod core {
         }
         // TODO Name this better
         /// Returns tuple of: (List of correctly classified percentage for each class, Confusion matrix of percentages).
-        pub fn evaluate_outputs(&self, test_data:&[(Vec<f32>,usize)]) -> (Array<f32>,Array<f32>) {
-            let chunks:Vec<(usize,Array<f32>)> = class_chunks(test_data);
+        pub fn evaluate_outputs(&self, test_data:&mut [(Vec<f32>,usize)]) -> (Array<f32>,Array<f32>) {
+            test_data.sort_by(|(_,a),(_,b)| a.cmp(b));
 
-            let mut pool = Pool::new(chunks.len() as u32);
+            let (input,classes) = matrixify_inputs(test_data);
+            let outputs = self.run(&input);
 
-            let out_dims = self.biases[self.biases.len()-1].dims();
+            let maxs:Array<f32> = max(&outputs,1i32);
+            let class_vectors:Array<bool> = eq(&outputs,&maxs,true);
+            let confusion_matrix:Array<f32> = sum_by_key(&classes,&class_vectors,0i32).1.cast::<f32>();
 
-            let empty_array = Array::<f32>::new_empty(out_dims); // TODO Is there not a better way to do this?
-            let mut classifications:Vec<Array<f32>> = vec!(empty_array;out_dims.get()[0] as usize);
-            let mut class_list:Vec<usize> = vec!(usize::default();chunks.len());
-            pool.scoped(|scope| {
-                for (chunk,classification,class_list) in izip!(chunks.iter(),&mut classifications,&mut class_list) {
-                    scope.execute(move || {
-                        let results = self.run(&chunk.1);
-                        let maxes = max(&results,1);
-                        let class_vectors = eq(&maxes,&results,true);
-                        let class_sums:Array<u32> = sum(&class_vectors,0); // Number of examples classified as each class
-                        let number_of_examples = chunk.1.dims().get()[0];
-                        *classification = class_sums / number_of_examples as f32; // Percentage of examples classified as each class
-                        *class_list = chunk.0;
-                    });
-                }
-            });
+            let class_lengths:Array<f32> = sum(&confusion_matrix,1i32);
 
-            let sorted_classifications:Vec<&Array<f32>> = sort_classifications(&class_list,&classifications);
+            let percent_confusion_matrix:Array<f32> = div(&confusion_matrix,&class_lengths,true);
 
-            let matrix:Array<f32> = join_many(0,sorted_classifications);
+            return (diag_extract(&percent_confusion_matrix,0i32),percent_confusion_matrix);
+            
+            fn matrixify_inputs(examples:&[(Vec<f32>,usize)]) -> (Array<f32>,Array<u32>) {
+                let in_len = examples[0].0.len();
+                let example_len = examples.len();
 
-            // TODO Is there a better way to set this?
-            let diagonal:Array<f32> = diag_extract(&matrix,0); // TODO If it breaks after conversation check changing this
+                // Flattens examples into `in_vec` and `out_vec`
+                let in_vec:Vec<f32> = examples.iter().flat_map(|(input,_)| input.clone() ).collect();
+                let out_vec:Vec<u32> = examples.iter().map(|(_,class)| class.clone() as u32 ).collect();
 
-            return (diagonal,matrix);
+                let input:Array<f32> = transpose(&Array::<f32>::new(&in_vec,Dim4::new(&[in_len as u64,example_len as u64,1,1])),false);
+                let output:Array<u32> = Array::<u32>::new(&out_vec,Dim4::new(&[example_len as u64,1,1,1]));
 
-            // Creates class chunks from `test_data`
-            fn class_chunks(test_data:&[(Vec<f32>,usize)]) -> Vec<(usize,Array<f32>)> {
-                let mut vec_chunks:HashMap<usize,Vec<Vec<f32>>> = HashMap::new();
-                for example in test_data {
-                    if let Some(class_chunk) = vec_chunks.get_mut(&example.1) {
-                        class_chunk.push(example.0.clone());
-                    }
-                    else {
-                        vec_chunks.insert(example.1,vec![example.0.clone()]);
-                    }
-                }
-
-                let mut chunks:Vec<(usize,Array<f32>)> = Vec::new(); // Class, input
-                for vec_chunk in vec_chunks.iter() {
-                    let matrix_chunk = matrixify_inputs(vec_chunk.1);
-                    chunks.push((*vec_chunk.0,matrix_chunk));
-                }
-                return chunks;
-
-                // TODO Surely a function exists to do this already?
-                // `Vec<Vec<f32>>` -> Array2<f32> (each inner vec as each row)
-                fn matrixify_inputs(examples:&[Vec<f32>]) -> Array<f32> {
-                    let input_len = examples[0].len();
-                    let example_len = examples.len();
-                    // TODO Use `.iter().flattens.collect()` here.
-                    // Flattens `examples.1`s into `input_vec`
-                    let mut input_vec:Vec<f32> = Vec::with_capacity(example_len * input_len);
-                    for example in examples {
-                        input_vec.append(&mut example.clone());
-                    }
-
-                    let input_array = transpose(&Array::<f32>::new(&input_vec,Dim4::new(&[input_len as u64,example_len as u64,1,1])),false);
-                    return input_array;
-                }
-            }
-            fn sort_classifications<'a>(class_list:&Vec<usize>,classifications:&'a Vec<Array<f32>>) -> Vec<&'a Array<f32>> {
-                // Is there a better way to initialise `Array1::default(0)`?
-                let mut sorted:Vec<&Array<f32>> = Vec::with_capacity(classifications.len());
-                for i in 0..class_list.len() {
-                    sorted.push(&classifications[i]); //TODO Remove this `.clone()`
-                }
-                return sorted;
+                return (input,output);
             }
         }
 
@@ -1241,19 +1213,35 @@ pub mod core {
         pub fn export(&self,path:&str) {
             let mut biases:Vec<Vec<f32>> = Vec::with_capacity(self.biases.len());
             for i in 0..self.biases.len() {
+                println!("bias:{}->dims:{}",i,self.biases[i].dims());
                 let len = self.biases[i].dims().get()[1] as usize;
                 let vec:Vec<f32> = vec!(f32::default();len);
                 biases.push(vec);
                 self.biases[i].host(&mut biases[i]);
+
+                for val in biases[i].iter() {
+                    if val.is_nan() {
+                        println!("ffs bois: nan bias");
+                        panic!("nan found");
+                    }
+                }
             }
 
             let mut weights:Vec<(Vec<f32>,(u64,u64))> = Vec::with_capacity(self.connections.len());
             for i in 0..self.connections.len() {
+                println!("connection:{}->dims:{}",i,self.connections[i].dims());
                 let dims = self.connections[i].dims();
                 let inner_dims = dims.get();
                 let vec:Vec<f32> = vec!(f32::default();(inner_dims[0]*inner_dims[1]) as usize);
                 weights.push((vec,(inner_dims[0],inner_dims[1])));
                 self.connections[i].host(&mut weights[i].0);
+
+                for val in weights[i].0.iter() {
+                    if val.is_nan() {
+                        println!("ffs bois: nan weight");
+                        panic!("nan found");
+                    }
+                }
             }
 
             let estruct = ImportExportNet{
@@ -1267,18 +1255,23 @@ pub mod core {
             let file = File::create(format!("{}.json",path));
             let serialized:String = serde_json::to_string(&estruct).unwrap();
             file.unwrap().write_all(serialized.as_bytes()).unwrap();
+
+            //panic!("checking export");
         }
         /// Imports neural network from `path`.
         pub fn import(path:&str) -> NeuralNetwork {
             let file = File::open(format!("{}.json",path));
+            //println!("Does it exist: {}",Path::new("checkpoints/10.json").exists());
             let mut string_contents:String = String::new();
             file.unwrap().read_to_string(&mut string_contents).unwrap();
+            //println!("got here?");
             let istruct:ImportExportNet = serde_json::from_str(&string_contents).unwrap();
+            //println!("got here? 2");
 
             let mut biases:Vec<arrayfire::Array<f32>> = Vec::with_capacity(istruct.biases.len());
             for i in 0..istruct.biases.len() {
                 let len = istruct.biases[i].len() as u64;
-                let array = arrayfire::Array::<f32>::new(&istruct.biases[i],Dim4::new(&[len,1,1,1]));
+                let array = arrayfire::Array::<f32>::new(&istruct.biases[i],Dim4::new(&[1,len,1,1]));
                 biases.push(array);
             }
 
