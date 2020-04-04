@@ -66,7 +66,7 @@ If you find any issues I would really appreciate if you could let me know (and p
 
 ## Installation
 
-1. [Setup ArrayFire Rust bindings](https://github.com/arrayfire/arrayfire-rust#use-from-cratesio--) (Ignore step 4, you shouldn't need to add `arrayfire` to your `Cargo.toml`).
+1. [Setup ArrayFire Rust bindings](https://github.com/arrayfire/arrayfire-rust#use-from-cratesio--) (Ignore step 4).
 2. Add `cogent = "0.2.0"` to `Cargo.toml`.
 
 ## TODO
