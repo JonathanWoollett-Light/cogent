@@ -1,6 +1,6 @@
 [package]
 name = "cogent"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Jonathan Woollett-Light <jonathanwoollettlight@gmail.com>"]
 edition = "2018"
 description = "Basic neural network library for classification"
@@ -15,8 +15,8 @@ catagories= ["science"]
 
 # Library ... # Purpose
 [dependencies]
-rand = "0.7"                                        # Random number generation
-crossterm="0.14.2"                                  # Printing backpropagation progress
-serde = {version = "1.0.104",features=["derive"]}   # Serialize (Export) and deserialize (Import) `NeuralNetwork`
-serde_json = "1.0"                                  # JSON format for serde
+rand = "0.7.3"                                      # Random number generation
+crossterm="0.17.1"                                  # Printing backpropagation progress
+serde = {version = "1.0.106",features=["derive"]}   # Serialize (Export) and deserialize (Import) `NeuralNetwork`
+serde_json = "1.0.50"                               # JSON format for serde
 arrayfire = "3.7.0"                                 # Linear algebra and GPU compute
