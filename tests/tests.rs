@@ -4,6 +4,8 @@ mod tests {
     use std::io::Read;
     use std::fs::File;
 
+    // Run with: `cargo test --release -- --test-threads=1`
+    // Using more threads will likely overload vram and crash.
 
     // TODO Figure out better name for this
     const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be > 0)
@@ -58,7 +60,6 @@ mod tests {
         net.train(&training_data)
             .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
             .halt_condition(HaltCondition::Accuracy(0.90f32))
-            .log_interval(MeasuredCondition::Iteration(1)).tracking()
         .go();
 
         // Evaluation
