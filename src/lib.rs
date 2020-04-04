@@ -1,13 +1,8 @@
 /// Core functionality of training a neural network.
 pub mod core {
-
     use rand::prelude::SliceRandom;
     
     use std::time::{Duration,Instant};
-
-    // use ndarray::{Array2,Array1,ArrayD,Axis,ArrayView2};
-    // use ndarray_rand::{RandomExt,rand_distr::Uniform};
-    // use ndarray_einsum_beta::*;
 
     use arrayfire::{
         Array,randu,Dim4,matmul,MatProp,constant,
