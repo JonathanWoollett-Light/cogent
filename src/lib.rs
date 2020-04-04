@@ -1020,6 +1020,7 @@ pub mod core {
         // TODO Name this better
         /// Returns tuple of: (List of correctly classified percentage for each class, Confusion matrix of percentages).
         pub fn evaluate_outputs(&self, test_data:&mut [(Vec<f32>,usize)]) -> (Vec<f32>,Vec<Vec<f32>>) {
+            // Sorts by class
             test_data.sort_by(|(_,a),(_,b)| a.cmp(b));
 
             let (input,classes) = matrixify_inputs(test_data);
@@ -1029,18 +1030,19 @@ pub mod core {
             let class_vectors:Array<bool> = eq(&outputs,&maxs,true);
             let confusion_matrix:Array<f32> = sum_by_key(&classes,&class_vectors,0i32).1.cast::<f32>();
 
-            let class_lengths:Array<f32> = sum(&confusion_matrix,1i32);
+            let class_lengths:Array<f32> = sum(&confusion_matrix,1i32); // Number of examples of each class
 
-            let percent_confusion_matrix:Array<f32> = div(&confusion_matrix,&class_lengths,true);
+            let percent_confusion_matrix:Array<f32> = div(&confusion_matrix,&class_lengths,true); // Divides each row (example) by number of examples of that class.
 
             let dims = percent_confusion_matrix.dims();
             let mut flat_vec = vec!(f32::default();(dims.get()[0]*dims.get()[1]) as usize); // dims.get()[0] == dims.get()[1]
+            // `x.host(...)` outputs in column-major order, calling `tranpose(x).host(...)` effectively outputs in row-major order.
             transpose(&percent_confusion_matrix,false).host(&mut flat_vec);
             let matrix_vec:Vec<Vec<f32>> = flat_vec.chunks(dims.get()[0] as usize).map(|x| x.to_vec()).collect();
 
+            // Gets diagonal from matrix, representing what percentage of examples where correctly identified as each class.
             let diag = diag_extract(&percent_confusion_matrix,0i32);
             let mut diag_vec:Vec<f32> = vec!(f32::default();diag.dims().get()[0] as usize);
-            
             diag.host(&mut diag_vec);
 
             return (diag_vec,matrix_vec);
