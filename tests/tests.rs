@@ -1,11 +1,9 @@
 #[cfg(test)]
 mod tests {
     use cogent::core::{HaltCondition,EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
-    use cogent::utilities::{array1_prt,array2_prt};
     use std::io::Read;
     use std::fs::File;
 
-    use arrayfire::{constant,randn,randu,Dim4,af_print,print_gen};
 
     // TODO Figure out better name for this
     const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be > 0)
@@ -31,7 +29,7 @@ mod tests {
     // Evaluates outputs for XOR
     #[test]
     fn evaluate_outputs_0() {
-        let data = vec![
+        let mut data = vec![
             (vec![0f32,0f32],0usize),
             (vec![1f32,0f32],1usize),
             (vec![0f32,1f32],1usize),
@@ -43,10 +41,7 @@ mod tests {
             Layer::new(2,Activation::Softmax)
         ],None);
 
-        let eval = net.evaluate_outputs(&data);
-
-        af_print!("accuracies:",eval.0);
-        af_print!("confusion matrix:",eval.1);
+        let eval = net.evaluate_outputs(&mut data);
 
         // Just checking it runs.
     }
@@ -58,7 +53,7 @@ mod tests {
             Layer::new(10,Activation::Softmax)
         ],None);
         let training_data = get_mnist_dataset(false);
-        let testing_data = get_mnist_dataset(true);
+        let mut testing_data = get_mnist_dataset(true);
 
         net.train(&training_data)
             .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
@@ -71,10 +66,7 @@ mod tests {
         let evaluation = net.evaluate(&testing_data);
         println!("Cost {}, Accuracy: {}/{} ({}%)",evaluation.0,evaluation.1,testing_data.len(),(100f32 * evaluation.1 as f32 / testing_data.len() as f32) as u8);
 
-        let eval = net.evaluate_outputs(&testing_data);
-
-        af_print!("accuracies:",eval.0);
-        af_print!("confusion matrix:",eval.1);
+        let eval = net.evaluate_outputs(&mut testing_data);
 
         // Just checking it runs.
     }
@@ -99,6 +91,7 @@ mod tests {
                 (vec![0f32,1f32],1usize),
                 (vec![1f32,1f32],0usize)
             ];
+
             // Execution
             // ------------------------------------------------
             net.train(&data)
@@ -108,11 +101,12 @@ mod tests {
                 .lambda(0f32)
             .go();
 
-
             // Evaluation
             // ------------------------------------------------
             let evaluation = net.evaluate(&data);
             assert!(evaluation.1 as usize == data.len());
+
+            panic!("1st iteration");
         }
     }
     // Tests network to learn an XOR gate.
@@ -244,8 +238,6 @@ mod tests {
             net.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(0.95f32))
-                .log_interval(MeasuredCondition::Iteration(1))
-                .tracking()
             .go();
 
             // Evaluation

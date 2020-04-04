@@ -29,8 +29,6 @@ pub mod core {
     use std::fs;
     use std::path::Path;
 
-    use std::collections::HashMap;
-
     use std::f32;
 
     // Default percentage of training data to set as evaluation data (0.1=10%).
@@ -510,7 +508,7 @@ pub mod core {
         ///     Layer::new(3,Activation::Sigmoid),
         ///     Layer::new(2,Activation::Softmax)
         /// ],None);
-        /// let input:Array2<f32> = array![
+        /// let input:Array<f32> = array![
         ///     [0f32,0f32],
         ///     [1f32,0f32],
         ///     [0f32,1f32],
@@ -1145,7 +1143,7 @@ pub mod core {
         }
         // TODO Name this better
         /// Returns tuple of: (List of correctly classified percentage for each class, Confusion matrix of percentages).
-        pub fn evaluate_outputs(&self, test_data:&mut [(Vec<f32>,usize)]) -> (Array<f32>,Array<f32>) {
+        pub fn evaluate_outputs(&self, test_data:&mut [(Vec<f32>,usize)]) -> (Vec<f32>,Vec<Vec<f32>>) {
             test_data.sort_by(|(_,a),(_,b)| a.cmp(b));
 
             let (input,classes) = matrixify_inputs(test_data);
@@ -1159,7 +1157,17 @@ pub mod core {
 
             let percent_confusion_matrix:Array<f32> = div(&confusion_matrix,&class_lengths,true);
 
-            return (diag_extract(&percent_confusion_matrix,0i32),percent_confusion_matrix);
+            let dims = percent_confusion_matrix.dims();
+            let mut flat_vec = vec!(f32::default();(dims.get()[0]*dims.get()[1]) as usize); // dims.get()[0] == dims.get()[1]
+            transpose(&percent_confusion_matrix,false).host(&mut flat_vec);
+            let matrix_vec:Vec<Vec<f32>> = flat_vec.chunks(dims.get()[0] as usize).map(|x| x.to_vec()).collect();
+
+            let diag = diag_extract(&percent_confusion_matrix,0i32);
+            let mut diag_vec:Vec<f32> = vec!(f32::default();diag.dims().get()[0] as usize);
+            
+            diag.host(&mut diag_vec);
+
+            return (diag_vec,matrix_vec);
             
             fn matrixify_inputs(examples:&[(Vec<f32>,usize)]) -> (Array<f32>,Array<u32>) {
                 let in_len = examples[0].0.len();
