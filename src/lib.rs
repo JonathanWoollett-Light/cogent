@@ -4,6 +4,7 @@ pub mod core {
     
     use std::time::{Duration,Instant};
 
+    // TODO Is this really a good way to include these?
     use arrayfire::{
         Array,randu,Dim4,matmul,MatProp,constant,
         sigmoid,max,rows,exp,maxof,sum,pow,
@@ -15,8 +16,8 @@ pub mod core {
 
     use serde::{Serialize,Deserialize};
 
-    use std::fs::File;
     use std::fs;
+    use std::fs::File;
     use std::path::Path;
 
     use std::f32;
@@ -45,7 +46,7 @@ pub mod core {
 
     /// For setting `evaluation_data`.
     pub enum EvaluationData<'b> {
-        Scaler(usize),
+        Scalar(usize),
         Percent(f32),
         Actual(&'b Vec<(Vec<f32>,usize)>)
     }
@@ -67,7 +68,7 @@ pub mod core {
     /// For setting a hyperparameter as a proportion of another.
     #[derive(Clone,Copy)]
     pub enum Proportion {
-        Scaler(u32),
+        Scalar(u32),
         Percent(f32),
     }
     
@@ -108,7 +109,7 @@ pub mod core {
         /// `evaluation_data` determines how to set the evaluation data.
         pub fn evaluation_data(&mut self, evaluation_data:EvaluationData) -> &mut Trainer<'a> {
             self.evaluation_data = match evaluation_data {
-                EvaluationData::Scaler(scaler) => { self.training_data.split_off(self.training_data.len() - scaler) }
+                EvaluationData::Scalar(scalar) => { self.training_data.split_off(self.training_data.len() - scalar) }
                 EvaluationData::Percent(percent) => { self.training_data.split_off(self.training_data.len() - (self.training_data.len() as f32 * percent) as usize) }
                 EvaluationData::Actual(actual) => { actual.clone() }
             };
@@ -132,7 +133,7 @@ pub mod core {
         pub fn batch_size(&mut self, batch_size:Proportion) -> &mut Trainer<'a> {
             self.batch_size = match batch_size {
                 Proportion::Percent(percent) => { (self.training_data.len() as f32 * percent) as usize },
-                Proportion::Scaler(scaler) => { scaler as usize } 
+                Proportion::Scalar(scalar) => { scalar as usize } 
             };
             return self;
         }
@@ -492,19 +493,18 @@ pub mod core {
         /// Returns outputs from batch of examples.
         /// ```
         /// use cogent::core::{NeuralNetwork,Layer,Activation};
-        /// use ndarray::{Array2,array};
+        /// use arrayfire::{Array,Dim4};
         /// 
         /// let mut net = NeuralNetwork::new(2,&[
         ///     Layer::new(3,Activation::Sigmoid),
         ///     Layer::new(2,Activation::Softmax)
         /// ],None);
-        /// let input:Array<f32> = array![
-        ///     [0f32,0f32],
-        ///     [1f32,0f32],
-        ///     [0f32,1f32],
-        ///     [1f32,1f32]
-        /// ];
-        /// let output:Array2<f32> = net.run(&input);
+        /// 
+        /// let input:Array::<f32>::new(
+        ///     &[0f32,1f32,0f32,1f32,0f32,0f32,1f32,1f32],
+        ///     Dim4::new(&[4,2,1,1])
+        /// );
+        /// let output:Array<f32> = net.run(&input);
         /// ```
         pub fn run(&self, inputs:&Array<f32>) -> Array<f32> {
             let rows = inputs.dims().get()[0];
@@ -770,7 +770,7 @@ pub mod core {
                         best_accuracy_iteration = iterations_elapsed;
                         best_accuracy_instant = Instant::now();
                     }
-                    Proportion::Scaler(scaler) => if evaluation.1 > best_accuracy + scaler {
+                    Proportion::Scalar(scalar) => if evaluation.1 > best_accuracy + scalar {
                         best_accuracy = evaluation.1;
                         best_accuracy_iteration = iterations_elapsed;
                         best_accuracy_instant = Instant::now();
@@ -842,18 +842,10 @@ pub mod core {
                     let out_batch:Array<f32> = rows(&data.1,batch_indx as u64,(batch_indx+batch_size-1) as u64);
                     chunks.push((in_batch,out_batch));
                 }
-                //println!("nearly");
                 let batch_indx:usize = (batches-1) * batch_size;
                 let in_batch:Array<f32> = rows(&data.0,batch_indx as u64,examples-1);
                 let out_batch:Array<f32> = rows(&data.1,batch_indx as u64,examples-1);
                 chunks.push((in_batch,out_batch));
-                //println!("done");
-                let mut total = 0usize;
-                for chunk in chunks.iter() {
-                    total+=chunk.0.dims().get()[0] as usize;
-                }
-                //println!("{} = {}",total,examples);
-                // TODO MAY NEED TO CHECK THIS
 
                 return chunks;
             }

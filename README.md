@@ -2,6 +2,7 @@
 
  - [Cargo](https://crates.io/crates/cogent)
  - [Documentation](https://docs.rs/cogent/)
+
 ## Introduction
 
 Cogent is a very basic library for training basic neural networks for classification tasks.
@@ -51,6 +52,22 @@ While a huge amount of my work has gone into making this and learning the basics
 
 If you find any issues I would really appreciate if you could let me know (and possibly suggest any solutions).
 
+## Features
+
+ - GPU compute using [ArrayFire Rust Bindings](https://github.com/arrayfire/arrayfire-rust)
+ - Optimisers: Stochastic gradient descent.
+ - Layers: Dense
+ - Activations: Softmax, Sigmoid, ReLU.
+ - Loss functions: Mean sqaured error, Cross entropy.
+ - Regularisation techniques: L2.
+
+
+
+## Installation
+
+1. [Setup ArrayFire Rust bindings](https://github.com/arrayfire/arrayfire-rust#use-from-cratesio--).
+2. Add `cogent = "0.1.16"` to `Cargo.toml`.
+
 ## TODO
 
 Task types:
@@ -61,7 +78,6 @@ Task types:
 Tasks:
 
 1. :ballot_box_with_check: Convolutional layers.
-2. :ballot_box_with_check: GPU Compute.
-3. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
-4. :repeat: Improve defaults.
-5. :repeat: Learn more.
+2. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
+3. :repeat: Improve defaults.
+4. :repeat: Learn more.

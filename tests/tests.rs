@@ -11,7 +11,7 @@ mod tests {
     const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be > 0)
     // TODO Figure out better name for this
     const TESTING_MIN_ACCURACY:f32 = 0.90f32; // approx 10% min inaccuracy
-    // Returns `TESTING_MIN_ACCURACY` percentage as scaler as number of example in dataset.
+    // Returns `TESTING_MIN_ACCURACY` percentage as number of example in dataset.
     fn required_accuracy(test_data:&[(Vec<f32>,usize)]) -> u32 {
         ((test_data.len() as f32) * TESTING_MIN_ACCURACY).ceil() as u32
     }
@@ -31,43 +31,31 @@ mod tests {
     // Evaluates outputs for XOR
     #[test]
     fn evaluate_outputs_0() {
+        let net = NeuralNetwork::new(2,&[
+            Layer::new(3,Activation::Sigmoid),
+            Layer::new(2,Activation::Softmax)
+        ],None);
+
         let mut data = vec![
             (vec![0f32,0f32],0usize),
             (vec![1f32,0f32],1usize),
             (vec![0f32,1f32],1usize),
             (vec![1f32,1f32],0usize)
         ];
-
-        let net = NeuralNetwork::new(2,&[
-            Layer::new(3,Activation::Sigmoid),
-            Layer::new(2,Activation::Softmax)
-        ],None);
-
-        let eval = net.evaluate_outputs(&mut data);
+        let _eval = net.evaluate_outputs(&mut data);
 
         // Just checking it runs.
     }
     // Evaluates outputs for MNIST
     #[test]
     fn evaluate_outputs_1() {
-        let mut net = NeuralNetwork::new(784,&[
+        let net = NeuralNetwork::new(784,&[
             Layer::new(100,Activation::ReLU),
             Layer::new(10,Activation::Softmax)
         ],None);
-        let training_data = get_mnist_dataset(false);
+
         let mut testing_data = get_mnist_dataset(true);
-
-        net.train(&training_data)
-            .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
-            .halt_condition(HaltCondition::Accuracy(0.90f32))
-        .go();
-
-        // Evaluation
-        // ------------------------------------------------
-        let evaluation = net.evaluate(&testing_data);
-        println!("Cost {}, Accuracy: {}/{} ({}%)",evaluation.0,evaluation.1,testing_data.len(),(100f32 * evaluation.1 as f32 / testing_data.len() as f32) as u8);
-
-        let eval = net.evaluate_outputs(&mut testing_data);
+        let _eval = net.evaluate_outputs(&mut testing_data);
 
         // Just checking it runs.
     }
@@ -106,8 +94,6 @@ mod tests {
             // ------------------------------------------------
             let evaluation = net.evaluate(&data);
             assert!(evaluation.1 as usize == data.len());
-
-            panic!("1st iteration");
         }
     }
     // Tests network to learn an XOR gate.

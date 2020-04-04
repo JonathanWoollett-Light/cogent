@@ -1,6 +1,6 @@
 [package]
 name = "cogent"
-version = "0.1.15"
+version = "0.2.0"
 authors = ["Jonathan Woollett-Light <jonathanwoollettlight@gmail.com>"]
 edition = "2018"
 description = "Basic neural network library for classification"
@@ -8,20 +8,15 @@ license = "Apache-2.0"
 exclude = ["tests","data"]
 repository = "https://github.com/JonathanWoollett-Light/cogent"
 documentation = "https://docs.rs/cogent/"
+keywords = ["deep-learning","neural-networks","machine-learning"]
+catagories= ["science"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-
-# Comment is what I'm using it for.
+# Library ... # Purpose
 [dependencies]
 rand = "0.7"                                        # Random number generation
-scoped_threadpool = "0.1.*"                         # Threading
-itertools = "0.8.2"                                 # Zipping iterators nicely
-ndarray = {version="0.13.0",features=["serde"]}     # Linear algebra
-ndarray_einsum_beta = "0.5.0"                       # Einstein summation for batch backpropagation
-ndarray-rand = "0.11.0"                             # Random Array generation
-crossterm="0.14.2"                                  # Nice printing
-serde = {version = "1.0.104",features=["derive"]}   # Serialize (Export) and deserialize (Import) neural network
+crossterm="0.14.2"                                  # Printing backpropagation progress
+serde = {version = "1.0.104",features=["derive"]}   # Serialize (Export) and deserialize (Import) `NeuralNetwork`
 serde_json = "1.0"                                  # JSON format for serde
-
-arrayfire = "3.7.0"
+arrayfire = "3.7.0"                                 # Linear algebra and GPU compute
