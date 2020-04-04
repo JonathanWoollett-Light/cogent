@@ -888,10 +888,11 @@ pub mod core {
             // Feeds forward
             // --------------
             let numb_of_examples = example.0.dims().get()[0]; // Number of examples (rows)
+            let ones = constant(1f32,Dim4::new(&[numb_of_examples,1,1,1]));
+            
             let mut inputs:Vec<Array<f32>> = Vec::with_capacity(self.biases.len()); // Name more intuitively
             let mut activations:Vec<Array<f32>> = Vec::with_capacity(self.biases.len()+1);
-            // TODO Is `.to_owned()` the best way to do this?
-            let ones = constant(1f32,Dim4::new(&[numb_of_examples,1,1,1]));
+
             activations.push(example.0.to_owned());
             for i in 0..self.layers.len() {
                 let weighted_inputs:Array<f32> = matmul(&activations[i],&self.connections[i],MatProp::NONE,MatProp::NONE);
@@ -900,7 +901,6 @@ pub mod core {
                 activations.push(self.layers[i].run(&inputs[i]));
             }
 
-            //println!("got here 3.5");
 
             // Backpropagates
             // --------------
