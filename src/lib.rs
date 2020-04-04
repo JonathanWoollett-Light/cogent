@@ -626,7 +626,6 @@ pub mod core {
             tracking:bool,
             min_learning_rate:f32
         ) -> (){
-            //println!("got here 2");
             if let Some(_) = checkpoint_interval {
                 if !Path::new("checkpoints").exists() {
                     // Create folder
@@ -654,7 +653,6 @@ pub mod core {
             let mut best_accuracy_instant = Instant::now();// Instant of best accuracy.
             let mut best_accuracy = 0u32; // Value of best accuracy.
 
-            //println!("got here 2.03");
             let starting_evaluation = self.evaluate(evaluation_data); // Compute intial evaluation.
 
             // If `log_interval` has been defined, print intial evaluation.
@@ -673,9 +671,6 @@ pub mod core {
             let mut last_checkpointed_instant = Instant::now();
             let mut last_logged_instant = Instant::now();
 
-            // self.export(&format!("checkpoints/1"));
-            // panic!("checking first");
-
             // Backpropgation loop
             // ------------------------------------------------
             loop {
@@ -685,7 +680,7 @@ pub mod core {
                 training_data.shuffle(&mut rng);
                 let training_data_matrix = self.matrixify(training_data);
 
-                let batches = NeuralNetwork::batch_chunks(&training_data_matrix,batch_size); // Split dataset into batches.
+                let batches = batch_chunks(&training_data_matrix,batch_size); // Split dataset into batches.
 
                 // TODO Reduce code duplication here.
                 // Runs backpropagation on all batches:
@@ -718,22 +713,7 @@ pub mod core {
                 }
                 iterations_elapsed += 1;
 
-
-                //println!("pre eval");
-                // for (b_layer,w_layer) in izip!(self.biases.iter(),self.connections.iter()) {
-                //     af_print!("current w_layer",w_layer);
-                //     af_print!("current b_layer",b_layer);
-                // }
-                // panic!("checked update");
-
                 let evaluation = self.evaluate(evaluation_data);
-
-                
-
-                //println!("post eval");
-
-                //println!("{} {}",evaluation.0,evaluation.1);
-                //panic!("completed evaluation");
 
                 // If `checkpoint_interval` number of iterations or length of duration passed, export weights  (`connections`) and biases (`biases`) to file.
                 match checkpoint_interval {// TODO Reduce code duplication here
@@ -808,6 +788,7 @@ pub mod core {
                     MeasuredCondition::Iteration(interval_iteration) =>  if iterations_elapsed - best_accuracy_iteration == interval_iteration { learning_rate *= learning_rate_decay },
                     MeasuredCondition::Duration(interval_duration) => if best_accuracy_instant.elapsed() >= interval_duration { learning_rate *= learning_rate_decay }
                 }
+
                 if learning_rate < min_learning_rate {
                     learning_rate = intial_learning_rate;
                     self.add_layer(Layer::new(
@@ -848,21 +829,40 @@ pub mod core {
                     learning_rate
                 ).as_bytes()).unwrap();
             }
+            // TODO Performance of this should be improved.
+            // Splits data into chunks of examples (rows).
+            fn batch_chunks(data:&(Array<f32>,Array<f32>),batch_size:usize) -> Vec<(Array<f32>,Array<f32>)>{
+                let examples = data.0.dims().get()[0];
+                let batches = (examples as f32 / batch_size as f32).ceil() as usize;
+
+                let mut chunks:Vec<(Array<f32>,Array<f32>)> = Vec::with_capacity(batches);
+                for i in 0..batches-1 {
+                    let batch_indx:usize = i * batch_size;
+                    let in_batch:Array<f32> = rows(&data.0,batch_indx as u64,(batch_indx+batch_size-1) as u64);
+                    let out_batch:Array<f32> = rows(&data.1,batch_indx as u64,(batch_indx+batch_size-1) as u64);
+                    chunks.push((in_batch,out_batch));
+                }
+                //println!("nearly");
+                let batch_indx:usize = (batches-1) * batch_size;
+                let in_batch:Array<f32> = rows(&data.0,batch_indx as u64,examples-1);
+                let out_batch:Array<f32> = rows(&data.1,batch_indx as u64,examples-1);
+                chunks.push((in_batch,out_batch));
+                //println!("done");
+                let mut total = 0usize;
+                for chunk in chunks.iter() {
+                    total+=chunk.0.dims().get()[0] as usize;
+                }
+                //println!("{} = {}",total,examples);
+                // TODO MAY NEED TO CHECK THIS
+
+                return chunks;
+            }
         }
         // Runs batch through network to calculate weight and bias gradients.
         // Returns new weight and bias values.
         fn update_batch(&self, batch: &(Array<f32>,Array<f32>), eta: f32, lambda:f32, n:f32) -> (Vec<Array<f32>>,Vec<Array<f32>>) {
 
-            //println!("got here 3");
-
             let (nabla_b,nabla_w):(Vec<Array<f32>>,Vec<Array<f32>>) = self.backpropagate(&batch);
-            //println!("got here 4");
-
-            // for (b_layer,w_layer) in izip!(nabla_b.iter(),nabla_w.iter()) {
-            //     af_print!("w_layer",w_layer);
-            //     af_print!("b_layer",b_layer);
-            // }
-            // panic!("got values in update batch");
 
             let batch_len = batch.0.dims().get()[0];
             // TODO Look into removing `.clone()`s here
@@ -879,16 +879,6 @@ pub mod core {
             for i in 0..self.biases.len() {
                 return_biases[i] = &self.biases[i] - &((eta / batch_len as f32)  * nabla_b[i].clone());
             }
-
-            // for (b_layer,w_layer) in izip!(self.biases.iter(),self.connections.iter()) {
-            //     af_print!("old w_layer",w_layer);
-            //     af_print!("old b_layer",b_layer);
-            // }
-            // for (b_layer,w_layer) in izip!(return_biases.iter(),return_connections.iter()) {
-            //     af_print!("new w_layer",w_layer);
-            //     af_print!("new b_layer",b_layer);
-            // }
-            // panic!("finished update batch");
 
             return (return_connections,return_biases);
         }
@@ -923,65 +913,34 @@ pub mod core {
             let mut nabla_w:Vec<Array<f32>> = Vec::with_capacity(self.connections.len()); // this should really be 3d matrix instead of 'Vec<DMatrix<f32>>', its a bad workaround
 
             let last_layer = self.layers[self.layers.len()-1];
-            // TODO Is `.to_owned()` a good solution here?
-
-            // af_print!("target",target);
-            // af_print!("activations[activations.len()-1]",activations[activations.len()-1]);
-            // af_print!("cost derivative",self.cost.derivative(&target.to_owned(),&activations[activations.len()-1]));
-            // af_print!("inputs[inputs.len()-1]",inputs[inputs.len()-1]);
-            // af_print!("last_layer.derivative(&inputs[inputs.len()-1])",last_layer.derivative(&inputs[inputs.len()-1]));
             
+            // Calculate error in output layer
             let mut error:Array<f32> = self.cost.derivative(&target,&activations[activations.len()-1]) * last_layer.derivative(&inputs[inputs.len()-1]);
-            // af_print!("error",error);
-            // panic!("calculated initial error");
-
-            //println!("got here 3.6");
 
             // Sets gradients in output layer
             nabla_b.insert(0,error.clone());
             //let weight_errors = einsum("ai,aj->aji", &[&error, &activations[last_index]]).unwrap();
             let weight_errors = calc_weight_errors(&error,&activations[last_index]);
             nabla_w.insert(0,weight_errors);
-            
-            //println!("got here 3.7");
 
             // self.layers.len()-1 -> 1 (inclusive)
             // (self.layers.len()=self.biases.len()=self.connections.len())
             for i in (1..self.layers.len()).rev() {
                 // Calculates error
-                // println!("3.71");
-                // af_print!("self.layers[i-1].derivative(&inputs[i-1])",self.layers[i-1].derivative(&inputs[i-1]));
-                // af_print!("error",error);
-                // af_print!("self.connections[i]",self.connections[i]);
-                // println!("3.72");
                 error = self.layers[i-1].derivative(&inputs[i-1]) *
                     matmul(&error,&self.connections[i],MatProp::NONE,MatProp::TRANS);
-                //println!("3.73");
-                //af_print!("error",error);
 
                 // Sets gradients
                 nabla_b.insert(0,error.clone());
-                //let ein_sum = einsum("ai,aj->aji", &[&error, &activations[i-1]]).unwrap();
                 let weight_errors = calc_weight_errors(&error,&activations[i-1]);
                 nabla_w.insert(0,weight_errors);
             }
-            //println!("got here 3.8");
+
             // Sum along columns (rows represent each example), push to `nabla_b_sum`.
-            //af_print!("nabla_b[1]",nabla_b[1]);
-            
             let nabla_b_sum:Vec<Array<f32>> = nabla_b.iter().map(|x| sum(x,0)).collect();
-            //af_print!("nabla_b_sum[1]",nabla_b_sum[1]);
-            //panic!("testing");
-            
+
             // Sums through layers (each layer is a matrix representing each example), casts to Arry2 then pushes to `nabla_w_sum`.
-            //af_print!("nabla_w[1]",nabla_w[1]);
             let nabla_w_sum:Vec<Array<f32>> = nabla_w.iter().map(|x| sum(x,2)).collect();
-            
-            // for (b_layer,w_layer) in izip!(nabla_b_sum.iter(),nabla_w_sum.iter()) {
-            //     af_print!("w_layer",w_layer);
-            //     af_print!("b_layer",b_layer);
-            // }
-            // panic!("finished backprop");
 
             // Returns gradients
             return (nabla_b_sum,nabla_w_sum);
@@ -1007,34 +966,7 @@ pub mod core {
                 return temp;
             }
         }
-        // TODO Performance of this should be improved.
-        // Splits data into chunks of examples (rows).
-        fn batch_chunks(data:&(Array<f32>,Array<f32>),batch_size:usize) -> Vec<(Array<f32>,Array<f32>)>{
-            let examples = data.0.dims().get()[0];
-            let batches = (examples as f32 / batch_size as f32).ceil() as usize;
-
-            let mut chunks:Vec<(Array<f32>,Array<f32>)> = Vec::with_capacity(batches);
-            for i in 0..batches-1 {
-                let batch_indx:usize = i * batch_size;
-                let in_batch:Array<f32> = rows(&data.0,batch_indx as u64,(batch_indx+batch_size-1) as u64);
-                let out_batch:Array<f32> = rows(&data.1,batch_indx as u64,(batch_indx+batch_size-1) as u64);
-                chunks.push((in_batch,out_batch));
-            }
-            //println!("nearly");
-            let batch_indx:usize = (batches-1) * batch_size;
-            let in_batch:Array<f32> = rows(&data.0,batch_indx as u64,examples-1);
-            let out_batch:Array<f32> = rows(&data.1,batch_indx as u64,examples-1);
-            chunks.push((in_batch,out_batch));
-            //println!("done");
-            let mut total = 0usize;
-            for chunk in chunks.iter() {
-                total+=chunk.0.dims().get()[0] as usize;
-            }
-            //println!("{} = {}",total,examples);
-            // TODO MAY NEED TO CHECK THIS
-
-            return chunks;
-        }
+        
         
         /// Inserts new layer before output layer in network.
         pub fn add_layer(&mut self, layer:Layer) {
@@ -1127,7 +1059,6 @@ pub mod core {
                 return (input,output);
             }
         }
-
         
         // Converts `[(Vec<f32>,usize)]` to `(Array2<f32>,Array2<f32>)`.
         fn matrixify(&self,examples:&[(Vec<f32>,usize)]) -> (Array<f32>,Array<f32>) {
