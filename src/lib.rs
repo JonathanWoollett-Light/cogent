@@ -1,13 +1,9 @@
 /// Core functionality of training a neural network.
 pub mod core {
 
-    use rand::{rngs::ThreadRng};
     use rand::prelude::SliceRandom;
     
     use std::time::{Duration,Instant};
-    use itertools::izip;
-
-    use scoped_threadpool::Pool;
 
     // use ndarray::{Array2,Array1,ArrayD,Axis,ArrayView2};
     // use ndarray_rand::{RandomExt,rand_distr::Uniform};
@@ -15,9 +11,8 @@ pub mod core {
 
     use arrayfire::{
         Array,randu,Dim4,matmul,MatProp,constant,
-        sigmoid,max,set_row,row,rows,exp,maxof,sum,pow,
-        transpose,af_print,print_gen,imax,eq,sum_all,log,
-        join_many,diag_extract,sum_by_key,div
+        sigmoid,max,rows,exp,maxof,sum,pow,
+        transpose,imax,eq,sum_all,log,diag_extract,sum_by_key,div
     };
 
     use std::io::{Read,Write, stdout};
@@ -858,34 +853,6 @@ pub mod core {
                     learning_rate
                 ).as_bytes()).unwrap();
             }
-            // Assumes `example.0.nrows()==example.1.nrows()`.
-            // TODO While performance here is not critical, it should be improved.
-            //      Constant reassignment here is extremely wasteful. There must be a way to improve this.
-            fn shuffle_matrix_data(rng: &mut ThreadRng,example:&mut (Array<f32>,Array<f32>)) {
-                let start = Instant::now();
-                
-                let length = example.0.dims().get()[0];
-                let mut indexs:Vec<u64> = (0..length).collect();
-                indexs.shuffle(rng);
-
-                for i in 0..length/2 {
-                    if i <= indexs[i as usize] {
-                        // This is awfully ineffecient
-                        let a = row(&example.0,i);
-                        let b = row(&example.0,indexs[i as usize]);
-                        example.0 = set_row(&example.0,&b,i);
-                        example.0 = set_row(&example.0,&a,indexs[i as usize]);
-
-                        let a = row(&example.1,i);
-                        let b = row(&example.1,indexs[i as usize]);
-                        example.0 = set_row(&example.1,&b,i);
-                        example.0 = set_row(&example.1,&a,indexs[i as usize]);
-                    }
-                }
-
-                //println!("Matrix shuffling took: {}ms",start.elapsed().as_millis());
-                //panic!("Testing matrix shuffling.");
-            }
         }
         // Runs batch through network to calculate weight and bias gradients.
         // Returns new weight and bias values.
@@ -1068,24 +1035,6 @@ pub mod core {
             for chunk in chunks.iter() {
                 total+=chunk.0.dims().get()[0] as usize;
             }
-            //println!("{} = {}",total,examples);
-            // TODO MAY NEED TO CHECK THIS
-
-            return chunks;
-        }
-        fn batch_chunks_indxs(data:&(Array<f32>,Array<f32>),batch_size:usize) -> Vec<(u64,u64)>{
-            let examples = data.0.dims().get()[0];
-            let batches = (examples as f32 / batch_size as f32).ceil() as usize;
-
-            let mut chunks:Vec<(u64,u64)> = Vec::with_capacity(batches as usize);
-            for i in 0..batches-1 {
-                let batch_indx:usize = i * batch_size;
-                chunks.push((batch_indx as u64,(batch_indx+batch_size-1) as u64));
-            }
-            //println!("nearly");
-            let batch_indx:usize = (batches-1) * batch_size;
-            chunks.push((batch_indx as u64,examples-1));
-            //println!("done");
             //println!("{} = {}",total,examples);
             // TODO MAY NEED TO CHECK THIS
 
