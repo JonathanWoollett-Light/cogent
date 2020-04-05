@@ -83,4 +83,4 @@ Tasks:
 4. :repeat: Improve defaults.
 5. :repeat: Learn more.
 
-Pls note that things may not be developed inorder, it is only my estimation.
+Please note that things may not be developed inorder, it is only my estimation.
