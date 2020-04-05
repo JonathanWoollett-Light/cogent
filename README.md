@@ -55,7 +55,7 @@ If you find any issues I would really appreciate if you could let me know (and p
 ## Features
 
  - Simplicity.
- - GPU compute using [ArrayFire Rust Bindings](https://github.com/arrayfire/arrayfire-rust) (you should)
+ - GPU compute using [ArrayFire Rust Bindings](https://github.com/arrayfire/arrayfire-rust)
  - Optimisers: Stochastic gradient descent.
  - Layers: Dense
  - Activations: Softmax, Sigmoid, ReLU.
