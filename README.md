@@ -76,7 +76,8 @@ Task types:
  - :repeat: = Perpetual
  
 Tasks:
-(Ordering is not strict)
+
+(ordering is not strict)
 
 1. :ballot_box_with_check: Dropout.
 2. :ballot_box_with_check: Convolutional layers.
