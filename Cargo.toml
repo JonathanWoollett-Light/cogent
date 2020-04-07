@@ -1,13 +1,16 @@
 [package]
 name = "cogent"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Jonathan Woollett-Light <jonathanwoollettlight@gmail.com>"]
 edition = "2018"
-description = "Basic neural network library for classification"
+description = "Basic neural network library for classification."
 license = "Apache-2.0"
 exclude = ["tests","data"]
+
 repository = "https://github.com/JonathanWoollett-Light/cogent"
 documentation = "https://docs.rs/cogent/"
+readme = "README.md"
+
 keywords = ["deep-learning","neural-networks","machine-learning"]
 catagories= ["science"]
 
