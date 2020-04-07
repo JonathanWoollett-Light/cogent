@@ -82,3 +82,5 @@ Tasks:
 3. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
 4. :repeat: Improve defaults.
 5. :repeat: Learn more.
+
+Please note that things may not be developed inorder, it is only my estimation.
