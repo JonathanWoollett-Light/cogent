@@ -28,7 +28,7 @@ mod tests {
         net.activation(2,Activation::Softmax); // Changes activation of output layer.
     }
     // Tests network to learn an XOR gate.
-    // Sigmoid
+    // (2-Sigmoid->3-Sigmoid->2)
     #[test]
     fn train_xor_0() {
         let runs = 10 * TEST_RERUN_MULTIPLIER;
@@ -65,7 +65,7 @@ mod tests {
         }
     }
     // Tests network to learn an XOR gate.
-    // Softmax
+    // (2-Softmax->3-Softmax->2)
     #[test]
     fn train_xor_1() {
         let runs = 10 * TEST_RERUN_MULTIPLIER;
@@ -105,7 +105,7 @@ mod tests {
     // My idea is that it effectively leads to 0 activations which lead to 0 gradients which stop it learning
 
     // Tests network to learn an XOR gate.
-    // Mixed (Sigmoid->Softmax)
+    // (2-Sigmoid->3-Softmax->2)
     #[test]
     fn train_xor_3() {
         let runs = 10 * TEST_RERUN_MULTIPLIER;
@@ -142,7 +142,7 @@ mod tests {
         }
     }
     // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
-    // Sigmoid->Softmax
+    // (784-Sigmoid->100-Softmax->10)
     #[test]
     fn train_digits_0() {
         let runs = TEST_RERUN_MULTIPLIER;
@@ -173,7 +173,7 @@ mod tests {
         }
     }
     // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
-    // ReLU->Softmax
+    // (784-ReLU->100-Softmax->10)
     #[test]
     fn train_digits_1() {
         let runs = TEST_RERUN_MULTIPLIER;
@@ -202,7 +202,7 @@ mod tests {
         }
     }
     // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
-    // Mixed (ReLU -> Sigmoid -> Softmax)
+    // (784-ReLU->300-Sigmoid->100-Softmax->10)
     #[test]
     fn train_digits_2() {
         let runs = TEST_RERUN_MULTIPLIER;
