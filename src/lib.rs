@@ -497,22 +497,23 @@ pub mod core {
         /// 
         /// Each row in `inputs` representing an example.
         pub fn run(&self, inputs:&Array<f32>) -> Array<f32> {
-            let rows = inputs.dims().get()[0];
-            let ones = constant(1f32,Dim4::new(&[rows,1,1,1]));
+            //let rows = inputs.dims().get()[0];
+            //let ones = constant(1f32,Dim4::new(&[rows,1,1,1]));
             let mut activations:Array<f32> = inputs.clone();
             //af_print!("activations",activations);
             for i in 0..self.layers.len() {
                 //af_print!("self.connections[i]",self.connections[i]);
                 let weighted_inputs:Array<f32> = matmul(&activations,&self.connections[i],MatProp::NONE,MatProp::NONE);
-                //af_print!("weighted_inputs",weighted_inputs);
-                let bias_matrix:Array<f32> = matmul(&ones,&self.biases[i],MatProp::NONE,MatProp::NONE);
-                //af_print!("bias_matrix",bias_matrix);
-                let inputs = weighted_inputs + bias_matrix;
+                
+                // TODO Performance of the commented code versus used code here is extremely similar, need to look into this further.
+                //let bias_matrix:Array<f32> = matmul(&ones,&self.biases[i],MatProp::NONE,MatProp::NONE);
+                //let inputs = weighted_inputs + bias_matrix;
+                let inputs = arrayfire::add(&weighted_inputs,&self.biases[i],true);
+                
                 //af_print!("inputs",inputs);
                 activations = self.layers[i].run(&inputs);
                 //af_print!("activations",activations);
             }
-            //panic!("finished run");
             return activations;
         }
         /// Begins setting hyperparameters for training.
@@ -842,7 +843,6 @@ pub mod core {
         // Runs batch through network to calculate weight and bias gradients.
         // Returns new weight and bias values.
         fn update_batch(&self, batch: &(Array<f32>,Array<f32>), eta: f32, lambda:f32, n:f32) -> (Vec<Array<f32>>,Vec<Array<f32>>) {
-
             let (nabla_b,nabla_w):(Vec<Array<f32>>,Vec<Array<f32>>) = self.backpropagate(&batch);
 
             let batch_len = batch.0.dims().get()[0];
@@ -851,15 +851,9 @@ pub mod core {
                 | (w,nw) | (1f32-eta*(lambda/n))*w - ((eta / batch_len as f32)) * nw
             ).collect();
 
-            // TODO Make this work
-            // let return_biases:Vec<Array1<f32>> = self.biases.iter().zip(nabla_b.iter()).map(
-            //     | (b,nb) | b - ((eta / batch.len() as f32)) * nb
-            // ).collect();
-            // This code replicates functionality of above code, for the time being.
-            let mut return_biases:Vec<Array<f32>> = self.biases.clone();
-            for i in 0..self.biases.len() {
-                return_biases[i] = &self.biases[i] - &((eta / batch_len as f32)  * nabla_b[i].clone());
-            }
+            let return_biases:Vec<Array<f32>> = self.biases.iter().zip(nabla_b).map(
+                |(old_b,new_b)| old_b - (eta * new_b / batch_len as f32)
+            ).collect();
 
             return (return_connections,return_biases);
         }
@@ -870,22 +864,26 @@ pub mod core {
             // --------------
             let numb_of_examples = example.0.dims().get()[0]; // Number of examples (rows)
             let ones = constant(1f32,Dim4::new(&[numb_of_examples,1,1,1]));
-            
+
             let mut inputs:Vec<Array<f32>> = Vec::with_capacity(self.biases.len()); // Name more intuitively
             let mut activations:Vec<Array<f32>> = Vec::with_capacity(self.biases.len()+1);
 
-            activations.push(example.0.to_owned());
+            activations.push(example.0.clone());
             for i in 0..self.layers.len() {
                 let weighted_inputs:Array<f32> = matmul(&activations[i],&self.connections[i],MatProp::NONE,MatProp::NONE);
+
+                
+                // TODO The implemented code is notably faster than the commented code here, look into why this is.
+                // inputs.push(arrayfire::add(&weighted_inputs,&self.biases[i],true));
                 let bias_matrix:Array<f32> = matmul(&ones,&self.biases[i],MatProp::NONE,MatProp::NONE);
                 inputs.push(weighted_inputs + bias_matrix);
+
                 activations.push(self.layers[i].run(&inputs[i]));
             }
 
-
             // Backpropagates
             // --------------
-            let target = example.1.clone(); // TODO check we don't need '.clone' here
+            let target = example.1.clone();
             let last_index = self.connections.len()-1; // = nabla_b.len()-1 = nabla_w.len()-1 = self.neurons.len()-2 = self.connections.len()-1
             
             // Gradients of biases and weights.
@@ -910,7 +908,6 @@ pub mod core {
                 // Calculates error
                 error = self.layers[i-1].derivative(&inputs[i-1]) *
                     matmul(&error,&self.connections[i],MatProp::NONE,MatProp::TRANS);
-
                 // Sets gradients
                 nabla_b.insert(0,error.clone());
                 let weight_errors = calc_weight_errors(&error,&activations[i-1]);
