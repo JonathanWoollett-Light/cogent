@@ -27,38 +27,6 @@ mod tests {
         ],None);
         net.activation(2,Activation::Softmax); // Changes activation of output layer.
     }
-    // TODO Properly test `evaluate_outputs`
-    // Evaluates outputs for XOR
-    #[test]
-    fn evaluate_outputs_0() {
-        let net = NeuralNetwork::new(2,&[
-            Layer::new(3,Activation::Sigmoid),
-            Layer::new(2,Activation::Softmax)
-        ],None);
-
-        let mut data = vec![
-            (vec![0f32,0f32],0usize),
-            (vec![1f32,0f32],1usize),
-            (vec![0f32,1f32],1usize),
-            (vec![1f32,1f32],0usize)
-        ];
-        let _eval = net.evaluate_outputs(&mut data);
-
-        // Just checking it runs.
-    }
-    // Evaluates outputs for MNIST
-    #[test]
-    fn evaluate_outputs_1() {
-        let net = NeuralNetwork::new(784,&[
-            Layer::new(100,Activation::ReLU),
-            Layer::new(10,Activation::Softmax)
-        ],None);
-
-        let mut testing_data = get_mnist_dataset(true);
-        let _eval = net.evaluate_outputs(&mut testing_data);
-
-        // Just checking it runs.
-    }
     // Tests network to learn an XOR gate.
     // Sigmoid
     #[test]
@@ -86,7 +54,7 @@ mod tests {
             net.train(&data)
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
-                .early_stopping_condition(MeasuredCondition::Iteration(2000))
+                .early_stopping_condition(MeasuredCondition::Iteration(3000))
                 .lambda(0f32)
             .go();
 

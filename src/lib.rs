@@ -7,7 +7,7 @@ pub mod core {
     // TODO Is this really a good way to include these?
     use arrayfire::{
         Array,randu,Dim4,matmul,MatProp,constant,
-        sigmoid,max,rows,exp,maxof,sum,pow,
+        sigmoid,rows,exp,maxof,sum,pow,
         transpose,imax,eq,sum_all,log,diag_extract,sum_by_key,div
     };
 
@@ -21,6 +21,8 @@ pub mod core {
     use std::path::Path;
 
     use std::f32;
+
+    use std::collections::HashMap;
 
     // Default percentage of training data to set as evaluation data (0.1=10%).
     const DEFAULT_EVALUTATION_DATA:f32 = 0.1f32;
@@ -469,17 +471,20 @@ pub mod core {
                 //biases.push(constant(0.5f32,Dim4::new(&[1, layers[i].size as u64, 1, 1])));
             }
             let layers:Vec<Activation> = layers.iter().map(|x|x.activation).collect();
-            NeuralNetwork{ inputs, biases, connections, layers, cost:cost_function}
+            NeuralNetwork{ inputs, biases, connections, layers, cost:cost_function }
         }
         /// Sets activation of layer specified by index (excluding input layer).
         /// ```
         /// use cogent::core::{NeuralNetwork,Layer,Activation};
         /// 
+        /// // Net (2 -Sigmoid-> 3 -Sigmoid-> 2)
         /// let mut net = NeuralNetwork::new(2,&[
         ///     Layer::new(3,Activation::Sigmoid),
         ///     Layer::new(2,Activation::Sigmoid)
         /// ],None);
+        /// 
         /// net.activation(1,Activation::Softmax); // Changes activation of output layer.
+        /// // Net will now be (2 -Sigmoid-> 3 -Softmax-> 2)
         /// ```
         pub fn activation(&mut self, index:usize, activation:Activation) {
             if index >= self.layers.len() {
@@ -490,22 +495,7 @@ pub mod core {
         }
         /// Runs batch of examples through network.
         /// 
-        /// Returns outputs from batch of examples.
-        /// ```
-        /// use cogent::core::{NeuralNetwork,Layer,Activation};
-        /// use arrayfire::{Array,Dim4};
-        /// 
-        /// let mut net = NeuralNetwork::new(2,&[
-        ///     Layer::new(3,Activation::Sigmoid),
-        ///     Layer::new(2,Activation::Softmax)
-        /// ],None);
-        /// 
-        /// let input:Array::<f32>::new(
-        ///     &[0f32,1f32,0f32,1f32,0f32,0f32,1f32,1f32],
-        ///     Dim4::new(&[4,2,1,1])
-        /// );
-        /// let output:Array<f32> = net.run(&input);
-        /// ```
+        /// Each row in `inputs` representing an example.
         pub fn run(&self, inputs:&Array<f32>) -> Array<f32> {
             let rows = inputs.dims().get()[0];
             let ones = constant(1f32,Dim4::new(&[rows,1,1,1]));
@@ -539,7 +529,7 @@ pub mod core {
         ///     Layer::new(2,Activation::Softmax)
         /// ],None);
         /// // Sets data
-        /// // For output 0=false and 1=true.
+        /// // 0=false,  1=true.
         /// let data = vec![
         ///     (vec![0f32,0f32],0),
         ///     (vec![1f32,0f32],1),
@@ -549,27 +539,25 @@ pub mod core {
         /// // Trains network
         /// neural_network.train(&data)
         ///     .learning_rate(2f32)
-        ///     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
+        ///     .evaluation_data(EvaluationData::Actual(&data)) // Use training data as evaluation data.
         ///     .lambda(0f32)
         /// .go();
         /// ```
-        pub fn train(&mut self,training_data:&Vec<(Vec<f32>,usize)>) -> Trainer {
-            println!("got here 1");
+        pub fn train(&mut self,training_data:&[(Vec<f32>,usize)]) -> Trainer {
             // TODO Should we be helpful and do this check or not bother?
+            let max_classes = self.biases[self.biases.len()-1].dims().get()[1] as usize;
             // Checks all examples fit the neural network.
-            let out_len = self.biases[self.biases.len()-1].dims().get()[1];
             for i in 0..training_data.len() {
-                let example = &training_data[i];
-                if example.0.len() != self.inputs {
-                    panic!("Input size of example {} != size of input layer.",i);
+                if training_data[i].0.len() != self.inputs {
+                    panic!("Input size of example {} ({}) != size of input layer ({}).",i,training_data[i].0.len(),self.inputs);
                 }
-                else if example.1 > out_len as usize {
-                    panic!("Output size of example {} != size of output layer.",i);
+                if training_data[i].1 >= max_classes {
+                    panic!("Output class of example {} ({}) >= number of output classes of network ({}).",i,training_data[i].1,max_classes);
                 }
             }
 
             let mut rng = rand::thread_rng();
-            let mut temp_training_data = training_data.clone();
+            let mut temp_training_data = training_data.to_vec();
             temp_training_data.shuffle(&mut rng);
 
             let temp_evaluation_data = temp_training_data.split_off(training_data.len() - (training_data.len() as f32 * DEFAULT_EVALUTATION_DATA) as usize);
@@ -605,6 +593,7 @@ pub mod core {
                 min_learning_rate: DEFAULT_MIN_LEARNING_RATE,
                 neural_network:self
             };
+            
         }
 
         // TODO Name this better
@@ -959,8 +948,19 @@ pub mod core {
             }
         }
         
-        
         /// Inserts new layer before output layer in network.
+        /// ```
+        /// use cogent::core::{Activation,Layer,NeuralNetwork};
+        /// 
+        /// // Net (2 -Sigmoid-> 3 -Softmax-> 2)
+        /// let mut net = NeuralNetwork::new(2,&[
+        ///     Layer::new(3,Activation::Sigmoid),
+        ///     Layer::new(2,Activation::Softmax)
+        /// ],None);
+        /// 
+        /// net.add_layer(Layer::new(5,Activation::ReLU));
+        /// // Net will now be (2 -Sigmoid-> 3 -ReLU-> 5 -Softmax-> 2)
+        /// ```
         pub fn add_layer(&mut self, layer:Layer) {
             let prev_neurons:u64 = if let Some(indx) = self.biases.len().checked_sub(2) {
                 self.biases[indx].dims().get()[1]
@@ -1009,16 +1009,43 @@ pub mod core {
             //println!("finished evaluation");
             return (cost / test_data.len() as f32, correct_classifications_numb);
         }
-        // TODO Name this better
-        /// Returns tuple of: (List of correctly classified percentage for each class, Confusion matrix of percentages).
-        pub fn evaluate_outputs(&self, test_data:&mut [(Vec<f32>,usize)]) -> (Vec<f32>,Vec<Vec<f32>>) {
+        /// Returns tuple of: (Vector of class percentage accuracies, Percentage confusion matrix).
+        /// ```
+        /// # use cogent::core::{EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
+        /// # 
+        /// # let mut net = NeuralNetwork::new(2,&[
+        /// #     Layer::new(3,Activation::Sigmoid),
+        /// #     Layer::new(2,Activation::Softmax)
+        /// # ],None);
+        /// # 
+        /// let mut data = vec![
+        ///     (vec![0f32,0f32],0usize),
+        ///     (vec![1f32,0f32],1usize),
+        ///     (vec![0f32,1f32],1usize),
+        ///     (vec![1f32,1f32],0usize)
+        /// ];
+        /// 
+        /// # net.train(&data)
+        /// #     .learning_rate(2f32)
+        /// #     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
+        /// #     .early_stopping_condition(MeasuredCondition::Iteration(2000))
+        /// #     .lambda(0f32)
+        /// # .go();
+        /// # 
+        /// // `net` is neural network trained to 100% accuracy to mimic an XOR gate.
+        /// let (correct_vector,confusion_matrix) = net.analyze(&mut data);
+        /// 
+        /// assert_eq!(correct_vector,vec![1f32,1f32]);
+        /// assert_eq!(confusion_matrix,vec![[1f32,0f32],[0f32,1f32]]);
+        /// ```
+        pub fn analyze(&self, data:&mut [(Vec<f32>,usize)]) -> (Vec<f32>,Vec<Vec<f32>>) {
             // Sorts by class
-            test_data.sort_by(|(_,a),(_,b)| a.cmp(b));
+            data.sort_by(|(_,a),(_,b)| a.cmp(b));
 
-            let (input,classes) = matrixify_inputs(test_data);
+            let (input,classes) = matrixify_inputs(data);
             let outputs = self.run(&input);
 
-            let maxs:Array<f32> = max(&outputs,1i32);
+            let maxs:Array<f32> = arrayfire::max(&outputs,1i32);
             let class_vectors:Array<bool> = eq(&outputs,&maxs,true);
             let confusion_matrix:Array<f32> = sum_by_key(&classes,&class_vectors,0i32).1.cast::<f32>();
 
@@ -1039,7 +1066,7 @@ pub mod core {
 
             return (diag_vec,matrix_vec);
             
-            fn matrixify_inputs(examples:&[(Vec<f32>,usize)]) -> (Array<f32>,Array<u32>) {
+            fn matrixify_inputs(examples:&[(Vec<f32>,usize)]) -> (Array<f32>,Array<u32>) { // Array(in,examples,1,1), Array(examples,1,1,1)
                 let in_len = examples[0].0.len();
                 let example_len = examples.len();
 
@@ -1053,9 +1080,172 @@ pub mod core {
                 return (input,output);
             }
         }
+        /// Returns tuple of pretty strings of: (Vector of class percentage accuracies, Percentage confusion matrix).
+        /// 
+        /// Example without dictionairy:
+        /// ```
+        /// # use cogent::core::{EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
+        /// # 
+        /// # let mut net = NeuralNetwork::new(2,&[
+        /// #     Layer::new(3,Activation::Sigmoid),
+        /// #     Layer::new(2,Activation::Softmax)
+        /// # ],None);
+        /// # 
+        /// let mut data = vec![
+        ///     (vec![0f32,0f32],0usize),
+        ///     (vec![1f32,0f32],1usize),
+        ///     (vec![0f32,1f32],1usize),
+        ///     (vec![1f32,1f32],0usize)
+        /// ];
+        /// 
+        /// # net.train(&data)
+        /// #     .learning_rate(2f32)
+        /// #     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
+        /// #     .early_stopping_condition(MeasuredCondition::Iteration(2000))
+        /// #     .lambda(0f32)
+        /// # .go();
+        /// # 
+        /// // `net` is neural network trained to 100% accuracy to mimic an XOR gate.
+        /// let (correct_vector,confusion_matrix) = net.analyze_string(&mut data,2,None);
+        /// 
+        /// let expected_vector:&str = 
+        /// "    0    1   
+        ///   ┌           ┐
+        /// % │ 1.00 1.00 │
+        ///   └           ┘\n";
+        /// assert_eq!(&correct_vector,expected_vector);
+        /// 
+        /// let expected_matrix:&str = 
+        /// "%   0    1   
+        ///   ┌           ┐
+        /// 0 │ 1.00 0.00 │
+        /// 1 │ 0.00 1.00 │
+        ///   └           ┘\n";
+        /// assert_eq!(&confusion_matrix,expected_matrix);
+        /// ```
+        /// Example with dictionairy:
+        /// ```
+        /// # use cogent::core::{EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
+        /// # use std::collections::HashMap;
+        /// # 
+        /// # let mut net = NeuralNetwork::new(2,&[
+        /// #     Layer::new(3,Activation::Sigmoid),
+        /// #     Layer::new(2,Activation::Softmax)
+        /// # ],None);
+        /// # 
+        /// let mut data = vec![
+        ///     (vec![0f32,0f32],0usize),
+        ///     (vec![1f32,0f32],1usize),
+        ///     (vec![0f32,1f32],1usize),
+        ///     (vec![1f32,1f32],0usize)
+        /// ];
+        /// 
+        /// # net.train(&data)
+        /// #     .learning_rate(2f32)
+        /// #     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
+        /// #     .early_stopping_condition(MeasuredCondition::Iteration(2000))
+        /// #     .lambda(0f32)
+        /// # .go();
+        /// # 
+        /// let mut dictionairy:HashMap<usize,&str> = HashMap::new();
+        /// dictionairy.insert(0,"False");
+        /// dictionairy.insert(1,"True");
+        /// 
+        /// // `net` is neural network trained to 100% accuracy to mimic an XOR gate.
+        /// let (correct_vector,confusion_matrix) = net.analyze_string(&mut data,2,Some(dictionairy));
+        /// 
+        /// let expected_vector:&str = 
+        /// "     False True 
+        ///   ┌              ┐
+        /// % │  1.00  1.00  │
+        ///   └              ┘\n";
+        /// assert_eq!(&correct_vector,expected_vector);
+        /// 
+        /// let expected_matrix:&str = 
+        /// "    %    False True 
+        ///       ┌              ┐
+        /// False │  1.00  0.00  │
+        ///  True │  0.00  1.00  │
+        ///       └              ┘\n";
+        /// assert_eq!(&confusion_matrix,expected_matrix);
+        /// ```
+        pub fn analyze_string(&self, data:&mut [(Vec<f32>,usize)],precision:usize,dict_opt:Option<HashMap<usize,&str>>) -> (String,String) {
+            let (vector,matrix) = self.analyze(data);
+
+            let class_outs = self.biases[self.biases.len()-1].dims().get()[1] as usize;
+            let classes:Vec<String> = if let Some(dictionary) = dict_opt {
+                (0..class_outs).map(|class|
+                    if let Some(label) = dictionary.get(&class) { 
+                        String::from(*label) 
+                    } else { format!("{}",class) }
+                ).collect()
+            } else {
+                (0..class_outs).map(|class| format!("{}",class) ).collect()
+            };
+
+            let widest_class:usize = classes.iter().fold(1usize,|max,x| std::cmp::max(max,x.chars().count()));
+            let class_spacing:usize = std::cmp::max(precision+2,widest_class);
+
+            let vector_string = vector_string(&vector,&classes,precision,class_spacing);
+            let matrix_string = matrix_string(&matrix,&classes,precision,widest_class,class_spacing);
+
+            return (vector_string,matrix_string);
+
+            fn vector_string(vector:&Vec<f32>,classes:&Vec<String>,precision:usize,spacing:usize) -> String {
+                let mut string = String::new(); // TODO Change this to `::with_capacity();`
+                
+                let precision_width = precision+2;
+                let space_between_vals = spacing-precision_width+1;
+                let row_width = ((spacing+1) * vector.len()) + space_between_vals;
+
+                string.push_str(&format!("  {:1$}","",space_between_vals));
+                for class in classes {
+                    string.push_str(&format!(" {:1$}",class,spacing));
+                }
+                string.push_str("\n");
+                string.push_str(&format!("{:1$}","",2));
+                string.push_str(&format!("┌{:1$}┐\n","",row_width));
+                string.push_str(&format!("% │{:1$}","",space_between_vals));
+                for val in vector {
+                    string.push_str(&format!("{:.1$}",val,precision));
+                    string.push_str(&format!("{:1$}","",space_between_vals))
+                }
+                string.push_str("│\n");
+                string.push_str(&format!("{:1$}","",2));
+                string.push_str(&format!("└{:1$}┘\n","",row_width));
+
+                return string;
+            }
+            fn matrix_string(matrix:&Vec<Vec<f32>>,classes:&Vec<String>,precision:usize,class_width:usize,spacing:usize) -> String {
+                let mut string = String::new(); // TODO Change this to `::with_capacity();`
+                let precision_width = precision+2;
+                let space_between_vals = spacing-precision_width+1;
+                let row_width = ((spacing+1) * matrix[0].len()) + space_between_vals;
+
+                string.push_str(&format!("{:2$}% {:3$}","","",class_width-1,space_between_vals));
+                
+                for class in classes {
+                    string.push_str(&format!(" {:1$}",class,spacing));
+                }
+                string.push_str("\n");
+                
+                string.push_str(&format!("{:2$} ┌{:3$}┐\n","","",class_width,row_width));
+
+                for i in 0..matrix.len() {
+                    string.push_str(&format!("{: >2$} │{:3$}",classes[i],"",class_width,space_between_vals));
+                    for val in matrix[i].iter() {
+                        string.push_str(&format!("{:.1$}",val,precision));
+                        string.push_str(&format!("{:1$}","",space_between_vals))
+                    }
+                    string.push_str("│\n");
+                }
+                string.push_str(&format!("{:2$} └{:3$}┘\n","","",class_width,row_width));
+
+                return string;
+            }
+        }
         
-        // Converts `[(Vec<f32>,usize)]` to `(Array2<f32>,Array2<f32>)`.
-        fn matrixify(&self,examples:&[(Vec<f32>,usize)]) -> (Array<f32>,Array<f32>) {
+        fn matrixify(&self,examples:&[(Vec<f32>,usize)]) -> (Array<f32>,Array<f32>) { // Array(in,examples,1,1), Array(out,examples,1,1)
 
             let in_len = examples[0].0.len();
             let out_len = self.biases[self.biases.len()-1].dims().get()[1] as usize;
@@ -1063,7 +1253,7 @@ pub mod core {
 
             // TODO Is there a better way to do either of these?
             // Flattens examples into `in_vec` and `out_vec`
-            let in_vec:Vec<f32> = examples.iter().flat_map(|(input,_)| input.clone()).collect();
+            let in_vec:Vec<f32> = examples.iter().flat_map(|(input,_)| (*input).clone()).collect();
             let out_vec:Vec<f32> = examples.iter().flat_map(|(_,class)| { 
                 let mut vec = vec!(0f32;out_len);
                 vec[*class]=1f32;
@@ -1075,7 +1265,6 @@ pub mod core {
 
             return (input,output);
         }
-
         // Returns Instant::elapsed() as hh:mm:ss string.
         fn time(instant:Instant) -> String {
             let mut seconds = instant.elapsed().as_secs();
@@ -1086,7 +1275,17 @@ pub mod core {
             let time = format!("{:#02}:{:#02}:{:#02}",hours,minutes,seconds);
             return time;
         }
-        /// Exports neural network to `path`.
+        /// Exports neural network to `path.json`.
+        /// ```ignore
+        /// use cogent::core::{Activation,Layer,NeuralNetwork};
+        /// 
+        /// let net = NeuralNetwork::new(2,&[
+        ///     Layer::new(3,Activation::Sigmoid),
+        ///     Layer::new(2,Activation::Softmax)
+        /// ],None);
+        /// 
+        /// net.export("my_neural_network");
+        /// ```
         pub fn export(&self,path:&str) {
             let mut biases:Vec<Vec<f32>> = Vec::with_capacity(self.biases.len());
             for i in 0..self.biases.len() {
@@ -1121,12 +1320,12 @@ pub mod core {
                 }
             }
 
-            let estruct = ImportExportNet{
+            let estruct = ImportExportNet {
                 inputs:self.inputs,
                 biases:biases,
                 connections:weights,
                 layers:self.layers.clone(),
-                cost:self.cost
+                cost:self.cost,
             };
 
             let file = File::create(format!("{}.json",path));
@@ -1135,7 +1334,11 @@ pub mod core {
 
             //panic!("checking export");
         }
-        /// Imports neural network from `path`.
+        /// Imports neural network from `path.json`.
+        /// ```ignore
+        /// use cogent::core::NeuralNetwork;
+        /// let net = NeuralNetwork::import("my_neural_network");
+        /// ```
         pub fn import(path:&str) -> NeuralNetwork {
             let file = File::open(format!("{}.json",path));
             //println!("Does it exist: {}",Path::new("checkpoints/10.json").exists());
