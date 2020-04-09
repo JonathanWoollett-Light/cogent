@@ -1012,7 +1012,8 @@ pub mod core {
         /// # .go();
         /// # 
         /// // `net` is neural network trained to 100% accuracy to mimic an XOR gate.
-        /// let (cost,accuracy) = net.evaluate(&mut data,None); // Passing `None` for the cost uses the default cost function (crossentropy).
+        /// // Passing `None` for the cost uses the default cost function (crossentropy).
+        /// let (cost,accuracy) = net.evaluate(&mut data,None); 
         /// 
         /// assert_eq!(accuracy,4u32);
         pub fn evaluate(&self, test_data:&[(Vec<f32>,usize)],cost:Option<&Cost>) -> (f32,u32) {
