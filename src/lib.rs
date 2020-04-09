@@ -31,7 +31,7 @@ pub mod core {
     // Default learning rate.
     const DEFAULT_LEARNING_RATE:f32 = 0.1f32;
     // Default percentage size of training data to set regularization parameter (0.1=10%).
-    const DEFAULT_LAMBDA:f32 = 0.1f32;
+    const DEFAULT_REGULARIZATION_PARAMETER:f32 = 0.1f32;
     // Default seconds to set duration for early stopping condition.
     // early stopping = default early stopping * (size of examples / number of examples) seconds
     const DEFAULT_EARLY_STOPPING:f32 = 400f32;
@@ -78,6 +78,7 @@ pub mod core {
     pub struct Trainer<'a> {
         training_data: Vec<(Vec<f32>,usize)>,
         evaluation_data: Vec<(Vec<f32>,usize)>,
+        cost:Cost,
         // Will halt after at a certain iteration, accuracy or duration.
         halt_condition: Option<HaltCondition>,
         // Can log after a certain number of iterations, a certain duration, or not at all.
@@ -86,7 +87,7 @@ pub mod core {
         // Reffered to as `ETA` in `NeuralNetwork`.
         learning_rate: f32, 
         // Regularization parameter
-        lambda: f32,
+        regularization_parameter: f32,
         // Can stop after a lack of cost improvement over a certain number of iterations/durations, or not at all.
         early_stopping_condition: MeasuredCondition,
         // Minimum change required to log positive evaluation change.
@@ -117,6 +118,13 @@ pub mod core {
             };
             return self;
         }
+        /// Sets `cost`.
+        /// 
+        /// `cost` determines cost function of network.
+        pub fn cost(&mut self, cost:Cost) -> &mut Trainer<'a> {
+            self.cost = cost;
+            return self;
+        }
         /// Sets `halt_condition`.
         /// 
         /// `halt_condition` sets after which Iteration/Duration or reached accuracy to stop training.
@@ -144,11 +152,11 @@ pub mod core {
             self.learning_rate = learning_rate;
             return self;
         }
-        /// Sets `lamdba` (otherwise known as regulation parameter).
+        /// Sets `regularization_parameter`.
         /// 
-        /// `lamdba` is the regularization paramter.
-        pub fn lambda(&mut self, lambda:f32) -> &mut Trainer<'a> {
-            self.lambda = lambda;
+        /// `regularization_parameter` is used as `lambda` for L2 regularization or `p` for dropout.
+        pub fn regularization_parameter(&mut self, regularization_parameter:f32) -> &mut Trainer<'a> {
+            self.regularization_parameter = regularization_parameter;
             return self;
         }
         /// Sets `early_stopping_condition`.
@@ -210,11 +218,12 @@ pub mod core {
             self.neural_network.train_details(
                 &mut self.training_data,
                 &self.evaluation_data,
+                &self.cost,
                 self.halt_condition,
                 self.log_interval,
                 self.batch_size,
                 self.learning_rate,
-                self.lambda,
+                self.regularization_parameter,
                 self.early_stopping_condition,
                 self.evaluation_min_change,
                 self.learning_rate_decay,
@@ -227,7 +236,7 @@ pub mod core {
         }
     }
     /// Defines cost function of neural network.
-    #[derive(Clone,Copy,Serialize,Deserialize)]
+    #[derive(Serialize,Deserialize)]
     pub enum Cost {
         /// Quadratic cost function.
         Quadratic,
@@ -397,7 +406,6 @@ pub mod core {
         biases: Vec<Vec<f32>>,
         connections: Vec<(Vec<f32>,(u64,u64))>,
         layers: Vec<Activation>,
-        cost: Cost,
     }
     /// Neural network.
     pub struct NeuralNetwork {
@@ -409,8 +417,6 @@ pub mod core {
         connections: Vec<Array<f32>>,
         // Activations of layers
         layers: Vec<Activation>,
-        // Cost function
-        cost: Cost,
     }
     impl NeuralNetwork {
         /// Constructs network of given layers.
@@ -422,9 +428,9 @@ pub mod core {
         /// let mut net = NeuralNetwork::new(2,&[
         ///     Layer::new(3,Activation::Sigmoid),
         ///     Layer::new(2,Activation::Softmax)
-        /// ],None);
+        /// ]);
         /// ```
-        pub fn new(inputs:usize,layers: &[Layer],cost:Option<Cost>) -> NeuralNetwork {
+        pub fn new(inputs:usize,layers: &[Layer]) -> NeuralNetwork {
             if layers.len() == 0 {
                 panic!("Requires >1 layers");
             }
@@ -435,11 +441,6 @@ pub mod core {
                 if x.size < 1usize {
                     panic!("All layer sizes must be >0");
                 }
-            }
-
-            let mut cost_function = Cost::Crossentropy;
-            if let Some(function) = cost {
-                cost_function = function;
             }
 
             //let ones = constant(1f32,Dim4::new(&[numb_of_examples,1,1,1]));
@@ -471,7 +472,7 @@ pub mod core {
                 //biases.push(constant(0.5f32,Dim4::new(&[1, layers[i].size as u64, 1, 1])));
             }
             let layers:Vec<Activation> = layers.iter().map(|x|x.activation).collect();
-            NeuralNetwork{ inputs, biases, connections, layers, cost:cost_function }
+            NeuralNetwork{ inputs, biases, connections, layers }
         }
         /// Sets activation of layer specified by index (excluding input layer).
         /// ```
@@ -481,7 +482,7 @@ pub mod core {
         /// let mut net = NeuralNetwork::new(2,&[
         ///     Layer::new(3,Activation::Sigmoid),
         ///     Layer::new(2,Activation::Sigmoid)
-        /// ],None);
+        /// ]);
         /// 
         /// net.activation(1,Activation::Softmax); // Changes activation of output layer.
         /// // Net will now be (2 -Sigmoid-> 3 -Softmax-> 2)
@@ -528,7 +529,7 @@ pub mod core {
         /// let mut neural_network = NeuralNetwork::new(2,&[
         ///     Layer::new(3,Activation::Sigmoid),
         ///     Layer::new(2,Activation::Softmax)
-        /// ],None);
+        /// ]);
         /// // Sets data
         /// // 0=false,  1=true.
         /// let data = vec![
@@ -541,7 +542,7 @@ pub mod core {
         /// neural_network.train(&data)
         ///     .learning_rate(2f32)
         ///     .evaluation_data(EvaluationData::Actual(&data)) // Use training data as evaluation data.
-        ///     .lambda(0f32)
+        ///     .regularization_parameter(0f32)
         /// .go();
         /// ```
         pub fn train(&mut self,training_data:&[(Vec<f32>,usize)]) -> Trainer {
@@ -579,11 +580,12 @@ pub mod core {
             return Trainer {
                 training_data: temp_training_data,
                 evaluation_data: temp_evaluation_data,
+                cost:Cost::Crossentropy,
                 halt_condition: None,
                 log_interval: None,
                 batch_size: batch_size,
                 learning_rate: DEFAULT_LEARNING_RATE,
-                lambda: DEFAULT_LAMBDA,
+                regularization_parameter: DEFAULT_REGULARIZATION_PARAMETER,
                 early_stopping_condition: MeasuredCondition::Iteration(early_stopping_condition),
                 evaluation_min_change: Proportion::Percent(DEFAULT_EVALUATION_MIN_CHANGE),
                 learning_rate_decay: DEFAULT_LEARNING_RATE_DECAY,
@@ -602,11 +604,12 @@ pub mod core {
         fn train_details(&mut self,
             training_data: &mut [(Vec<f32>,usize)], // TODO Look into `&mut [(Vec<f32>,Vec<f32>)]` vs `&mut Vec<(Vec<f32>,Vec<f32>)>`
             evaluation_data: &[(Vec<f32>,usize)],
+            cost:&Cost,
             halt_condition: Option<HaltCondition>,
             log_interval: Option<MeasuredCondition>,
             batch_size: usize,
             intial_learning_rate: f32,
-            lambda: f32,
+            regularization_parameter: f32,
             early_stopping_n: MeasuredCondition,
             evaluation_min_change: Proportion,
             learning_rate_decay: f32,
@@ -643,7 +646,7 @@ pub mod core {
             let mut best_accuracy_instant = Instant::now();// Instant of best accuracy.
             let mut best_accuracy = 0u32; // Value of best accuracy.
 
-            let starting_evaluation = self.evaluate(evaluation_data); // Compute intial evaluation.
+            let starting_evaluation = self.inner_evaluate(evaluation_data,cost); // Compute intial evaluation.
 
             // If `log_interval` has been defined, print intial evaluation.
             if let Some(_) = log_interval {
@@ -687,7 +690,7 @@ pub mod core {
                         stdout.queue(cursor::RestorePosition).unwrap();
                         stdout.flush().unwrap();
 
-                        let (new_connections,new_biases) = self.update_batch(&batch,learning_rate,lambda,training_data.len() as f32);
+                        let (new_connections,new_biases) = self.update_batch(&batch,learning_rate,regularization_parameter,training_data.len() as f32,cost);
                         self.connections = new_connections;
                         self.biases = new_biases;
                     }
@@ -696,14 +699,14 @@ pub mod core {
                 else {
                     //println!("got here 2.3");
                     for batch in batches {
-                        let (new_connections,new_biases) = self.update_batch(&batch,learning_rate,lambda,training_data.len() as f32);
+                        let (new_connections,new_biases) = self.update_batch(&batch,learning_rate,regularization_parameter,training_data.len() as f32,cost);
                         self.connections = new_connections;
                         self.biases = new_biases;
                     }
                 }
                 iterations_elapsed += 1;
 
-                let evaluation = self.evaluate(evaluation_data);
+                let evaluation = self.inner_evaluate(evaluation_data,cost);
 
                 // If `checkpoint_interval` number of iterations or length of duration passed, export weights  (`connections`) and biases (`biases`) to file.
                 match checkpoint_interval {// TODO Reduce code duplication here
@@ -790,7 +793,7 @@ pub mod core {
 
             // Compute and print final evaluation.
             // ------------------------------------------------
-            let evaluation = self.evaluate(evaluation_data); 
+            let evaluation = self.inner_evaluate(evaluation_data,cost); 
             let new_percent = (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32;
             let starting_percent = (starting_evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32;
             println!();
@@ -842,13 +845,13 @@ pub mod core {
         }
         // Runs batch through network to calculate weight and bias gradients.
         // Returns new weight and bias values.
-        fn update_batch(&self, batch: &(Array<f32>,Array<f32>), eta: f32, lambda:f32, n:f32) -> (Vec<Array<f32>>,Vec<Array<f32>>) {
-            let (nabla_b,nabla_w):(Vec<Array<f32>>,Vec<Array<f32>>) = self.backpropagate(&batch);
+        fn update_batch(&self, batch: &(Array<f32>,Array<f32>), eta: f32, regularization_parameter:f32, n:f32,cost:&Cost) -> (Vec<Array<f32>>,Vec<Array<f32>>) {
+            let (nabla_b,nabla_w):(Vec<Array<f32>>,Vec<Array<f32>>) = self.backpropagate(&batch,cost);
 
             let batch_len = batch.0.dims().get()[0];
             // TODO Look into removing `.clone()`s here
             let return_connections:Vec<Array<f32>> = self.connections.iter().zip(nabla_w).map(
-                | (w,nw) | (1f32-eta*(lambda/n))*w - ((eta / batch_len as f32)) * nw
+                | (w,nw) | (1f32-eta*(regularization_parameter/n))*w - ((eta / batch_len as f32)) * nw
             ).collect();
 
             let return_biases:Vec<Array<f32>> = self.biases.iter().zip(nabla_b).map(
@@ -859,7 +862,7 @@ pub mod core {
         }
         // Runs backpropgation on chunk of batch.
         // Returns weight and bias partial derivatives (errors).
-        fn backpropagate(&self, example:&(Array<f32>,Array<f32>)) -> (Vec<Array<f32>>,Vec<Array<f32>>) {
+        fn backpropagate(&self, example:&(Array<f32>,Array<f32>),cost:&Cost) -> (Vec<Array<f32>>,Vec<Array<f32>>) {
             // Feeds forward
             // --------------
             let numb_of_examples = example.0.dims().get()[0]; // Number of examples (rows)
@@ -872,7 +875,6 @@ pub mod core {
             for i in 0..self.layers.len() {
                 let weighted_inputs:Array<f32> = matmul(&activations[i],&self.connections[i],MatProp::NONE,MatProp::NONE);
 
-                
                 // TODO The implemented code is notably faster than the commented code here, look into why this is.
                 // inputs.push(arrayfire::add(&weighted_inputs,&self.biases[i],true));
                 let bias_matrix:Array<f32> = matmul(&ones,&self.biases[i],MatProp::NONE,MatProp::NONE);
@@ -894,7 +896,7 @@ pub mod core {
             let last_layer = self.layers[self.layers.len()-1];
             
             // Calculate error in output layer
-            let mut error:Array<f32> = self.cost.derivative(&target,&activations[activations.len()-1]) * last_layer.derivative(&inputs[inputs.len()-1]);
+            let mut error:Array<f32> = cost.derivative(&target,&activations[activations.len()-1]) * last_layer.derivative(&inputs[inputs.len()-1]);
 
             // Sets gradients in output layer
             nabla_b.insert(0,error.clone());
@@ -953,7 +955,7 @@ pub mod core {
         /// let mut net = NeuralNetwork::new(2,&[
         ///     Layer::new(3,Activation::Sigmoid),
         ///     Layer::new(2,Activation::Softmax)
-        /// ],None);
+        /// ]);
         /// 
         /// net.add_layer(Layer::new(5,Activation::ReLU));
         /// // Net will now be (2 -Sigmoid-> 3 -ReLU-> 5 -Softmax-> 2)
@@ -987,11 +989,45 @@ pub mod core {
         }
 
         /// Returns tuple: (Average cost across batch, Number of examples correctly classified).
-        pub fn evaluate(&self, test_data:&[(Vec<f32>,usize)]) -> (f32,u32) {
+        /// ```
+        /// # use cogent::core::{EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
+        /// # 
+        /// # let mut net = NeuralNetwork::new(2,&[
+        /// #     Layer::new(3,Activation::Sigmoid),
+        /// #     Layer::new(2,Activation::Softmax)
+        /// # ]);
+        /// # 
+        /// let mut data = vec![
+        ///     (vec![0f32,0f32],0usize),
+        ///     (vec![1f32,0f32],1usize),
+        ///     (vec![0f32,1f32],1usize),
+        ///     (vec![1f32,1f32],0usize)
+        /// ];
+        /// 
+        /// # net.train(&data)
+        /// #     .learning_rate(2f32)
+        /// #     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
+        /// #     .early_stopping_condition(MeasuredCondition::Iteration(2000))
+        /// #     .regularization_parameter(0f32)
+        /// # .go();
+        /// # 
+        /// // `net` is neural network trained to 100% accuracy to mimic an XOR gate.
+        /// let (cost,accuracy) = net.evaluate(&mut data,None); // Passing `None` for the cost uses the default cost function (crossentropy).
+        /// 
+        /// assert_eq!(accuracy,4u32);
+        pub fn evaluate(&self, test_data:&[(Vec<f32>,usize)],cost:Option<&Cost>) -> (f32,u32) {
+            if let Some(cost_function) = cost {
+                return self.inner_evaluate(test_data,cost_function);
+            } else {
+                return self.inner_evaluate(test_data,&Cost::Crossentropy);
+            }
+        }
+        /// Returns tuple: (Average cost across batch, Number of examples correctly classified).
+        fn inner_evaluate(&self, test_data:&[(Vec<f32>,usize)],cost:&Cost) -> (f32,u32) {
             let (input,target) = self.matrixify(test_data);
             let output = self.run(&input);
 
-            let cost:f32 = self.cost.run(&target,&output);
+            let cost:f32 = cost.run(&target,&output);
 
             //panic!("cost computed");
 
@@ -1013,7 +1049,7 @@ pub mod core {
         /// # let mut net = NeuralNetwork::new(2,&[
         /// #     Layer::new(3,Activation::Sigmoid),
         /// #     Layer::new(2,Activation::Softmax)
-        /// # ],None);
+        /// # ]);
         /// # 
         /// let mut data = vec![
         ///     (vec![0f32,0f32],0usize),
@@ -1026,7 +1062,7 @@ pub mod core {
         /// #     .learning_rate(2f32)
         /// #     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
         /// #     .early_stopping_condition(MeasuredCondition::Iteration(2000))
-        /// #     .lambda(0f32)
+        /// #     .regularization_parameter(0f32)
         /// # .go();
         /// # 
         /// // `net` is neural network trained to 100% accuracy to mimic an XOR gate.
@@ -1086,7 +1122,7 @@ pub mod core {
         /// # let mut net = NeuralNetwork::new(2,&[
         /// #     Layer::new(3,Activation::Sigmoid),
         /// #     Layer::new(2,Activation::Softmax)
-        /// # ],None);
+        /// # ]);
         /// # 
         /// let mut data = vec![
         ///     (vec![0f32,0f32],0usize),
@@ -1099,7 +1135,7 @@ pub mod core {
         /// #     .learning_rate(2f32)
         /// #     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
         /// #     .early_stopping_condition(MeasuredCondition::Iteration(2000))
-        /// #     .lambda(0f32)
+        /// #     .regularization_parameter(0f32)
         /// # .go();
         /// # 
         /// // `net` is neural network trained to 100% accuracy to mimic an XOR gate.
@@ -1128,7 +1164,7 @@ pub mod core {
         /// # let mut net = NeuralNetwork::new(2,&[
         /// #     Layer::new(3,Activation::Sigmoid),
         /// #     Layer::new(2,Activation::Softmax)
-        /// # ],None);
+        /// # ]);
         /// # 
         /// let mut data = vec![
         ///     (vec![0f32,0f32],0usize),
@@ -1141,7 +1177,7 @@ pub mod core {
         /// #     .learning_rate(2f32)
         /// #     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
         /// #     .early_stopping_condition(MeasuredCondition::Iteration(2000))
-        /// #     .lambda(0f32)
+        /// #     .regularization_parameter(0f32)
         /// # .go();
         /// # 
         /// let mut dictionairy:HashMap<usize,&str> = HashMap::new();
@@ -1279,7 +1315,7 @@ pub mod core {
         /// let net = NeuralNetwork::new(2,&[
         ///     Layer::new(3,Activation::Sigmoid),
         ///     Layer::new(2,Activation::Softmax)
-        /// ],None);
+        /// ]);
         /// 
         /// net.export("my_neural_network");
         /// ```
@@ -1322,7 +1358,6 @@ pub mod core {
                 biases:biases,
                 connections:weights,
                 layers:self.layers.clone(),
-                cost:self.cost,
             };
 
             let file = File::create(format!("{}.json",path));
@@ -1364,7 +1399,6 @@ pub mod core {
                 biases:biases,
                 connections:weights,
                 layers:istruct.layers,
-                cost:istruct.cost
             };
         }
     }

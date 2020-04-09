@@ -24,7 +24,7 @@ mod tests {
         let mut net = NeuralNetwork::new(2,&[
             Layer::new(3,Activation::Sigmoid),
             Layer::new(2,Activation::Sigmoid)
-        ],None);
+        ]);
         net.activation(2,Activation::Softmax); // Changes activation of output layer.
     }
     // Tests network to learn an XOR gate.
@@ -40,7 +40,7 @@ mod tests {
             let mut net = NeuralNetwork::new(2,&[
                 Layer::new(3,Activation::Sigmoid),
                 Layer::new(2,Activation::Sigmoid)
-            ],None);
+            ]);
             // Sets training and testing data
             let data = vec![
                 (vec![0f32,0f32],0usize),
@@ -55,12 +55,12 @@ mod tests {
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
-                .lambda(0f32)
+                .regularization_parameter(0f32)
             .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&data);
+            let evaluation = net.evaluate(&data,None);
             assert!(evaluation.1 as usize == data.len());
         }
     }
@@ -76,7 +76,7 @@ mod tests {
             let mut net = NeuralNetwork::new(2,&[
                 Layer::new(3,Activation::Sigmoid),
                 Layer::new(2,Activation::Sigmoid)
-            ],None);
+            ]);
             // Sets training and testing data
             let data = vec![
                 (vec![0f32,0f32],0usize),
@@ -91,12 +91,12 @@ mod tests {
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
-                .lambda(0f32)
+                .regularization_parameter(0f32)
             .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&data);
+            let evaluation = net.evaluate(&data,None);
             assert!(evaluation.1 as usize == data.len());
         }
     }
@@ -116,7 +116,7 @@ mod tests {
             let mut net = NeuralNetwork::new(2,&[
                 Layer::new(3,Activation::Sigmoid),
                 Layer::new(2,Activation::Softmax)
-            ],None);
+            ]);
 
             // Sets training and testing data
             let data = vec![
@@ -132,12 +132,12 @@ mod tests {
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
-                .lambda(0f32)
+                .regularization_parameter(0f32)
             .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&data);
+            let evaluation = net.evaluate(&data,None);
             assert!(evaluation.1 as usize == data.len());
         }
     }
@@ -153,7 +153,7 @@ mod tests {
             let mut net = NeuralNetwork::new(784,&[
                 Layer::new(100,Activation::Sigmoid),
                 Layer::new(10,Activation::Softmax)
-            ],None);
+            ]);
             // Sets training and testing data
             let training_data = get_mnist_dataset(false);
             let testing_data = get_mnist_dataset(true);
@@ -168,7 +168,7 @@ mod tests {
             // Evaluation
             // ------------------------------------------------
 
-            let evaluation = net.evaluate(&testing_data);
+            let evaluation = net.evaluate(&testing_data,None);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
         }
     }
@@ -183,7 +183,7 @@ mod tests {
             let mut net = NeuralNetwork::new(784,&[
                 Layer::new(100,Activation::ReLU),
                 Layer::new(10,Activation::Softmax) // You can't have a ReLU output layer
-            ],None);
+            ]);
             // Sets training and testing data
             let training_data = get_mnist_dataset(false);
             let testing_data = get_mnist_dataset(true);
@@ -197,7 +197,7 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&testing_data);
+            let evaluation = net.evaluate(&testing_data,None);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
         }
     }
@@ -213,7 +213,7 @@ mod tests {
                 Layer::new(300,Activation::ReLU),
                 Layer::new(100,Activation::Sigmoid),
                 Layer::new(10,Activation::Softmax)
-            ],None);
+            ]);
 
             // Sets training and testing data
             let training_data = get_mnist_dataset(false);
@@ -228,7 +228,7 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&testing_data);
+            let evaluation = net.evaluate(&testing_data,None);
             assert!(evaluation.1 >= required_accuracy(&testing_data));
         }
     }
