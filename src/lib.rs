@@ -284,7 +284,7 @@ pub mod core {
         fn derivative(&self,y:&Array<f32>,a:&Array<f32>) -> Array<f32> {
             return match self {
                 Self::Quadratic => { a-y },
-                Self::Crossentropy => { -1f32 * ((1f32/a)*y) + (1f32-y) * (1f32/(1f32-a)) } // (-1 * (y*(1/a))) + (1-y) * (1/(1-a))
+                Self::Crossentropy => { (-1*y)/a + (1f32-y)/(1f32-a) } // -y/a + (1-y)/(1-a)
             }
         }
     }
@@ -498,18 +498,24 @@ pub mod core {
         /// 
         /// Each row in `inputs` representing an example.
         pub fn run(&self, inputs:&Array<f32>) -> Array<f32> {
-            //let rows = inputs.dims().get()[0];
-            //let ones = constant(1f32,Dim4::new(&[rows,1,1,1]));
+            let rows = inputs.dims().get()[0];
+            let ones = constant(1f32,Dim4::new(&[rows,1,1,1]));
             let mut activations:Array<f32> = inputs.clone();
             //af_print!("activations",activations);
             for i in 0..self.layers.len() {
                 //af_print!("self.connections[i]",self.connections[i]);
                 let weighted_inputs:Array<f32> = matmul(&activations,&self.connections[i],MatProp::NONE,MatProp::NONE);
                 
-                // TODO Performance of the commented code versus used code here is extremely similar, need to look into this further.
-                //let bias_matrix:Array<f32> = matmul(&ones,&self.biases[i],MatProp::NONE,MatProp::NONE);
-                //let inputs = weighted_inputs + bias_matrix;
-                let inputs = arrayfire::add(&weighted_inputs,&self.biases[i],true);
+                // TODO:
+                // Performance of the commented code versus used code here is extremely similar.
+                //  The used code benefits from caching and becomes more efficient when is more frequent use,
+                //   in this case run is not frequently used, simply being used for evaluation.
+                //  Notably when used for forward prop when training the performance difference is significant,
+                //   while the commented code appears simpler for consistency between forward prop here and the code written
+                //   to carry out forward prop during training we use the code we are using here instead.
+                let bias_matrix:Array<f32> = matmul(&ones,&self.biases[i],MatProp::NONE,MatProp::NONE);
+                let inputs = weighted_inputs + bias_matrix;
+                //let inputs = arrayfire::add(&weighted_inputs,&self.biases[i],true);
                 
                 //af_print!("inputs",inputs);
                 activations = self.layers[i].run(&inputs);

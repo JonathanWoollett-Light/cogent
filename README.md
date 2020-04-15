@@ -18,6 +18,7 @@ Training a network to classify MNIST:
 ```rust
 // Setup
 // ----------
+// 784-Sigmoid->100-Softmax->10
 let mut neural_network = NeuralNetwork::new(784,&[
     Layer::new(100,Activation::Sigmoid),
     Layer::new(10,Activation::Softmax)
