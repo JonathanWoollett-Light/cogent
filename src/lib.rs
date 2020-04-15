@@ -1,14 +1,14 @@
 /// Core functionality of training a neural network.
 pub mod core {
     use rand::prelude::SliceRandom;
-    
+    use itertools::izip;
     use std::time::{Duration,Instant};
 
     // TODO Is this really a good way to include these?
     use arrayfire::{
         Array,randu,Dim4,matmul,MatProp,constant,
         sigmoid,rows,exp,maxof,sum,pow,
-        transpose,imax,eq,sum_all,log,diag_extract,sum_by_key,div
+        transpose,imax,eq,sum_all,log,diag_extract,sum_by_key,div,gt,print_gen
     };
 
     use std::io::{Read,Write, stdout};
@@ -30,8 +30,6 @@ pub mod core {
     const DEFAULT_BATCH_SIZE:f32 = 0.01f32;
     // Default learning rate.
     const DEFAULT_LEARNING_RATE:f32 = 0.1f32;
-    // Default percentage size of training data to set regularization parameter (0.1=10%).
-    const DEFAULT_REGULARIZATION_PARAMETER:f32 = 0.1f32;
     // Default seconds to set duration for early stopping condition.
     // early stopping = default early stopping * (size of examples / number of examples) seconds
     const DEFAULT_EARLY_STOPPING:f32 = 400f32;
@@ -45,7 +43,6 @@ pub mod core {
     const DEFAULT_LEARNING_RATE_INTERVAL:f32 = 200f32;
     // ...
     const DEFAULT_MIN_LEARNING_RATE:f32 = 0.001f32;
-
     /// For setting `evaluation_data`.
     pub enum EvaluationData<'b> {
         Scalar(usize),
@@ -85,9 +82,11 @@ pub mod core {
         log_interval: Option<MeasuredCondition>,
         batch_size: usize, // TODO Maybe change `batch_size` to allow it to be set by a user as a % of their data
         // Reffered to as `ETA` in `NeuralNetwork`.
-        learning_rate: f32, 
-        // Regularization parameter
-        regularization_parameter: f32,
+        learning_rate: f32,
+        // Lambda value if using L2
+        l2:Option<f32>, 
+        // Dropout p value if using dropout
+        dropout:Option<f32>,
         // Can stop after a lack of cost improvement over a certain number of iterations/durations, or not at all.
         early_stopping_condition: MeasuredCondition,
         // Minimum change required to log positive evaluation change.
@@ -152,11 +151,18 @@ pub mod core {
             self.learning_rate = learning_rate;
             return self;
         }
-        /// Sets `regularization_parameter`.
+        /// Sets `l2`.
         /// 
-        /// `regularization_parameter` is used as `lambda` for L2 regularization or `p` for dropout.
-        pub fn regularization_parameter(&mut self, regularization_parameter:f32) -> &mut Trainer<'a> {
-            self.regularization_parameter = regularization_parameter;
+        /// `l2` represents whether to implement L2 regularisation and with what lambda value.
+        pub fn l2(&mut self, lambda:f32) -> &mut Trainer<'a> {
+            self.l2 = Some(lambda);
+            return self;
+        }
+        /// Sets `dropout`.
+        /// 
+        /// `dropout` represents whether to implement dropout on dense layers and with what p value.
+        pub fn dropout(&mut self, p:f32) -> &mut Trainer<'a> {
+            self.dropout = Some(p);
             return self;
         }
         /// Sets `early_stopping_condition`.
@@ -223,7 +229,8 @@ pub mod core {
                 self.log_interval,
                 self.batch_size,
                 self.learning_rate,
-                self.regularization_parameter,
+                self.l2,
+                self.dropout,
                 self.early_stopping_condition,
                 self.evaluation_min_change,
                 self.learning_rate_decay,
@@ -259,22 +266,15 @@ pub mod core {
             // Cross entropy cost
             // TODO Need to double check this
             fn cross_entropy(y: &Array<f32>, a: &Array<f32>) -> f32 {
-                //let part1 = a.mapv(f32::ln) * y;
-                let part1 = log(a) * y;
-
-                //af_print!("part1:",part1);
-
-                let part2 = log(&(1f32 - a)) * (1f32 - y);
-
-                //af_print!("part2:",part2);
-                //af_print!("part1+part2:",&part1+&part2);
+                // Adds very small value to a, to prevent log(0)=nan
+                let part1 = log(&(a+1e-20)) * y;
+                // Add very small value to prevent log(1-1)=log(0)=nan
+                let part2 = log(&(1f32 - a + 1e-20)) * (1f32 - y);
 
                 let mut cost:f32 = sum_all(&(part1+part2)).0 as f32;
 
-                // println!("cost:{}",cost);
-                // println!("a.dims().get()[1]:{}",a.dims().get()[0]);
-
                 cost /= -(a.dims().get()[1] as f32);
+
                 return cost;
             }
         }
@@ -284,7 +284,12 @@ pub mod core {
         fn derivative(&self,y:&Array<f32>,a:&Array<f32>) -> Array<f32> {
             return match self {
                 Self::Quadratic => { a-y },
-                Self::Crossentropy => { (-1*y)/a + (1f32-y)/(1f32-a) } // -y/a + (1-y)/(1-a)
+                Self::Crossentropy => {
+                    // TODO Double check we don't need to add a val to prevent 1-a=0 (commented out code below checks count of values where a>=1)
+                    //let check = sum_all(&arrayfire::ge(a,&1f32,false)).0;
+                    //if check != 0f64 { panic!("check: {}",check); }
+                    return (-1*y)/a + (1f32-y)/(1f32-a);
+                } // -y/a + (1-y)/(1-a)
             }
         }
     }
@@ -353,8 +358,6 @@ pub mod core {
                 // Similar performance.
                 let gt = arrayfire::gt(z,&0f32,false);
                 return arrayfire::and(z,&gt,false);
-            
-                
             }
         }
         // TODO Make this better
@@ -548,7 +551,6 @@ pub mod core {
         /// neural_network.train(&data)
         ///     .learning_rate(2f32)
         ///     .evaluation_data(EvaluationData::Actual(&data)) // Use training data as evaluation data.
-        ///     .regularization_parameter(0f32)
         /// .go();
         /// ```
         pub fn train(&mut self,training_data:&[(Vec<f32>,usize)]) -> Trainer {
@@ -575,13 +577,11 @@ pub mod core {
             let learning_rate_interval:u32 = (DEFAULT_LEARNING_RATE_INTERVAL * multiplier).ceil() as u32;
             
             let batch_holder:f32 = DEFAULT_BATCH_SIZE * training_data.len() as f32;
-            // TODO What should we use as min batch size here instead of `10f32`?
-            let batch_size:usize = if batch_holder < 10f32 {
-                training_data.len()
-            }
-            else {
-                batch_holder.ceil() as usize
-            };
+            // TODO What should we use as min batch size here instead of `100`?
+            let batch_size:usize = 
+                if training_data.len() < 100usize { training_data.len() }
+                else if batch_holder < 100f32 { 100usize }
+                else { batch_holder.ceil() as usize };
 
             return Trainer {
                 training_data: temp_training_data,
@@ -591,7 +591,8 @@ pub mod core {
                 log_interval: None,
                 batch_size: batch_size,
                 learning_rate: DEFAULT_LEARNING_RATE,
-                regularization_parameter: DEFAULT_REGULARIZATION_PARAMETER,
+                l2:None,
+                dropout:None,
                 early_stopping_condition: MeasuredCondition::Iteration(early_stopping_condition),
                 evaluation_min_change: Proportion::Percent(DEFAULT_EVALUATION_MIN_CHANGE),
                 learning_rate_decay: DEFAULT_LEARNING_RATE_DECAY,
@@ -615,7 +616,8 @@ pub mod core {
             log_interval: Option<MeasuredCondition>,
             batch_size: usize,
             intial_learning_rate: f32,
-            regularization_parameter: f32,
+            l2:Option<f32>,
+            dropout:Option<f32>,
             early_stopping_n: MeasuredCondition,
             evaluation_min_change: Proportion,
             learning_rate_decay: f32,
@@ -696,7 +698,7 @@ pub mod core {
                         stdout.queue(cursor::RestorePosition).unwrap();
                         stdout.flush().unwrap();
 
-                        let (new_connections,new_biases) = self.update_batch(&batch,learning_rate,regularization_parameter,training_data.len() as f32,cost);
+                        let (new_connections,new_biases) = self.update_batch(&batch,learning_rate,training_data.len() as f32,cost,l2,dropout);
                         self.connections = new_connections;
                         self.biases = new_biases;
                     }
@@ -705,7 +707,7 @@ pub mod core {
                 else {
                     //println!("got here 2.3");
                     for batch in batches {
-                        let (new_connections,new_biases) = self.update_batch(&batch,learning_rate,regularization_parameter,training_data.len() as f32,cost);
+                        let (new_connections,new_biases) = self.update_batch(&batch,learning_rate,training_data.len() as f32,cost,l2,dropout);
                         self.connections = new_connections;
                         self.biases = new_biases;
                     }
@@ -851,86 +853,169 @@ pub mod core {
         }
         // Runs batch through network to calculate weight and bias gradients.
         // Returns new weight and bias values.
-        fn update_batch(&self, batch: &(Array<f32>,Array<f32>), eta: f32, regularization_parameter:f32, n:f32,cost:&Cost) -> (Vec<Array<f32>>,Vec<Array<f32>>) {
-            let (nabla_b,nabla_w):(Vec<Array<f32>>,Vec<Array<f32>>) = self.backpropagate(&batch,cost);
-
-            let batch_len = batch.0.dims().get()[0];
-            // TODO Look into removing `.clone()`s here
-            let return_connections:Vec<Array<f32>> = self.connections.iter().zip(nabla_w).map(
-                | (w,nw) | (1f32-eta*(regularization_parameter/n))*w - ((eta / batch_len as f32)) * nw
-            ).collect();
-
-            let return_biases:Vec<Array<f32>> = self.biases.iter().zip(nabla_b).map(
-                |(old_b,new_b)| old_b - (eta * new_b / batch_len as f32)
-            ).collect();
-
-            return (return_connections,return_biases);
-        }
-        // Runs backpropgation on chunk of batch.
-        // Returns weight and bias partial derivatives (errors).
-        fn backpropagate(&self, example:&(Array<f32>,Array<f32>),cost:&Cost) -> (Vec<Array<f32>>,Vec<Array<f32>>) {
-            // Feeds forward
-            // --------------
-            let numb_of_examples = example.0.dims().get()[0]; // Number of examples (rows)
-            let ones = constant(1f32,Dim4::new(&[numb_of_examples,1,1,1]));
-
-            let mut inputs:Vec<Array<f32>> = Vec::with_capacity(self.biases.len()); // Name more intuitively
-            let mut activations:Vec<Array<f32>> = Vec::with_capacity(self.biases.len()+1);
-
-            activations.push(example.0.clone());
-            for i in 0..self.layers.len() {
-                let weighted_inputs:Array<f32> = matmul(&activations[i],&self.connections[i],MatProp::NONE,MatProp::NONE);
-
-                // TODO The implemented code is notably faster than the commented code here, look into why this is.
-                // inputs.push(arrayfire::add(&weighted_inputs,&self.biases[i],true));
-                let bias_matrix:Array<f32> = matmul(&ones,&self.biases[i],MatProp::NONE,MatProp::NONE);
-                inputs.push(weighted_inputs + bias_matrix);
-
-                activations.push(self.layers[i].run(&inputs[i]));
-            }
-
-            // Backpropagates
-            // --------------
-            let target = example.1.clone();
-            let last_index = self.connections.len()-1; // = nabla_b.len()-1 = nabla_w.len()-1 = self.neurons.len()-2 = self.connections.len()-1
-            
-            // Gradients of biases and weights.
-            let mut nabla_b:Vec<Array<f32>> = Vec::with_capacity(self.biases.len());
-            // TODO find way to make this ArrayD an Array3, ArrayD willl always have 3d imensions, just can't figure out caste.
-            let mut nabla_w:Vec<Array<f32>> = Vec::with_capacity(self.connections.len()); // this should really be 3d matrix instead of 'Vec<DMatrix<f32>>', its a bad workaround
-
-            let last_layer = self.layers[self.layers.len()-1];
-            
-            // Calculate error in output layer
-            let mut error:Array<f32> = cost.derivative(&target,&activations[activations.len()-1]) * last_layer.derivative(&inputs[inputs.len()-1]);
-
-            // Sets gradients in output layer
-            nabla_b.insert(0,error.clone());
-            //let weight_errors = einsum("ai,aj->aji", &[&error, &activations[last_index]]).unwrap();
-            let weight_errors = calc_weight_errors(&error,&activations[last_index]);
-            nabla_w.insert(0,weight_errors);
-
-            // self.layers.len()-1 -> 1 (inclusive)
-            // (self.layers.len()=self.biases.len()=self.connections.len())
-            for i in (1..self.layers.len()).rev() {
-                // Calculates error
-                error = self.layers[i-1].derivative(&inputs[i-1]) *
-                    matmul(&error,&self.connections[i],MatProp::NONE,MatProp::TRANS);
-                // Sets gradients
-                nabla_b.insert(0,error.clone());
-                let weight_errors = calc_weight_errors(&error,&activations[i-1]);
-                nabla_w.insert(0,weight_errors);
-            }
-
+        fn update_batch(&self, batch: &(Array<f32>,Array<f32>), learning_rate: f32, n:f32,cost:&Cost,l2:Option<f32>,dropout:Option<f32>) -> (Vec<Array<f32>>,Vec<Array<f32>>) {
+            let (nabla_b,nabla_w):(Vec<Array<f32>>,Vec<Array<f32>>) = 
+                if let Some(p) = dropout { dropout_backpropagate(self,&batch,cost,p) } 
+                else { backpropagate(self,&batch,cost) };
+                
             // Sum along columns (rows represent each example), push to `nabla_b_sum`.
             let nabla_b_sum:Vec<Array<f32>> = nabla_b.iter().map(|x| sum(x,0)).collect();
-
             // Sums through layers (each layer is a matrix representing each example), casts to Arry2 then pushes to `nabla_w_sum`.
             let nabla_w_sum:Vec<Array<f32>> = nabla_w.iter().map(|x| sum(x,2)).collect();
 
-            // Returns gradients
-            return (nabla_b_sum,nabla_w_sum);
 
+            let batch_len = batch.0.dims().get()[0] as f32;
+            // TODO Look into removing `.clone()`s here
+
+            let return_connections:Vec<Array<f32>> = 
+                if let Some(lambda) = l2 {
+                    izip!(&self.connections,&nabla_w_sum).map(
+                        | (old_w,new) | (1f32-learning_rate*(lambda/n))*old_w - ((learning_rate / batch_len)) * new
+                    ).collect()
+                } 
+                else {
+                    izip!(&self.connections,&nabla_w_sum).map(
+                        |(old_w,new_w)| old_w - (learning_rate * new_w / batch_len)
+                    ).collect()
+                };
+
+            let return_biases:Vec<Array<f32>> = izip!(&self.biases,&nabla_b_sum).map(
+                |(old_b,new_b)| old_b - (learning_rate * new_b / batch_len)
+            ).collect();
+
+            //panic!("\n\ngothere\n\n");
+
+            return (return_connections,return_biases);
+
+            // TODO Name `input` and `inputs` better so it's easier to differentiate
+            // Runs backpropgation on chunk of batch.
+            // Returns weight and bias partial derivatives (errors).
+            fn dropout_backpropagate(net:&NeuralNetwork, (input,target):&(Array<f32>,Array<f32>),cost:&Cost,p:f32) -> (Vec<Array<f32>>,Vec<Array<f32>>) {
+                // Feeds forward
+                // --------------
+
+                let numb_of_examples = input.dims().get()[0]; // Number of examples (rows)
+                let ones = constant(1f32,Dim4::new(&[numb_of_examples,1,1,1]));
+
+                // Creates dropout mask for all hidden layers
+                let mut dropout_masks:Vec<Array<f32>> = (0..net.biases.len()-1).map(|indx| gt(&randu::<f32>(net.biases[indx].dims()),&p,false).cast::<f32>()).collect();
+                dropout_masks=dropout_masks.iter().map(|x| matmul(&ones,x,MatProp::NONE,MatProp::NONE)).collect();
+
+                let mut inputs:Vec<Array<f32>> = Vec::with_capacity(net.biases.len()); // Name more intuitively
+                let mut activations:Vec<Array<f32>> = Vec::with_capacity(net.biases.len()+1);
+                // Pushes input
+                activations.push(input.clone());
+
+                // Forward propagates hidden layers
+                for i in 0..net.layers.len()-1 {
+                    let weighted_inputs:Array<f32> = matmul(&activations[i],&net.connections[i],MatProp::NONE,MatProp::NONE);
+                    // TODO The implemented code is notably faster than the commented code here, look into why this is.
+                    // inputs.push(arrayfire::add(&weighted_inputs,&self.biases[i],true));
+                    let bias_matrix:Array<f32> = matmul(&ones,&net.biases[i],MatProp::NONE,MatProp::NONE);
+                    inputs.push(weighted_inputs + bias_matrix);
+                    activations.push(net.layers[i].run(&inputs[i]) * &dropout_masks[i]);
+                }
+                // Forward propgates from last hidden layer to output layer
+                let out_indx = net.layers.len()-1;
+                let weighted_inputs:Array<f32> = matmul(&activations[out_indx],&net.connections[out_indx],MatProp::NONE,MatProp::NONE);
+                let bias_matrix:Array<f32> = matmul(&ones,&net.biases[out_indx],MatProp::NONE,MatProp::NONE);
+                inputs.push(weighted_inputs + bias_matrix);
+                activations.push(net.layers[out_indx].run(&inputs[out_indx]));
+
+                //panic!("\n\nWAHT IS WRONG\n\n\n");
+
+                // Backpropagates
+                // --------------
+
+                // Gradients of biases and weights.
+                let mut nabla_b:Vec<Array<f32>> = Vec::with_capacity(net.biases.len());
+                let mut nabla_w:Vec<Array<f32>> = Vec::with_capacity(net.connections.len());
+
+                // Calculate error in output layer
+                let last_layer = net.layers[net.layers.len()-1];
+                let mut error:Array<f32> = cost.derivative(&target,&activations[activations.len()-1]) * last_layer.derivative(&inputs[inputs.len()-1]);
+
+                // Sets gradients in output layer
+                nabla_b.insert(0,error.clone());
+                //let weight_errors = einsum("ai,aj->aji", &[&error, &activations[activations.len()-1]]).unwrap();
+                let weight_errors = calc_weight_errors(&error,&activations[net.connections.len()-1]);
+                nabla_w.insert(0,weight_errors);
+
+                // self.layers.len()-1 -> 1 (inclusive)
+                // (self.layers.len()=self.biases.len()=self.connections.len())
+                for i in (1..net.layers.len()).rev() {
+                    // Calculates error
+                    error = net.layers[i-1].derivative(&inputs[i-1]) *
+                        matmul(&error,&net.connections[i],MatProp::NONE,MatProp::TRANS);
+                    //panic!("dropout_masks[i-1].dims():{}, error.dims():{}",dropout_masks[i-1].dims(),error.dims());
+                    error = error * &dropout_masks[i-1]; // Applies dropout mask
+                    
+                    // Sets gradients
+                    nabla_b.insert(0,error.clone());
+                    let weight_errors = calc_weight_errors(&error,&activations[i-1]);
+                    nabla_w.insert(0,weight_errors);
+                }
+
+                // Returns gradients
+                return (nabla_b,nabla_w);
+            }
+            fn backpropagate(net:&NeuralNetwork, example:&(Array<f32>,Array<f32>),cost:&Cost) -> (Vec<Array<f32>>,Vec<Array<f32>>) {
+                // Feeds forward
+                // --------------
+                let numb_of_examples = example.0.dims().get()[0]; // Number of examples (rows)
+                let ones = constant(1f32,Dim4::new(&[numb_of_examples,1,1,1]));
+    
+                let mut inputs:Vec<Array<f32>> = Vec::with_capacity(net.biases.len()); // Name more intuitively
+                let mut activations:Vec<Array<f32>> = Vec::with_capacity(net.biases.len()+1);
+    
+                activations.push(example.0.clone());
+                for i in 0..net.layers.len() {
+                    let weighted_inputs:Array<f32> = matmul(&activations[i],&net.connections[i],MatProp::NONE,MatProp::NONE);
+    
+                    // TODO The implemented code is notably faster than the commented code here, look into why this is.
+                    // inputs.push(arrayfire::add(&weighted_inputs,&self.biases[i],true));
+                    let bias_matrix:Array<f32> = matmul(&ones,&net.biases[i],MatProp::NONE,MatProp::NONE);
+                    inputs.push(weighted_inputs + bias_matrix);
+    
+                    activations.push(net.layers[i].run(&inputs[i]));
+                }
+    
+                // Backpropagates
+                // --------------
+                let target = example.1.clone();
+                let last_index = net.connections.len()-1; // = nabla_b.len()-1 = nabla_w.len()-1 = self.neurons.len()-2 = self.connections.len()-1
+                
+                // Gradients of biases and weights.
+                let mut nabla_b:Vec<Array<f32>> = Vec::with_capacity(net.biases.len());
+                // TODO find way to make this ArrayD an Array3, ArrayD willl always have 3d imensions, just can't figure out caste.
+                let mut nabla_w:Vec<Array<f32>> = Vec::with_capacity(net.connections.len()); // this should really be 3d matrix instead of 'Vec<DMatrix<f32>>', its a bad workaround
+    
+                let last_layer = net.layers[net.layers.len()-1];
+                
+                // Calculate error in output layer
+                let mut error:Array<f32> = cost.derivative(&target,&activations[activations.len()-1]) * last_layer.derivative(&inputs[inputs.len()-1]);
+    
+                // Sets gradients in output layer
+                nabla_b.insert(0,error.clone());
+                //let weight_errors = einsum("ai,aj->aji", &[&error, &activations[last_index]]).unwrap();
+                let weight_errors = calc_weight_errors(&error,&activations[last_index]);
+                nabla_w.insert(0,weight_errors);
+    
+                // self.layers.len()-1 -> 1 (inclusive)
+                // (self.layers.len()=self.biases.len()=self.connections.len())
+                for i in (1..net.layers.len()).rev() {
+                    // Calculates error
+                    error = net.layers[i-1].derivative(&inputs[i-1]) *
+                        matmul(&error,&net.connections[i],MatProp::NONE,MatProp::TRANS);
+                    // Sets gradients
+                    nabla_b.insert(0,error.clone());
+                    let weight_errors = calc_weight_errors(&error,&activations[i-1]);
+                    nabla_w.insert(0,weight_errors);
+                }
+    
+                // Returns gradients
+                return (nabla_b,nabla_w);
+            }
             fn calc_weight_errors(errors:&Array<f32>,activations:&Array<f32>) -> arrayfire::Array<f32> {
                 let rows:u64 = errors.dims().get()[0];
                 
@@ -952,6 +1037,7 @@ pub mod core {
                 return temp;
             }
         }
+        
         
         /// Inserts new layer before output layer in network.
         /// ```
@@ -1014,7 +1100,6 @@ pub mod core {
         /// #     .learning_rate(2f32)
         /// #     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
         /// #     .early_stopping_condition(MeasuredCondition::Iteration(2000))
-        /// #     .regularization_parameter(0f32)
         /// # .go();
         /// # 
         /// // `net` is neural network trained to 100% accuracy to mimic an XOR gate.
@@ -1035,6 +1120,8 @@ pub mod core {
             let output = self.run(&input);
 
             let cost:f32 = cost.run(&target,&output);
+
+            //if cost.is_nan() { panic!("fist nan"); }
 
             //panic!("cost computed");
 
@@ -1069,7 +1156,6 @@ pub mod core {
         /// #     .learning_rate(2f32)
         /// #     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
         /// #     .early_stopping_condition(MeasuredCondition::Iteration(2000))
-        /// #     .regularization_parameter(0f32)
         /// # .go();
         /// # 
         /// // `net` is neural network trained to 100% accuracy to mimic an XOR gate.
@@ -1142,7 +1228,6 @@ pub mod core {
         /// #     .learning_rate(2f32)
         /// #     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
         /// #     .early_stopping_condition(MeasuredCondition::Iteration(2000))
-        /// #     .regularization_parameter(0f32)
         /// # .go();
         /// # 
         /// // `net` is neural network trained to 100% accuracy to mimic an XOR gate.
@@ -1184,7 +1269,6 @@ pub mod core {
         /// #     .learning_rate(2f32)
         /// #     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
         /// #     .early_stopping_condition(MeasuredCondition::Iteration(2000))
-        /// #     .regularization_parameter(0f32)
         /// # .go();
         /// # 
         /// let mut dictionairy:HashMap<usize,&str> = HashMap::new();

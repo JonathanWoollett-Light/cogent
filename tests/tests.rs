@@ -27,7 +27,8 @@ mod tests {
         ]);
         net.activation(2,Activation::Softmax); // Changes activation of output layer.
     }
-    // Tests network to learn an XOR gate.
+    // `train_xor_x` Tests network to learn an XOR gate.
+
     // (2-Sigmoid->3-Sigmoid->2)
     #[test]
     fn train_xor_0() {
@@ -55,7 +56,6 @@ mod tests {
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
-                .regularization_parameter(0f32)
             .go();
 
             // Evaluation
@@ -64,7 +64,6 @@ mod tests {
             assert!(evaluation.1 as usize == data.len());
         }
     }
-    // Tests network to learn an XOR gate.
     // (2-Softmax->3-Softmax->2)
     #[test]
     fn train_xor_1() {
@@ -91,7 +90,6 @@ mod tests {
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
-                .regularization_parameter(0f32)
             .go();
 
             // Evaluation
@@ -104,7 +102,6 @@ mod tests {
     // ReLU doesn't seem to work with such small networks
     // My idea is that it effectively leads to 0 activations which lead to 0 gradients which stop it learning
 
-    // Tests network to learn an XOR gate.
     // (2-Sigmoid->3-Softmax->2)
     #[test]
     fn train_xor_3() {
@@ -132,7 +129,6 @@ mod tests {
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
-                .regularization_parameter(0f32)
             .go();
 
             // Evaluation
@@ -141,70 +137,11 @@ mod tests {
             assert!(evaluation.1 as usize == data.len());
         }
     }
-    // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
-    // (784-Sigmoid->100-Softmax->10)
+    // `train_digits_x` Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
+
+    // (784-ReLU->300-Sigmoid->100-Softmax->10) with L2
     #[test]
     fn train_digits_0() {
-        let runs = TEST_RERUN_MULTIPLIER;
-        for _ in 0..runs {
-            // Setup
-            // ------------------------------------------------
-            // Sets network
-            let mut net = NeuralNetwork::new(784,&[
-                Layer::new(100,Activation::Sigmoid),
-                Layer::new(10,Activation::Softmax)
-            ]);
-            // Sets training and testing data
-            let training_data = get_mnist_dataset(false);
-            let testing_data = get_mnist_dataset(true);
-
-            // Execution
-            // ------------------------------------------------
-            net.train(&training_data)
-                .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
-                .halt_condition(HaltCondition::Accuracy(0.95f32))
-            .go();
-
-            // Evaluation
-            // ------------------------------------------------
-
-            let evaluation = net.evaluate(&testing_data,None);
-            assert!(evaluation.1 >= required_accuracy(&testing_data));
-        }
-    }
-    // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
-    // (784-ReLU->100-Softmax->10)
-    #[test]
-    fn train_digits_1() {
-        let runs = TEST_RERUN_MULTIPLIER;
-        for _ in 0..runs {
-            // Setup
-            // ------------------------------------------------
-            let mut net = NeuralNetwork::new(784,&[
-                Layer::new(100,Activation::ReLU),
-                Layer::new(10,Activation::Softmax) // You can't have a ReLU output layer
-            ]);
-            // Sets training and testing data
-            let training_data = get_mnist_dataset(false);
-            let testing_data = get_mnist_dataset(true);
-
-            // Execution
-            // ------------------------------------------------
-            net.train(&training_data)
-                .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
-                .halt_condition(HaltCondition::Accuracy(0.95f32))
-            .go();
-
-            // Evaluation
-            // ------------------------------------------------
-            let evaluation = net.evaluate(&testing_data,None);
-            assert!(evaluation.1 >= required_accuracy(&testing_data));
-        }
-    }
-    // Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
-    // (784-ReLU->300-Sigmoid->100-Softmax->10)
-    #[test]
-    fn train_digits_2() {
         let runs = TEST_RERUN_MULTIPLIER;
         for _ in 0..runs {
             // Setup
@@ -223,7 +160,70 @@ mod tests {
             // ------------------------------------------------
             net.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
-                .halt_condition(HaltCondition::Accuracy(0.95f32))
+                .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
+                .l2(0.1f32)
+            .go();
+
+            // Evaluation
+            // ------------------------------------------------
+            let evaluation = net.evaluate(&testing_data,None);
+            assert!(evaluation.1 >= required_accuracy(&testing_data));
+        }
+    }
+    // (784-ReLU->800-Softmax->10) with dropout
+    #[test]
+    fn train_digits_1() {
+        let runs = TEST_RERUN_MULTIPLIER;
+        for _ in 0..runs {
+            // Setup
+            // ------------------------------------------------
+            let mut net = NeuralNetwork::new(784,&[
+                Layer::new(1000,Activation::ReLU),
+                Layer::new(500,Activation::ReLU),
+                Layer::new(10,Activation::Softmax)
+            ]);
+
+            // Sets training and testing data
+            let training_data = get_mnist_dataset(false);
+            let testing_data = get_mnist_dataset(true);
+
+            // Execution
+            // ------------------------------------------------
+            net.train(&training_data)
+                .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
+                .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
+                .dropout(0.5f32)
+            .go();
+
+            // Evaluation
+            // ------------------------------------------------
+            let evaluation = net.evaluate(&testing_data,None);
+            assert!(evaluation.1 >= required_accuracy(&testing_data));
+        }
+    }
+    // (784-ReLU->800-Softmax->10) with L2
+    #[test]
+    fn train_digits_2() {
+        let runs = TEST_RERUN_MULTIPLIER;
+        for _ in 0..runs {
+            // Setup
+            // ------------------------------------------------
+            let mut net = NeuralNetwork::new(784,&[
+                Layer::new(1000,Activation::ReLU),
+                Layer::new(500,Activation::ReLU),
+                Layer::new(10,Activation::Softmax)
+            ]);
+
+            // Sets training and testing data
+            let training_data = get_mnist_dataset(false);
+            let testing_data = get_mnist_dataset(true);
+
+            // Execution
+            // ------------------------------------------------
+            net.train(&training_data)
+                .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
+                .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
+                .l2(0.1f32)
             .go();
 
             // Evaluation

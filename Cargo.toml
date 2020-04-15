@@ -23,3 +23,4 @@ crossterm="0.17.1"                                  # Printing backpropagation p
 serde = {version = "1.0.106",features=["derive"]}   # Serialize (Export) and deserialize (Import) `NeuralNetwork`
 serde_json = "1.0.50"                               # JSON format for serde
 arrayfire = "3.7.0"                                 # Linear algebra and GPU compute
+itertools = "0.9.0"                                 # Nice zipping of iterators
