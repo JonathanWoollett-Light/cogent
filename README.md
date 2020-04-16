@@ -62,7 +62,7 @@ If you find any issues I would really appreciate if you could let me know (and p
  - Layers: Dense
  - Activations: Softmax, Sigmoid, ReLU.
  - Loss functions: Mean sqaured error, Cross entropy.
- - Regularisation techniques: L2.
+ - Regularisation techniques: L2, Dropout.
 
 
 
@@ -80,10 +80,10 @@ Task types:
  
 Tasks:
 
-1. :ballot_box_with_check: Dropout.
-2. :ballot_box_with_check: Convolutional layers.
-3. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
-4. :repeat: Improve defaults.
-5. :repeat: Learn more.
+1. :ballot_box_with_check: Convolutional layers.
+2. :ballot_box_with_check: Meticulous testing and validation.
+2. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
+3. :repeat: Improve defaults.
+4. :repeat: Learn more.
 
 Please note that things may not be developed inorder, it is only my estimation.
