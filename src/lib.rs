@@ -705,7 +705,6 @@ pub mod core {
                     stdout.write(format!("Backpropagated: {}\n",NeuralNetwork::time(backprop_start_instant)).as_bytes()).unwrap();
                 }
                 else {
-                    //println!("got here 2.3");
                     for batch in batches {
                         let (new_connections,new_biases) = self.update_batch(&batch,learning_rate,training_data.len() as f32,cost,l2,dropout);
                         self.connections = new_connections;
@@ -854,37 +853,44 @@ pub mod core {
         // Runs batch through network to calculate weight and bias gradients.
         // Returns new weight and bias values.
         fn update_batch(&self, batch: &(Array<f32>,Array<f32>), learning_rate: f32, n:f32,cost:&Cost,l2:Option<f32>,dropout:Option<f32>) -> (Vec<Array<f32>>,Vec<Array<f32>>) {
+            // Runs backpropagation
+            // --------------
+
             let (nabla_b,nabla_w):(Vec<Array<f32>>,Vec<Array<f32>>) = 
                 if let Some(p) = dropout { dropout_backpropagate(self,&batch,cost,p) } 
                 else { backpropagate(self,&batch,cost) };
-                
-            // Sum along columns (rows represent each example), push to `nabla_b_sum`.
+               
+            // Sums errors in weights and biases across examples
+            // --------------
+            // Sums along columns (rows represent each example).
             let nabla_b_sum:Vec<Array<f32>> = nabla_b.iter().map(|x| sum(x,0)).collect();
-            // Sums through layers (each layer is a matrix representing each example), casts to Arry2 then pushes to `nabla_w_sum`.
+            // Sums through layers (each layer is a matrix representing each example).
             let nabla_w_sum:Vec<Array<f32>> = nabla_w.iter().map(|x| sum(x,2)).collect();
 
 
-            let batch_len = batch.0.dims().get()[0] as f32;
-            // TODO Look into removing `.clone()`s here
+            // Subtracts errors from current weights and biases
+            // --------------
 
+            let batch_len = batch.0.dims().get()[0] as f32;
+
+            // = old weights - weights errors
             let return_connections:Vec<Array<f32>> = 
                 if let Some(lambda) = l2 {
                     izip!(&self.connections,&nabla_w_sum).map(
-                        | (old_w,new) | (1f32-learning_rate*(lambda/n))*old_w - ((learning_rate / batch_len)) * new
+                        | (old_w,w_error) | (1f32-learning_rate*(lambda/n))*old_w - ((learning_rate / batch_len)) * w_error
                     ).collect()
                 } 
                 else {
                     izip!(&self.connections,&nabla_w_sum).map(
-                        |(old_w,new_w)| old_w - (learning_rate * new_w / batch_len)
+                        |(old_w,error_w)| old_w - (learning_rate * error_w / batch_len)
                     ).collect()
                 };
 
+            // = old biasers - bias errors
             let return_biases:Vec<Array<f32>> = izip!(&self.biases,&nabla_b_sum).map(
-                |(old_b,new_b)| old_b - (learning_rate * new_b / batch_len)
+                |(old_b,error_b)| old_b - (learning_rate * error_b / batch_len)
             ).collect();
-
-            //panic!("\n\ngothere\n\n");
-
+            
             return (return_connections,return_biases);
 
             // TODO Name `input` and `inputs` better so it's easier to differentiate
@@ -894,16 +900,18 @@ pub mod core {
                 // Feeds forward
                 // --------------
 
+                // TODO Could this be done nicer?
                 let numb_of_examples = input.dims().get()[0]; // Number of examples (rows)
                 let ones = constant(1f32,Dim4::new(&[numb_of_examples,1,1,1]));
 
-                // Creates dropout mask for all hidden layers
+                // Creates dropout mask for each hidden layer
                 let mut dropout_masks:Vec<Array<f32>> = (0..net.biases.len()-1).map(|indx| gt(&randu::<f32>(net.biases[indx].dims()),&p,false).cast::<f32>()).collect();
                 dropout_masks=dropout_masks.iter().map(|x| matmul(&ones,x,MatProp::NONE,MatProp::NONE)).collect();
 
                 let mut inputs:Vec<Array<f32>> = Vec::with_capacity(net.biases.len()); // Name more intuitively
                 let mut activations:Vec<Array<f32>> = Vec::with_capacity(net.biases.len()+1);
-                // Pushes input
+
+                // Pushes input to activations (1st layer doesn't have an activation function)
                 activations.push(input.clone());
 
                 // Forward propagates hidden layers
@@ -922,8 +930,6 @@ pub mod core {
                 inputs.push(weighted_inputs + bias_matrix);
                 activations.push(net.layers[out_indx].run(&inputs[out_indx]));
 
-                //panic!("\n\nWAHT IS WRONG\n\n\n");
-
                 // Backpropagates
                 // --------------
 
@@ -937,17 +943,15 @@ pub mod core {
 
                 // Sets gradients in output layer
                 nabla_b.insert(0,error.clone());
-                //let weight_errors = einsum("ai,aj->aji", &[&error, &activations[activations.len()-1]]).unwrap();
+                // `calc_weight_errors` repliaces `ndarray::einsum("ai,aj->aji", &[&error, &activations[activations.len()-1]]).unwrap();`
                 let weight_errors = calc_weight_errors(&error,&activations[net.connections.len()-1]);
                 nabla_w.insert(0,weight_errors);
 
-                // self.layers.len()-1 -> 1 (inclusive)
-                // (self.layers.len()=self.biases.len()=self.connections.len())
                 for i in (1..net.layers.len()).rev() {
                     // Calculates error
                     error = net.layers[i-1].derivative(&inputs[i-1]) *
                         matmul(&error,&net.connections[i],MatProp::NONE,MatProp::TRANS);
-                    //panic!("dropout_masks[i-1].dims():{}, error.dims():{}",dropout_masks[i-1].dims(),error.dims());
+
                     error = error * &dropout_masks[i-1]; // Applies dropout mask
                     
                     // Sets gradients
@@ -962,6 +966,7 @@ pub mod core {
             fn backpropagate(net:&NeuralNetwork, example:&(Array<f32>,Array<f32>),cost:&Cost) -> (Vec<Array<f32>>,Vec<Array<f32>>) {
                 // Feeds forward
                 // --------------
+
                 let numb_of_examples = example.0.dims().get()[0]; // Number of examples (rows)
                 let ones = constant(1f32,Dim4::new(&[numb_of_examples,1,1,1]));
     
@@ -982,6 +987,7 @@ pub mod core {
     
                 // Backpropagates
                 // --------------
+
                 let target = example.1.clone();
                 let last_index = net.connections.len()-1; // = nabla_b.len()-1 = nabla_w.len()-1 = self.neurons.len()-2 = self.connections.len()-1
                 
@@ -1121,11 +1127,6 @@ pub mod core {
 
             let cost:f32 = cost.run(&target,&output);
 
-            //if cost.is_nan() { panic!("fist nan"); }
-
-            //panic!("cost computed");
-
-            //println!("done cost");
             let output_classes = imax(&output,1).1;
             let target_classes_vec:Vec<u32> = test_data.iter().map(|x|x.1 as u32).collect();
             let target_classes = Array::<u32>::new(&target_classes_vec,Dim4::new(&[test_data.len() as u64,1,1,1]));
