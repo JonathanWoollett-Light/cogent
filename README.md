@@ -69,7 +69,7 @@ If you find any issues I would really appreciate if you could let me know (and p
 ## Installation
 
 1. [Setup ArrayFire Rust bindings](https://github.com/arrayfire/arrayfire-rust#use-from-cratesio--) (Ignore step 4).
-2. Add `cogent = "^0.2"` to `Cargo.toml`.
+2. Add `cogent = "^0.3"` to `Cargo.toml`.
 
 ## TODO
 
@@ -81,9 +81,10 @@ Task types:
 Tasks:
 
 1. :ballot_box_with_check: Convolutional layers.
-2. :ballot_box_with_check: Meticulous testing and validation.
-2. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
-3. :repeat: Improve defaults.
-4. :repeat: Learn more.
+2. :ballot_box_with_check: Meticulous testing (making sure things work).
+3. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
+4. :ballot_box_with_check: Meticulous benchmarking (making sure things are fast).
+5. :repeat: Improve defaults.
+6. :repeat: Learn more.
 
 Please note that things may not be developed inorder, it is only my estimation.

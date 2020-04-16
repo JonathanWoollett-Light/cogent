@@ -30,15 +30,15 @@ pub mod core {
     const DEFAULT_BATCH_SIZE:f32 = 0.01f32;
     // Default learning rate.
     const DEFAULT_LEARNING_RATE:f32 = 0.1f32;
-    // Default seconds to set duration for early stopping condition.
-    // early stopping = default early stopping * (size of examples / number of examples) seconds
+    // Default interval in iterations before early stopping.
+    // early stopping = default early stopping * (size of examples / number of examples) Iterations
     const DEFAULT_EARLY_STOPPING:f32 = 400f32;
     // Default percentage minimum positive accuracy change required to prevent early stopping or learning rate decay (0.005=0.5%).
-    const DEFAULT_EVALUATION_MIN_CHANGE:f32 = 0.005f32;
+    const DEFAULT_EVALUATION_MIN_CHANGE:f32 = 0.001f32;
     // Default amount to decay learning rate after period of un-notable (what word should I use here?) change.
     // `new learning rate = learning rate decay * old learning rate`
     const DEFAULT_LEARNING_RATE_DECAY:f32 = 0.5f32;
-    // Default interval to go without notable importment before learning rate decay.
+    // Default interval in iterations before learning rate decay.
     // interval = default learning rate interval * (size of examples / number of examples) iterations.
     const DEFAULT_LEARNING_RATE_INTERVAL:f32 = 200f32;
     // ...
@@ -394,7 +394,7 @@ pub mod core {
     
     /// Used to specify layers to construct neural net.
     pub struct Layer {
-        size: usize,
+        size: usize, // TODO Should this be `size` or `length`? (especially considering it's 1d, we don't say the 'size' of a line)
         activation: Activation,
     }
     impl Layer {
@@ -435,14 +435,14 @@ pub mod core {
         /// ```
         pub fn new(inputs:usize,layers: &[Layer]) -> NeuralNetwork {
             if layers.len() == 0 {
-                panic!("Requires >1 layers");
+                panic!("Requires output layer."); // TODO Is this best way to word this?
             }
             if inputs == 0 {
-                panic!("Input size must be >0");
+                panic!("Input size must be >0.");
             }
-            for x in layers {
-                if x.size < 1usize {
-                    panic!("All layer sizes must be >0");
+            for i in 0..layers.len() {
+                if layers[i].size == 0usize {
+                    panic!("Layer {} .size = 0. All layer sizes must be >0.",i);
                 }
             }
 
@@ -1419,13 +1419,6 @@ pub mod core {
                 let vec:Vec<f32> = vec!(f32::default();len);
                 biases.push(vec);
                 self.biases[i].host(&mut biases[i]);
-
-                for val in biases[i].iter() {
-                    if val.is_nan() {
-                        println!("ffs bois: nan bias");
-                        panic!("nan found");
-                    }
-                }
             }
 
             let mut weights:Vec<(Vec<f32>,(u64,u64))> = Vec::with_capacity(self.connections.len());
@@ -1436,13 +1429,6 @@ pub mod core {
                 let vec:Vec<f32> = vec!(f32::default();(inner_dims[0]*inner_dims[1]) as usize);
                 weights.push((vec,(inner_dims[0],inner_dims[1])));
                 self.connections[i].host(&mut weights[i].0);
-
-                for val in weights[i].0.iter() {
-                    if val.is_nan() {
-                        println!("ffs bois: nan weight");
-                        panic!("nan found");
-                    }
-                }
             }
 
             let estruct = ImportExportNet {
@@ -1455,8 +1441,6 @@ pub mod core {
             let file = File::create(format!("{}.json",path));
             let serialized:String = serde_json::to_string(&estruct).unwrap();
             file.unwrap().write_all(serialized.as_bytes()).unwrap();
-
-            //panic!("checking export");
         }
         /// Imports neural network from `path.json`.
         /// ```ignore

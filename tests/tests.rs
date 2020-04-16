@@ -7,13 +7,53 @@ mod tests {
     // Run with: `cargo test --release -- --test-threads=1`
     // Using more threads will likely overload vram and crash.
 
-    // TODO Figure out better name for this
-    const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be > 0)
-    // TODO Figure out better name for this
+    // TODO Name this better
+    const TEST_RERUN_MULTIPLIER:usize = 1usize; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be > 0)
+
+    // TODO Name this better
     const TESTING_MIN_ACCURACY:f32 = 0.95f32; // 5% error min needed to pass tests
     // Returns `TESTING_MIN_ACCURACY` percentage as number of example in dataset.
     fn required_accuracy(test_data:&[(Vec<f32>,usize)]) -> u32 {
         ((test_data.len() as f32) * TESTING_MIN_ACCURACY).ceil() as u32
+    }
+
+    // Tests `NeuralNetwork::new` panics when no layers are set.
+    #[test] // (2-)
+    #[should_panic="Requires output layer."]
+    fn new_no_layers() { NeuralNetwork::new(2,&[]); }
+    // Tests `NeuralNetwork::new` panics when inputs is set to 0.
+    #[test] // (0-Sigmoid->1)
+    #[should_panic="Input size must be >0."]
+    fn new_0_input() { NeuralNetwork::new(0,&[Layer::new(1,Activation::Sigmoid)]); }
+
+    // Tests `NeuralNetwork::new` panics when a layerers length is 0.
+    // --------------
+    #[test] // (784-ReLU->0-Sigmoid->100-Softmax->10)
+    #[should_panic="Layer 0 .size = 0. All layer sizes must be >0."]
+    fn new_small_layers_0() {
+        NeuralNetwork::new(784,&[
+            Layer::new(0,Activation::ReLU),
+            Layer::new(100,Activation::Sigmoid),
+            Layer::new(10,Activation::Softmax)
+        ]);
+    }
+    #[test] // (784-ReLU->800-Sigmoid->0-Softmax->10)
+    #[should_panic="Layer 1 .size = 0. All layer sizes must be >0."]
+    fn new_small_layers_1() {
+        NeuralNetwork::new(784,&[
+            Layer::new(800,Activation::ReLU),
+            Layer::new(0,Activation::Sigmoid),
+            Layer::new(10,Activation::Softmax)
+        ]);
+    }
+    #[test] // (784-ReLU->800-Sigmoid->100-Softmax->0)
+    #[should_panic="Layer 2 .size = 0. All layer sizes must be >0."]
+    fn new_small_layers_2() {
+        NeuralNetwork::new(784,&[
+            Layer::new(800,Activation::ReLU),
+            Layer::new(100,Activation::Sigmoid),
+            Layer::new(0,Activation::Softmax)
+        ]);
     }
 
     // Tests changing activation of layer using out of range index.
@@ -27,7 +67,9 @@ mod tests {
         ]);
         net.activation(2,Activation::Softmax); // Changes activation of output layer.
     }
+
     // `train_xor_x` Tests network to learn an XOR gate.
+    // --------------
 
     // (2-Sigmoid->3-Sigmoid->2)
     #[test]
@@ -137,10 +179,11 @@ mod tests {
             assert!(evaluation.1 as usize == data.len());
         }
     }
-    // `train_digits_x` Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
 
-    // (784-ReLU->300-Sigmoid->100-Softmax->10) with L2
-    #[test]
+    // `train_digits_x` Tests network to recognize handwritten digits of 28x28 pixels (MNIST dataset).
+    // --------------
+
+    #[test] // (784-ReLU->300-Sigmoid->100-Softmax->10) with L2
     fn train_digits_0() {
         let runs = TEST_RERUN_MULTIPLIER;
         for _ in 0..runs {
@@ -161,6 +204,7 @@ mod tests {
             net.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
+                //.tracking().log_interval(MeasuredCondition::Iteration(1))
                 .l2(0.1f32)
             .go();
 
@@ -170,8 +214,7 @@ mod tests {
             assert!(evaluation.1 >= required_accuracy(&testing_data));
         }
     }
-    // (784-ReLU->800-Softmax->10) with dropout
-    #[test]
+    #[test] // (784-ReLU->800-Softmax->10) with dropout
     fn train_digits_1() {
         let runs = TEST_RERUN_MULTIPLIER;
         for _ in 0..runs {
@@ -202,8 +245,7 @@ mod tests {
             assert!(evaluation.1 >= required_accuracy(&testing_data));
         }
     }
-    // (784-ReLU->800-Softmax->10) with L2
-    #[test]
+    #[test] // (784-ReLU->800-Softmax->10) with L2
     fn train_digits_2() {
         let runs = TEST_RERUN_MULTIPLIER;
         for _ in 0..runs {
