@@ -873,6 +873,7 @@ pub mod core {
 
             let batch_len = batch.0.dims().get()[0] as f32;
 
+            // TODO Is it worth storing `l2:Option<f32>` (if `l2:f32` `l2=0` is same as `l2=None`)?
             // = old weights - weights errors
             let return_connections:Vec<Array<f32>> = 
                 if let Some(lambda) = l2 {
