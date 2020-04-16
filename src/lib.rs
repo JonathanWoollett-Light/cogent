@@ -8,7 +8,7 @@ pub mod core {
     use arrayfire::{
         Array,randu,Dim4,matmul,MatProp,constant,
         sigmoid,rows,exp,maxof,sum,pow,
-        transpose,imax,eq,sum_all,log,diag_extract,sum_by_key,div,gt,print_gen
+        transpose,imax,eq,sum_all,log,diag_extract,sum_by_key,div,gt
     };
 
     use std::io::{Read,Write, stdout};

@@ -20,7 +20,7 @@ Training a network to classify MNIST:
 // ----------
 // 784-Sigmoid->100-Softmax->10
 let mut neural_network = NeuralNetwork::new(784,&[
-    Layer::new(100,Activation::Sigmoid),
+    Layer::new(800,Activation::ReLU),
     Layer::new(10,Activation::Softmax)
 ]);
 
@@ -38,11 +38,13 @@ let testing_data:Vec<(Vec<f32>,usize)> = get_mnist_dataset(true);
 
 neural_network.train(&training_data)
     .evaluation_data(EvaluationData::Actual(&testing_data))
+    .l2(0.1f32)
     .go();
 
 // `.evaluation_data(...)` sets the evaluation data. 
 // If evaluation data is not set it will simply shuffle and split off a random group from training data to be evaluation data.
 // In the case of MNIST where training and evaluation datasets are given seperately, it makes sense to set it as such.
+// `.l2(...)` sets the lambda value for L2 regularisation. 
 
 // Evaluation
 // ----------

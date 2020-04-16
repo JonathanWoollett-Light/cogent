@@ -10,7 +10,7 @@ mod tests {
     // TODO Figure out better name for this
     const TEST_RERUN_MULTIPLIER:u32 = 1; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be > 0)
     // TODO Figure out better name for this
-    const TESTING_MIN_ACCURACY:f32 = 0.90f32; // approx 10% min inaccuracy
+    const TESTING_MIN_ACCURACY:f32 = 0.95f32; // 5% error min needed to pass tests
     // Returns `TESTING_MIN_ACCURACY` percentage as number of example in dataset.
     fn required_accuracy(test_data:&[(Vec<f32>,usize)]) -> u32 {
         ((test_data.len() as f32) * TESTING_MIN_ACCURACY).ceil() as u32
@@ -192,7 +192,8 @@ mod tests {
             net.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
-                .dropout(0.5f32)
+                //.tracking().log_interval(MeasuredCondition::Iteration(1))
+                .dropout(0.2f32)
             .go();
 
             // Evaluation
@@ -223,6 +224,7 @@ mod tests {
             net.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
+                //.tracking().log_interval(MeasuredCondition::Iteration(1))
                 .l2(0.1f32)
             .go();
 
