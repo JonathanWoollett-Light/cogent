@@ -4,7 +4,7 @@ mod tests {
     use std::io::Read;
     use std::fs::File;
 
-    // Run with: `cargo test --release -- --test-threads=1`
+    // Run with: `cargo test --release -- --test-threads=1` (You can set 1 higher if you have more VRAM)
     // Using more threads will likely overload vram and crash.
 
     // TODO Name this better

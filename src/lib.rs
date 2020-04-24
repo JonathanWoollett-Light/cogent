@@ -654,7 +654,8 @@ pub mod core {
             let mut best_accuracy_instant = Instant::now();// Instant of best accuracy.
             let mut best_accuracy = 0u32; // Value of best accuracy.
 
-            let starting_evaluation = self.inner_evaluate(evaluation_data,cost); // Compute intial evaluation.
+            let matrix_evaluation_data = self.matrixify(evaluation_data);
+            let starting_evaluation = self.inner_evaluate(&matrix_evaluation_data,evaluation_data,cost); // Compute intial evaluation.
 
             // If `log_interval` has been defined, print intial evaluation.
             if let Some(_) = log_interval {
@@ -713,7 +714,7 @@ pub mod core {
                 }
                 iterations_elapsed += 1;
 
-                let evaluation = self.inner_evaluate(evaluation_data,cost);
+                let evaluation = self.inner_evaluate(&matrix_evaluation_data,evaluation_data,cost);
 
                 // If `checkpoint_interval` number of iterations or length of duration passed, export weights  (`connections`) and biases (`biases`) to file.
                 match checkpoint_interval {// TODO Reduce code duplication here
@@ -800,7 +801,7 @@ pub mod core {
 
             // Compute and print final evaluation.
             // ------------------------------------------------
-            let evaluation = self.inner_evaluate(evaluation_data,cost); 
+            let evaluation = self.inner_evaluate(&matrix_evaluation_data,evaluation_data,cost); 
             let new_percent = (evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32;
             let starting_percent = (starting_evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32;
             println!();
@@ -1116,17 +1117,16 @@ pub mod core {
         /// assert_eq!(accuracy,4u32);
         pub fn evaluate(&self, test_data:&[(Vec<f32>,usize)],cost:Option<&Cost>) -> (f32,u32) {
             if let Some(cost_function) = cost {
-                return self.inner_evaluate(test_data,cost_function);
+                return self.inner_evaluate(&self.matrixify(test_data),test_data,cost_function);
             } else {
-                return self.inner_evaluate(test_data,&Cost::Crossentropy);
+                return self.inner_evaluate(&self.matrixify(test_data),test_data,&Cost::Crossentropy);
             }
         }
         /// Returns tuple: (Average cost across batch, Number of examples correctly classified).
-        fn inner_evaluate(&self, test_data:&[(Vec<f32>,usize)],cost:&Cost) -> (f32,u32) {
-            let (input,target) = self.matrixify(test_data);
-            let output = self.run(&input);
+        fn inner_evaluate(&self,(input,target):&(Array<f32>,Array<f32>),test_data:&[(Vec<f32>,usize)],cost:&Cost) -> (f32,u32) {
+            let output = self.run(input);
 
-            let cost:f32 = cost.run(&target,&output);
+            let cost:f32 = cost.run(target,&output);
 
             let output_classes = imax(&output,1).1;
             let target_classes_vec:Vec<u32> = test_data.iter().map(|x|x.1 as u32).collect();
@@ -1166,6 +1166,7 @@ pub mod core {
         /// assert_eq!(correct_vector,vec![1f32,1f32]);
         /// assert_eq!(confusion_matrix,vec![[1f32,0f32],[0f32,1f32]]);
         /// ```
+        #[deprecated(note = "Not deprecated, just broken until ArrayFire update installer to match git (where issue has been reported and fixed).")]
         pub fn analyze(&self, data:&mut [(Vec<f32>,usize)]) -> (Vec<f32>,Vec<Vec<f32>>) {
             // Sorts by class
             data.sort_by(|(_,a),(_,b)| a.cmp(b));
@@ -1295,6 +1296,7 @@ pub mod core {
         ///       └              ┘\n";
         /// assert_eq!(&confusion_matrix,expected_matrix);
         /// ```
+        #[deprecated(note = "Not deprecated, just broken until ArrayFire update installer to match git (where issue has been reported and fixed).")]
         pub fn analyze_string(&self, data:&mut [(Vec<f32>,usize)],precision:usize,dict_opt:Option<HashMap<usize,&str>>) -> (String,String) {
             let (vector,matrix) = self.analyze(data);
 
@@ -1415,7 +1417,6 @@ pub mod core {
         pub fn export(&self,path:&str) {
             let mut biases:Vec<Vec<f32>> = Vec::with_capacity(self.biases.len());
             for i in 0..self.biases.len() {
-                println!("bias:{}->dims:{}",i,self.biases[i].dims());
                 let len = self.biases[i].dims().get()[1] as usize;
                 let vec:Vec<f32> = vec!(f32::default();len);
                 biases.push(vec);
@@ -1424,7 +1425,6 @@ pub mod core {
 
             let mut weights:Vec<(Vec<f32>,(u64,u64))> = Vec::with_capacity(self.connections.len());
             for i in 0..self.connections.len() {
-                println!("connection:{}->dims:{}",i,self.connections[i].dims());
                 let dims = self.connections[i].dims();
                 let inner_dims = dims.get();
                 let vec:Vec<f32> = vec!(f32::default();(inner_dims[0]*inner_dims[1]) as usize);
@@ -1450,12 +1450,9 @@ pub mod core {
         /// ```
         pub fn import(path:&str) -> NeuralNetwork {
             let file = File::open(format!("{}.json",path));
-            //println!("Does it exist: {}",Path::new("checkpoints/10.json").exists());
             let mut string_contents:String = String::new();
             file.unwrap().read_to_string(&mut string_contents).unwrap();
-            //println!("got here?");
             let istruct:ImportExportNet = serde_json::from_str(&string_contents).unwrap();
-            //println!("got here? 2");
 
             let mut biases:Vec<arrayfire::Array<f32>> = Vec::with_capacity(istruct.biases.len());
             for i in 0..istruct.biases.len() {
