@@ -499,8 +499,20 @@ pub mod core {
         }
         /// Runs batch of examples through network.
         /// 
-        /// Each row in `inputs` representing an example.
-        pub fn run(&self, inputs:&Array<f32>) -> Array<f32> {
+        /// Returns classes.
+        pub fn run(&self, inputs:&Array<f32>) -> Vec<usize> {
+            let results = self.inner_run(inputs);
+            let classes = arrayfire::imax(&results,1i32).1;
+
+            let mut classes_vec:Vec<u32> = vec!(u32::default();classes.elements());
+            classes.host(&mut classes_vec);
+
+            return classes_vec.into_iter().map(|x| x as usize).collect();
+        }
+        /// Runs batch of examples through network.
+        /// 
+        /// Returns output.
+        pub fn inner_run(&self, inputs:&Array<f32>) -> Array<f32> {
             let rows = inputs.dims().get()[0];
             let ones = constant(1f32,Dim4::new(&[rows,1,1,1]));
             let mut activations:Array<f32> = inputs.clone();
@@ -1124,7 +1136,7 @@ pub mod core {
         }
         /// Returns tuple: (Average cost across batch, Number of examples correctly classified).
         fn inner_evaluate(&self,(input,target):&(Array<f32>,Array<f32>),test_data:&[(Vec<f32>,usize)],cost:&Cost) -> (f32,u32) {
-            let output = self.run(input);
+            let output = self.inner_run(input);
 
             let cost:f32 = cost.run(target,&output);
 
@@ -1172,7 +1184,7 @@ pub mod core {
             data.sort_by(|(_,a),(_,b)| a.cmp(b));
 
             let (input,classes) = matrixify_inputs(data);
-            let outputs = self.run(&input);
+            let outputs = self.inner_run(&input);
 
             let maxs:Array<f32> = arrayfire::max(&outputs,1i32);
             let class_vectors:Array<bool> = eq(&outputs,&maxs,true);
