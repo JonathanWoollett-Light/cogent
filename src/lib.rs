@@ -500,14 +500,21 @@ pub mod core {
         /// Runs batch of examples through network.
         /// 
         /// Returns classes.
-        pub fn run(&self, inputs:&Array<f32>) -> Vec<usize> {
-            let results = self.inner_run(inputs);
-            let classes = arrayfire::imax(&results,1i32).1;
+        pub fn run(&self, inputs:&[Vec<f32>]) -> Vec<usize> {
+            let in_len = inputs[0].len();
+            let example_len = inputs.len();
+
+            // TODO Is there a better way to do either of these?
+            let in_vec:Vec<f32> = inputs.iter().flat_map(|x| x.clone()).collect();
+            let input:Array<f32> = transpose(&Array::<f32>::new(&in_vec,Dim4::new(&[in_len as u64,example_len as u64,1,1])),false);
+
+            let output = self.inner_run(&input);
+            let classes = arrayfire::imax(&output,1i32).1;
 
             let mut classes_vec:Vec<u32> = vec!(u32::default();classes.elements());
             classes.host(&mut classes_vec);
 
-            return classes_vec.into_iter().map(|x| x as usize).collect();
+            return classes_vec.into_iter().map(|x| x as usize).collect(); // Castes from `Vec<u32>` to `Vec<usize>`
         }
         /// Runs batch of examples through network.
         /// 
