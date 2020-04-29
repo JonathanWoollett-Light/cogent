@@ -500,7 +500,7 @@ pub mod core {
         /// Runs batch of examples through network.
         /// 
         /// Returns classes.
-        pub fn run(&self, inputs:&[Vec<f32>]) -> Vec<usize> {
+        pub fn run(&self, inputs:&Vec<Vec<f32>>) -> Vec<usize> {
             let in_len = inputs[0].len();
             let example_len = inputs.len();
 
