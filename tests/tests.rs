@@ -19,7 +19,7 @@ mod tests {
 
     // Tests `NeuralNetwork::new` panics when no layers are set.
     #[test] // (2-)
-    #[should_panic="Requires output layer."]
+    #[should_panic="Requires output layer (layers.len() must be >0)."]
     fn new_no_layers() { NeuralNetwork::new(2,&[]); }
     // Tests `NeuralNetwork::new` panics when inputs is set to 0.
     #[test] // (0-Sigmoid->1)
@@ -29,7 +29,7 @@ mod tests {
     // Tests `NeuralNetwork::new` panics when a layerers length is 0.
     // --------------
     #[test] // (784-ReLU->0-Sigmoid->100-Softmax->10)
-    #[should_panic="Layer 0 .size = 0. All layer sizes must be >0."]
+    #[should_panic="layers[0].size == 0. All layer sizes must be >0."]
     fn new_small_layers_0() {
         NeuralNetwork::new(784,&[
             Layer::new(0,Activation::ReLU),
@@ -38,7 +38,7 @@ mod tests {
         ]);
     }
     #[test] // (784-ReLU->800-Sigmoid->0-Softmax->10)
-    #[should_panic="Layer 1 .size = 0. All layer sizes must be >0."]
+    #[should_panic="layers[1].size == 0. All layer sizes must be >0."]
     fn new_small_layers_1() {
         NeuralNetwork::new(784,&[
             Layer::new(800,Activation::ReLU),
@@ -47,7 +47,7 @@ mod tests {
         ]);
     }
     #[test] // (784-ReLU->800-Sigmoid->100-Softmax->0)
-    #[should_panic="Layer 2 .size = 0. All layer sizes must be >0."]
+    #[should_panic="layers[2].size == 0. All layer sizes must be >0."]
     fn new_small_layers_2() {
         NeuralNetwork::new(784,&[
             Layer::new(800,Activation::ReLU),

@@ -435,17 +435,13 @@ pub mod core {
         /// ```
         pub fn new(inputs:usize,layers: &[Layer]) -> NeuralNetwork {
             // Checks network contains output layer
-            if layers.len() == 0 {
-                panic!("Requires output layer (layers.len() > 0).");
-            }
+            if layers.len() == 0 { panic!("Requires output layer (layers.len() must be >0)."); }
             // Chekcs inputs != 0
-            if inputs == 0 {
-                panic!("Input size must be >0.");
-            }
+            if inputs == 0 { panic!("Input size must be >0."); }
             // Checks all layer sizes != 0
             for i in 0..layers.len() {
                 if layers[i].size == 0usize {
-                    panic!("Layer {} .size = 0. All layer sizes must be >0.",i);
+                    panic!("layers[{}].size == 0. All layer sizes must be >0.",i);
                 }
             }
 
