@@ -8,7 +8,7 @@ pub mod core {
     use arrayfire::{
         Array,randu,Dim4,matmul,MatProp,constant,
         sigmoid,rows,exp,maxof,sum,pow,
-        transpose,imax,eq,sum_all,log,diag_extract,sum_by_key,div,gt
+        transpose,imax,eq,sum_all,log,diag_extract,sum_by_key,div,gt,and,max
     };
 
     use std::io::{Read,Write, stdout};
@@ -80,8 +80,7 @@ pub mod core {
         halt_condition: Option<HaltCondition>,
         // Can log after a certain number of iterations, a certain duration, or not at all.
         log_interval: Option<MeasuredCondition>,
-        batch_size: usize, // TODO Maybe change `batch_size` to allow it to be set by a user as a % of their data
-        // Reffered to as `ETA` in `NeuralNetwork`.
+        batch_size: usize,
         learning_rate: f32,
         // Lambda value if using L2
         l2:Option<f32>, 
@@ -356,8 +355,8 @@ pub mod core {
                 // Follow code replaces the above line.
                 // Above line replaced becuase it is prone to floating point error leading to f32:NAN.
                 // Similar performance.
-                let gt = arrayfire::gt(z,&0f32,false);
-                return arrayfire::and(z,&gt,false);
+                let gt = gt(z,&0f32,false);
+                return and(z,&gt,false);
             }
         }
         // TODO Make this better
@@ -368,19 +367,19 @@ pub mod core {
             //  Allowing softmax to handle large values in y.
             // ------------------------------------------------
             // Gets max values in each row
-            let max_axis_vals = arrayfire::max(&y,1);
-            let max_axis_vals_matrix = arrayfire::matmul(&max_axis_vals,&ones,arrayfire::MatProp::NONE,arrayfire::MatProp::NONE);
+            let max_axis_vals = max(&y,1);
+            let max_axis_vals_matrix = matmul(&max_axis_vals,&ones,MatProp::NONE,MatProp::NONE);
             let max_reduced = y - max_axis_vals_matrix;
 
             // Applies softmax
             // ------------------------------------------------
             // Apply e^(x) to every value in matrix
-            let exp_matrix = arrayfire::exp(&max_reduced);
+            let exp_matrix = exp(&max_reduced);
             // Calculates sums of rows
-            let row_sums = arrayfire::sum(&exp_matrix,1);
-            let row_sums_matrix = arrayfire::matmul(&row_sums,&ones,arrayfire::MatProp::NONE,arrayfire::MatProp::NONE);
+            let row_sums = sum(&exp_matrix,1);
+            let row_sums_matrix = matmul(&row_sums,&ones,MatProp::NONE,MatProp::NONE);
             // Divides each value by row sum
-            let softmax = exp_matrix / row_sums_matrix;
+            let softmax = exp_matrix / row_sums_matrix; // TODO Could this div be done using batch operation with `arrayfire::div(...)` using `row_sums`?
 
             return softmax;
         }
@@ -434,48 +433,47 @@ pub mod core {
         /// ]);
         /// ```
         pub fn new(inputs:usize,layers: &[Layer]) -> NeuralNetwork {
+            // Checks network contains output layer
             if layers.len() == 0 {
-                panic!("Requires output layer."); // TODO Is this best way to word this?
+                panic!("Requires output layer (layers.len() > 0).");
             }
+            // Chekcs inputs != 0
             if inputs == 0 {
                 panic!("Input size must be >0.");
             }
+            // Checks all layer sizes != 0
             for i in 0..layers.len() {
                 if layers[i].size == 0usize {
                     panic!("Layer {} .size = 0. All layer sizes must be >0.",i);
                 }
             }
 
-            //let ones = constant(1f32,Dim4::new(&[numb_of_examples,1,1,1]));
+            // Lists for weights and biases in network
             let mut connections: Vec<Array<f32>> = Vec::with_capacity(layers.len());
             let mut biases: Vec<Array<f32>> = Vec::with_capacity(layers.len());
+
             // Sets connections between inputs and 1st hidden layer
             connections.push(
                 ((randu::<f32>(Dim4::new(&[inputs as u64,layers[0].size as u64, 1, 1])) * 2f32) - 1f32)
                 / (inputs as f32).sqrt()
             );
-            // connections.push(
-            //     constant(0.5f32,Dim4::new(&[inputs as u64,layers[0].size as u64, 1, 1]))
-            //     / (inputs as f32).sqrt()
-            // );
             // Sets biases for 1st hidden layer
             biases.push((randu::<f32>(Dim4::new(&[1, layers[0].size as u64, 1, 1])) * 2f32) - 1f32);
-            //biases.push(constant(0.5f32,Dim4::new(&[1, layers[0].size as u64, 1, 1])));
+
             // Sets connections and biases for all subsequent layers
             for i in 1..layers.len() {
                 connections.push(
                     ((randu::<f32>(Dim4::new(&[layers[i-1].size as u64,layers[i].size as u64, 1, 1])) * 2f32) - 1f32)
                     / (layers[i-1].size as f32).sqrt()
                 );
-                // connections.push(
-                //     constant(0.5f32,Dim4::new(&[layers[i-1].size as u64,layers[i].size as u64, 1, 1]))
-                //     / (layers[i-1].size as f32).sqrt()
-                // );
                 biases.push((randu::<f32>(Dim4::new(&[1, layers[i].size as u64, 1, 1])) * 2f32) - 1f32);
-                //biases.push(constant(0.5f32,Dim4::new(&[1, layers[i].size as u64, 1, 1])));
             }
+
+            // Sets activations of layers
             let layers:Vec<Activation> = layers.iter().map(|x|x.activation).collect();
-            NeuralNetwork{ inputs, biases, connections, layers }
+
+            // Constructs and returns neural network
+            return NeuralNetwork{ inputs, biases, connections, layers };
         }
         /// Sets activation of layer specified by index (excluding input layer).
         /// ```
@@ -497,7 +495,7 @@ pub mod core {
             } 
             self.layers[index] = activation;
         }
-        /// Runs batch of examples through network.
+        /// Runs a batch of examples through the network.
         /// 
         /// Returns classes.
         pub fn run(&self, inputs:&Vec<Vec<f32>>) -> Vec<usize> {
@@ -516,32 +514,32 @@ pub mod core {
 
             return classes_vec.into_iter().map(|x| x as usize).collect(); // Castes from `Vec<u32>` to `Vec<usize>`
         }
-        /// Runs batch of examples through network.
+        /// Runs a batch of examples through the network.
         /// 
         /// Returns output.
         pub fn inner_run(&self, inputs:&Array<f32>) -> Array<f32> {
             let rows = inputs.dims().get()[0];
             let ones = constant(1f32,Dim4::new(&[rows,1,1,1]));
-            let mut activations:Array<f32> = inputs.clone();
-            //af_print!("activations",activations);
+
+            let mut activations:Array<f32> = inputs.clone(); // Sets input layer
+            
+            // Forward propagates
             for i in 0..self.layers.len() {
                 //af_print!("self.connections[i]",self.connections[i]);
                 let weighted_inputs:Array<f32> = matmul(&activations,&self.connections[i],MatProp::NONE,MatProp::NONE);
                 
                 // TODO:
                 // Performance of the commented code versus used code here is extremely similar.
-                //  The used code benefits from caching and becomes more efficient when is more frequent use,
+                //  The used code benefits from caching and becomes more efficient when it is in more frequent use,
                 //   in this case run is not frequently used, simply being used for evaluation.
                 //  Notably when used for forward prop when training the performance difference is significant,
-                //   while the commented code appears simpler for consistency between forward prop here and the code written
-                //   to carry out forward prop during training we use the code we are using here instead.
+                //   while the commented code appears simpler, for the sake of consistency between training 
+                //   and here we use the uncommented code.
                 let bias_matrix:Array<f32> = matmul(&ones,&self.biases[i],MatProp::NONE,MatProp::NONE);
                 let inputs = weighted_inputs + bias_matrix;
                 //let inputs = arrayfire::add(&weighted_inputs,&self.biases[i],true);
                 
-                //af_print!("inputs",inputs);
                 activations = self.layers[i].run(&inputs);
-                //af_print!("activations",activations);
             }
             return activations;
         }
@@ -585,6 +583,8 @@ pub mod core {
                 }
             }
 
+
+            // TODO THIS EVLAUATION DATA SPLIT OFF NEEDS TO BE FIXED
             let mut rng = rand::thread_rng();
             let mut temp_training_data = training_data.to_vec();
             temp_training_data.shuffle(&mut rng);
@@ -695,9 +695,7 @@ pub mod core {
             // Backpropgation loop
             // ------------------------------------------------
             loop {
-                // TODO Double check:
-                //  I beleive it is cheaper to shuffle as slice and set as matrix each iteration vs
-                //  setting as matrix once then shuffling as matrix each iteration.
+                // TODO: Combine make new function that more efficeintly does matirixy and batching
                 training_data.shuffle(&mut rng);
                 let training_data_matrix = self.matrixify(training_data);
 
@@ -882,9 +880,9 @@ pub mod core {
                
             // Sums errors in weights and biases across examples
             // --------------
-            // Sums along columns (rows represent each example).
+            // Sums gradients through examples (along columns (rows represent each example)).
             let nabla_b_sum:Vec<Array<f32>> = nabla_b.iter().map(|x| sum(x,0)).collect();
-            // Sums through layers (each layer is a matrix representing each example).
+            // Sums gradients through examples (through layers ((each layer is a matrix representing each example)).
             let nabla_w_sum:Vec<Array<f32>> = nabla_w.iter().map(|x| sum(x,2)).collect();
 
 
@@ -915,7 +913,7 @@ pub mod core {
             return (return_connections,return_biases);
 
             // TODO Name `input` and `inputs` better so it's easier to differentiate
-            // Runs backpropgation on chunk of batch.
+            // Runs backpropgation on batch, applying dropout to every hidden layer.
             // Returns weight and bias partial derivatives (errors).
             fn dropout_backpropagate(net:&NeuralNetwork, (input,target):&(Array<f32>,Array<f32>),cost:&Cost,p:f32) -> (Vec<Array<f32>>,Vec<Array<f32>>) {
                 // Feeds forward
@@ -984,6 +982,8 @@ pub mod core {
                 // Returns gradients
                 return (nabla_b,nabla_w);
             }
+            // Runs backpropgation batch.
+            // Returns weight and bias partial derivatives (errors).
             fn backpropagate(net:&NeuralNetwork, example:&(Array<f32>,Array<f32>),cost:&Cost) -> (Vec<Array<f32>>,Vec<Array<f32>>) {
                 // Feeds forward
                 // --------------
@@ -1009,27 +1009,24 @@ pub mod core {
                 // Backpropagates
                 // --------------
 
-                let target = example.1.clone();
-                let last_index = net.connections.len()-1; // = nabla_b.len()-1 = nabla_w.len()-1 = self.neurons.len()-2 = self.connections.len()-1
+                let target = example.1.clone(); // Sets target
                 
-                // Gradients of biases and weights.
+                // Containers of gradients of biases and weights.
                 let mut nabla_b:Vec<Array<f32>> = Vec::with_capacity(net.biases.len());
-                // TODO find way to make this ArrayD an Array3, ArrayD willl always have 3d imensions, just can't figure out caste.
-                let mut nabla_w:Vec<Array<f32>> = Vec::with_capacity(net.connections.len()); // this should really be 3d matrix instead of 'Vec<DMatrix<f32>>', its a bad workaround
+                let mut nabla_w:Vec<Array<f32>> = Vec::with_capacity(net.connections.len());
     
+                // Sets output layer activation
                 let last_layer = net.layers[net.layers.len()-1];
                 
                 // Calculate error in output layer
                 let mut error:Array<f32> = cost.derivative(&target,&activations[activations.len()-1]) * last_layer.derivative(&inputs[inputs.len()-1]);
     
-                // Sets gradients in output layer
+                // Sets gradients for output layer
                 nabla_b.insert(0,error.clone());
-                //let weight_errors = einsum("ai,aj->aji", &[&error, &activations[last_index]]).unwrap();
-                let weight_errors = calc_weight_errors(&error,&activations[last_index]);
+                let weight_errors = calc_weight_errors(&error,&activations[activations.len()-2]);
                 nabla_w.insert(0,weight_errors);
     
-                // self.layers.len()-1 -> 1 (inclusive)
-                // (self.layers.len()=self.biases.len()=self.connections.len())
+                
                 for i in (1..net.layers.len()).rev() {
                     // Calculates error
                     error = net.layers[i-1].derivative(&inputs[i-1]) *
@@ -1043,6 +1040,7 @@ pub mod core {
                 // Returns gradients
                 return (nabla_b,nabla_w);
             }
+            // einsum(ai,aj->aji)
             fn calc_weight_errors(errors:&Array<f32>,activations:&Array<f32>) -> arrayfire::Array<f32> {
                 let rows:u64 = errors.dims().get()[0];
                 
