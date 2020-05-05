@@ -24,8 +24,8 @@ pub mod core {
 
     use std::collections::HashMap;
 
-    // Default percentage of training data to set as evaluation data (0.1=10%).
-    const DEFAULT_EVALUTATION_DATA:f32 = 0.1f32;
+    // Default percentage of training data to set as evaluation data (0.1=5%).
+    const DEFAULT_EVALUTATION_DATA:f32 = 0.05f32;
     // Default percentage of size of training data to set batch size (0.01=1%).
     const DEFAULT_BATCH_SIZE:f32 = 0.01f32;
     // Default learning rate.
@@ -44,10 +44,10 @@ pub mod core {
     // ...
     const DEFAULT_MIN_LEARNING_RATE:f32 = 0.001f32;
     /// For setting `evaluation_data`.
-    pub enum EvaluationData<'b> {
+    pub enum EvaluationData<'a> {
         Scalar(usize),
         Percent(f32),
-        Actual(&'b Vec<(Vec<f32>,usize)>)
+        Actual(&'a Vec<(Vec<f32>,usize)>)
     }
     /// For setting a hyperparameter with measured intervals.
     #[derive(Clone,Copy)]
@@ -74,7 +74,7 @@ pub mod core {
     /// To practicaly implement optional setting of training hyperparameters.
     pub struct Trainer<'a> {
         training_data: Vec<(Vec<f32>,usize)>,
-        evaluation_data: Vec<(Vec<f32>,usize)>,
+        evaluation_data: EvaluationData<'a>,
         cost:Cost,
         // Will halt after at a certain iteration, accuracy or duration.
         halt_condition: Option<HaltCondition>,
@@ -108,12 +108,8 @@ pub mod core {
         /// Sets `evaluation_data`.
         /// 
         /// `evaluation_data` determines how to set the evaluation data.
-        pub fn evaluation_data(&mut self, evaluation_data:EvaluationData) -> &mut Trainer<'a> {
-            self.evaluation_data = match evaluation_data {
-                EvaluationData::Scalar(scalar) => { self.training_data.split_off(self.training_data.len() - scalar) }
-                EvaluationData::Percent(percent) => { self.training_data.split_off(self.training_data.len() - (self.training_data.len() as f32 * percent) as usize) }
-                EvaluationData::Actual(actual) => { actual.clone() }
-            };
+        pub fn evaluation_data(&mut self, evaluation_data:EvaluationData<'a>) -> &mut Trainer<'a> {
+            self.evaluation_data = evaluation_data;
             return self;
         }
         /// Sets `cost`.
@@ -220,9 +216,14 @@ pub mod core {
         }
         /// Begins training.
         pub fn go(&mut self) -> () {
+            let evaluation_data = match self.evaluation_data {
+                EvaluationData::Scalar(scalar) => { self.training_data.split_off(self.training_data.len() - scalar) }
+                EvaluationData::Percent(percent) => { self.training_data.split_off(self.training_data.len() - (self.training_data.len() as f32 * percent) as usize) }
+                EvaluationData::Actual(actual) => { actual.clone() }
+            };
             self.neural_network.train_details(
                 &mut self.training_data,
-                &self.evaluation_data,
+                &evaluation_data,
                 &self.cost,
                 self.halt_condition,
                 self.log_interval,
@@ -583,13 +584,9 @@ pub mod core {
                 }
             }
 
-
-            // TODO THIS EVLAUATION DATA SPLIT OFF NEEDS TO BE FIXED
             let mut rng = rand::thread_rng();
             let mut temp_training_data = training_data.to_vec();
             temp_training_data.shuffle(&mut rng);
-
-            let temp_evaluation_data = temp_training_data.split_off(training_data.len() - (training_data.len() as f32 * DEFAULT_EVALUTATION_DATA) as usize);
 
             let multiplier:f32 = training_data[0].0.len() as f32 / training_data.len() as f32;
             let early_stopping_condition:u32 = (DEFAULT_EARLY_STOPPING * multiplier).ceil() as u32;
@@ -604,7 +601,7 @@ pub mod core {
 
             return Trainer {
                 training_data: temp_training_data,
-                evaluation_data: temp_evaluation_data,
+                evaluation_data: EvaluationData::Percent(DEFAULT_EVALUTATION_DATA),
                 cost:Cost::Crossentropy,
                 halt_condition: None,
                 log_interval: None,
