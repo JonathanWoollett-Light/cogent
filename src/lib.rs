@@ -246,8 +246,12 @@ pub mod core {
     #[derive(Serialize,Deserialize)]
     pub enum Cost {
         /// Quadratic cost function.
+        ///
+        /// $ C(w,b)=\frac{1}{2n}\sum_{x} ||y(x)-a(x) ||^2 $
         Quadratic,
         /// Crossentropy cost function.
+        ///
+        /// $ C(w,b) = -\frac{1}{n} \sum_{x} (y(x) \ln{(a(x))}  + (1-y(x)) \ln{(1-a(x))}) $
         Crossentropy
     }
     impl Cost {
@@ -297,10 +301,16 @@ pub mod core {
     #[derive(Clone,Copy,Serialize,Deserialize)]
     pub enum Activation {
         /// Sigmoid activation functions.
+        /// 
+        /// $ A(z)=\frac{1}{1+e^-z} $
         Sigmoid,
         /// Softmax activation function.
+        /// 
+        /// $ A(\begin{bmatrix}z_1,\dots,z_k\end{bmatrix})=\begin{bmatrix}\frac{e^{z_1}}{\Sigma_{i=1}^k e^{z_i}} & \dots &\frac{e^{z_k}}{\Sigma_{i=1}^k e^{z_i}}\end{bmatrix} $
         Softmax,
         /// ReLU activation function.
+        /// 
+        /// $ A(z)=max(z,0) $
         ReLU // Name it 'ReLU' or 'Relu'?
     }
     impl Activation {
