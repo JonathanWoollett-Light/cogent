@@ -82,9 +82,10 @@ Tasks:
 
 1. :ballot_box_with_check: Convolutional layers.
 2. :ballot_box_with_check: Meticulous testing (making sure things work).
-3. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
-4. :ballot_box_with_check: Meticulous benchmarking (making sure things are fast).
-5. :repeat: Improve defaults.
-6. :repeat: Learn more.
+3. :ballot_box_with_check: Optimise usage of VRAM.
+4. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
+5. :ballot_box_with_check: Meticulous benchmarking (making sure things are fast).
+6. :repeat: Improve defaults.
+7. :repeat: Learn more.
 
 Please note that things may not be developed inorder, it is only my estimation.
