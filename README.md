@@ -48,7 +48,14 @@ neural_network.train(&training_data)
 
 // Evaluation
 // ----------
-let evaluation:(f32,u32) = neural_network.evaluate(&testing_data,None); // (cost,example correctly classified)
+let (cost,correctly_classified):(f32,u32) = neural_network.evaluate(&testing_data,None); // (cost,examples correctly classified)
+println!("Cost: {:.2}",cost);
+println!(
+    "Accuracy: {}/{} ({:.2}%)",
+    correctly_classified,
+    testing_data.len(),
+    correctly_classified as f32 / testing_data.len() as f32
+);
 ```
 
 While a huge amount of my work has gone into making this and learning the basics of neural networks along the way, I am immensely (and I cannot stress this enough) amateur in inumerable ways.
