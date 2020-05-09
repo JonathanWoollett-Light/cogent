@@ -146,9 +146,9 @@ pub mod core {
             self.learning_rate = learning_rate;
             return self;
         }
-        /// Sets `l2`.
+        /// Sets lambda ($ \lambda $) for `l2`.
         /// 
-        /// `l2` represents whether to implement L2 regularisation and with what lambda value.
+        /// If $ \lambda $ set, implements L2 regularization with $ \lambda $ value.
         pub fn l2(&mut self, lambda:f32) -> &mut Trainer<'a> {
             self.l2 = Some(lambda);
             return self;
