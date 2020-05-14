@@ -2,27 +2,24 @@
 pub mod core {
     use rand::prelude::SliceRandom;
     use itertools::izip;
-    use std::time::{Duration,Instant};
 
     // TODO Is this really a good way to include these?
     use arrayfire::{
-        Array,randu,Dim4,matmul,MatProp,constant,
-        sigmoid,rows,exp,maxof,sum,pow,
-        transpose,imax,eq,sum_all,log,diag_extract,sum_by_key,div,gt,and,max
+        Array, randu, Dim4, matmul, MatProp, constant, sigmoid, rows, exp, maxof, sum, pow,
+        transpose, imax, eq, sum_all, log, diag_extract, sum_by_key, div, gt, and, max
     };
 
-    use std::io::{Read,Write, stdout};
     use crossterm::{QueueableCommand, cursor};
 
-    use serde::{Serialize,Deserialize};
+    use serde::{Serialize, Deserialize};
 
-    use std::fs;
-    use std::fs::File;
-    use std::path::Path;
-
-    use std::f32;
-
-    use std::collections::HashMap;
+    use std::{
+        time::{Duration, Instant},
+        io::{Read, Write, stdout},
+        fs::{create_dir, remove_dir_all, File},
+        path::Path,
+        collections::HashMap
+    };
 
     // Default percentage of training data to set as evaluation data (0.1=5%).
     const DEFAULT_EVALUTATION_DATA:f32 = 0.05f32;
@@ -652,15 +649,15 @@ pub mod core {
             if let Some(_) = checkpoint_interval {
                 if !Path::new("checkpoints").exists() {
                     // Create folder
-                    fs::create_dir("checkpoints").unwrap();
+                    create_dir("checkpoints").unwrap();
                 }
                 if let Some(folder) = name {
                     let path = format!("checkpoints/{}",folder);
                     // If folder exists, empty it.
                     if Path::new(&path).exists() {
-                        fs::remove_dir_all(&path).unwrap();// Delete folder
+                        remove_dir_all(&path).unwrap();// Delete folder
                     }
-                    fs::create_dir(&path).unwrap(); // Create folder
+                    create_dir(&path).unwrap(); // Create folder
                 }
             }
 
