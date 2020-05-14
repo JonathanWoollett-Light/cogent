@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use cogent::core::{HaltCondition,EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
+    use cogent::core::{HaltCondition,EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork,Proportion};
     use std::io::Read;
     use std::fs::File;
 
@@ -74,7 +74,7 @@ mod tests {
     // (2-Sigmoid->3-Sigmoid->2)
     #[test]
     fn train_xor_0() {
-        let runs = 10 * TEST_RERUN_MULTIPLIER;
+        let runs = 1 * TEST_RERUN_MULTIPLIER;
         
         for _ in 0..runs {
             // Setup
@@ -82,7 +82,7 @@ mod tests {
             // Sets network
             let mut net = NeuralNetwork::new(2,&[
                 Layer::new(3,Activation::Sigmoid),
-                Layer::new(2,Activation::Sigmoid)
+                Layer::new(2,Activation::Softmax)
             ]);
             // Sets training and testing data
             let data = vec![
@@ -98,6 +98,7 @@ mod tests {
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
+                //.log_interval(MeasuredCondition::Iteration(100))
             .go();
 
             // Evaluation
@@ -191,9 +192,10 @@ mod tests {
             // ------------------------------------------------
             let mut net = NeuralNetwork::new(784,&[
                 Layer::new(300,Activation::ReLU),
-                Layer::new(100,Activation::Sigmoid),
                 Layer::new(10,Activation::Softmax)
             ]);
+
+            //println!("size: {}kb",net.mem_size() / 1024);
 
             // Sets training and testing data
             let training_data = get_mnist_dataset(false);
