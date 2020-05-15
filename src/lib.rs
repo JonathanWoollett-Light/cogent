@@ -247,10 +247,10 @@ pub mod core {
             // Cross entropy cost
             // TODO Need to double check this
             fn cross_entropy(y: &Array<f32>, a: &Array<f32>) -> f32 {
-                if sum_all(&arrayfire::isnan(a)).0 > 0f64 { 
-                    af_print!("a",cols(&a,0,10));
-                    panic!("nan a"); 
-                }
+                // if sum_all(&arrayfire::isnan(a)).0 > 0f64 { 
+                //     af_print!("a",cols(&a,0,10));
+                //     panic!("nan a"); 
+                // }
 
                 //af_print!("y",cols(&y,0,10));
                 
@@ -265,7 +265,7 @@ pub mod core {
 
                 let mut cost:f32 = sum_all(&(part1+part2)).0 as f32;
 
-                if cost.is_nan() { panic!("nan cost"); }
+                //if cost.is_nan() { panic!("nan cost"); }
 
                 cost /= -(a.dims().get()[0] as f32);
 
@@ -283,22 +283,22 @@ pub mod core {
                     //let check = sum_all(&arrayfire::ge(a,&1f32,false)).0;
                     //if check != 0f64 { panic!("check: {}",check); }
                     
-                    if sum_all(&arrayfire::isinf(a)).0 > 0f64 { 
-                        af_print!("a inf",cols(a,0,10));
-                        panic!("a inf");
-                    }
-                    if sum_all(&arrayfire::isnan(a)).0 > 0f64 { 
-                        af_print!("a nan",cols(a,0,10));
-                        panic!("a nan");
-                    }
-                    if sum_all(&eq(a,&1f32,false)).0 > 0f64 { 
-                        af_print!("a eq 1",cols(a,0,10));
-                        panic!("nan a eq 1");
-                    }
-                    if sum_all(&eq(a,&0f32,false)).0 > 0f64 { 
-                        af_print!("a eq 0",cols(a,0,10));
-                        panic!("nan a eq 0");
-                    }
+                    // if sum_all(&arrayfire::isinf(a)).0 > 0f64 { 
+                    //     af_print!("a inf",cols(a,0,10));
+                    //     panic!("a inf");
+                    // }
+                    // if sum_all(&arrayfire::isnan(a)).0 > 0f64 { 
+                    //     af_print!("a nan",cols(a,0,10));
+                    //     panic!("a nan");
+                    // }
+                    // if sum_all(&eq(a,&1f32,false)).0 > 0f64 { 
+                    //     af_print!("a eq 1",cols(a,0,10));
+                    //     panic!("nan a eq 1");
+                    // }
+                    // if sum_all(&eq(a,&0f32,false)).0 > 0f64 { 
+                    //     af_print!("a eq 0",cols(a,0,10));
+                    //     panic!("nan a eq 0");
+                    // }
                     return (-1*y)/a + (1f32-y)/(1f32-a);
                 } // -y/a + (1-y)/(1-a)
             }
@@ -483,26 +483,30 @@ pub mod core {
             //af_print!("z",z);
             //af_print!("a",a);
             
-            if sum_all(&arrayfire::isnan(&partial_error)).0 > 0f64 { 
-                af_print!("partial_error",cols(&partial_error,0,10));
-                panic!("nan partial_error");
-            }
-            if sum_all(&arrayfire::isnan(&z)).0 > 0f64 { 
-                af_print!("z",cols(&z,0,10));
-                panic!("nan z");
-            }
-            if sum_all(&arrayfire::isnan(&a)).0 > 0f64 { 
-                af_print!("a",cols(&a,0,10));
-                panic!("nan a");
-            }
+            // if sum_all(&arrayfire::isnan(&partial_error)).0 > 0f64 { 
+            //     af_print!("partial_error",cols(&partial_error,0,10));
+            //     panic!("nan partial_error");
+            // }
+            // if sum_all(&arrayfire::isnan(&z)).0 > 0f64 { 
+            //     af_print!("z",cols(&z,0,10));
+            //     panic!("nan z");
+            // }
+            // if sum_all(&arrayfire::isnan(&a)).0 > 0f64 { 
+            //     af_print!("a",cols(&a,0,10));
+            //     panic!("nan a");
+            // }
+            
+            //af_print!("self.activation.derivative(z)",self.activation.derivative(z));
+            
+            //af_print!("partial_error",partial_error);
 
             // δ
             let error = self.activation.derivative(z) * partial_error;
 
-            if sum_all(&arrayfire::isnan(&error)).0 > 0f64 { 
-                af_print!("error",cols(&error,0,10));
-                panic!("nan error");
-            }
+            // if sum_all(&arrayfire::isnan(&error)).0 > 0f64 { 
+            //     af_print!("error",cols(&error,0,10));
+            //     panic!("nan error");
+            // }
 
             //af_print!("error",error);
 
@@ -510,14 +514,21 @@ pub mod core {
             let batch_len = z.dims().get()[1] as f32;
             //println!("batch_len: {}",batch_len);
 
-            // Sets errors/gradients and sums through examples
+            //af_print!("a",a);
 
+            //af_print!("unsummed bias errors",error);
+            //af_print!("unsummed weight errors",calc_weight_errors(&error,a));
+
+            // Sets errors/gradients and sums through examples
             // ∂C/∂b
             let bias_error = sum(&error,1);
             //af_print!("bias_error",bias_error);
             // ∂C/∂w
             let weight_error = sum(&calc_weight_errors(&error,a),2);
             //af_print!("weight_error",weight_error);
+
+            // w^T dot δ
+            let nxt_partial_error = matmul(&self.weights,&error,MatProp::TRANS,MatProp::NONE);
 
             // = old weights - avg weight errors
             // self.weights = 
@@ -528,20 +539,28 @@ pub mod core {
             //         sub(&self.weights,&(learning_rate * weight_error / batch_len),false)
             //     };
             if let Some(lambda) = l2 {
-                println!("l2: {:.3}, {:.3}",(1f32 - (learning_rate * lambda / training_set_length as f32)),learning_rate/batch_len);
+                //println!("l2: {:.3}, {:.3}",(1f32 - (learning_rate * lambda / training_set_length as f32)),learning_rate/batch_len);
                 self.weights = ((1f32 - (learning_rate * lambda / training_set_length as f32)) * &self.weights) - (learning_rate * weight_error / batch_len)
             } 
             else {
-                println!("no l2: {:.3}",learning_rate/batch_len);
+                //println!("no l2: {:.3}",learning_rate/batch_len);
                 self.weights = &self.weights - (learning_rate * weight_error / batch_len);
             }
+            
 
             //af_print!("self.weights",self.weights);
             // = old biases - avg bias errors
             self.biases = &self.biases - (learning_rate * bias_error / batch_len);
             //af_print!("self.biases",self.biases);
+            
+            //af_print!("self.biases",self.biases);
+            //af_print!("self.weights",self.weights);
+
+            //af_print!("self.weights",self.weights);
+            //af_print!("error",error);
+
             // w^T dot δ
-            return matmul(&self.weights,&error,MatProp::TRANS,MatProp::NONE);
+            return nxt_partial_error;
 
             // einsum(ai,aj->aji)
             fn calc_weight_errors(errors:&Array<f32>,activations:&Array<f32>) -> arrayfire::Array<f32> {
@@ -577,13 +596,15 @@ pub mod core {
             DropoutLayer {p,mask:Array::<f32>::new_empty(Dim4::new(&[1,1,1,1]))}
         }
         fn forepropagate(&mut self,z:&Array<f32>,ones:&Array<f32>) -> Array<f32> {
+            //panic!("got here");
             // Sets mask dimensions
             let z_dims = z.dims();
             let z_dim_arr = z_dims.get();
-            let mask_dims = Dim4::new(&[z_dim_arr[0],z_dim_arr[1],1,1]);
+            let mask_dims = Dim4::new(&[z_dim_arr[0],1,1,1]);
             // Updates mask
-            self.mask = matmul(ones,&gt(&randu::<f32>(mask_dims),&self.p,false).cast::<f32>(),MatProp::NONE,MatProp::NONE);
+            self.mask = matmul(&gt(&randu::<f32>(mask_dims),&self.p,false).cast::<f32>(),ones,MatProp::NONE,MatProp::NONE);
             // Applies mask
+            //panic!("got here");
             return mul(z,&self.mask,false);
         }
         fn backpropagate(&self,partial_error:&Array<f32>) -> Array<f32> {
@@ -665,6 +686,8 @@ pub mod core {
             // Constructs and returns neural network
             return NeuralNetwork{ inputs:net_inputs, layers:inner_layers };
         }
+        /// Constructs network of given layers will all weights and biases set to given value.
+        /// IMPORTANT: This function seems to cause issues in training and HAS NOT been properly tested, I DO NOT recommend you use this.
         pub fn new_constant(mut inputs:u64,layers: &[Layer],val:f32) -> NeuralNetwork {
             // Checks network contains output layer
             if layers.len() == 0 { panic!("Requires output layer (layers.len() must be >0)."); }
@@ -1151,10 +1174,10 @@ pub mod core {
                 layer_outs.push((input,z));
                 input = a;
             }
-            if sum_all(&arrayfire::isnan(&input)).0 > 0f64 { 
-                af_print!("input",cols(&input,0,10));
-                panic!("nan input");
-            }
+            // if sum_all(&arrayfire::isnan(&input)).0 > 0f64 { 
+            //     af_print!("input",cols(&input,0,10));
+            //     panic!("nan input");
+            // }
             layer_outs.push((input,None));
             //NeuralNetwork::mem_info("Inner 6.1.3");
             
@@ -1170,23 +1193,23 @@ pub mod core {
 
             let last_activation = &out_iter.next().unwrap().0;
             
-            if sum_all(&eq(last_activation,&0f32,false)).0 > 0f64 { 
-                af_print!("last_activation eq 0",cols(&last_activation,0,10));
-                panic!("nan last_activation eq 0");
-            }
+            // if sum_all(&eq(last_activation,&0f32,false)).0 > 0f64 { 
+            //     af_print!("last_activation eq 0",cols(&last_activation,0,10));
+            //     panic!("nan last_activation eq 0");
+            // }
 
-            if sum_all(&arrayfire::isnan(&last_activation)).0 > 0f64 { 
-                af_print!("last_activation",cols(&last_activation,0,10));
-                panic!("nan last_activation");
-            }
+            // if sum_all(&arrayfire::isnan(&last_activation)).0 > 0f64 { 
+            //     af_print!("last_activation",cols(&last_activation,0,10));
+            //     panic!("nan last_activation");
+            // }
 
             // ∇(a)C
             let mut partial_error = cost.derivative(target,last_activation);
 
-            if sum_all(&arrayfire::isnan(&partial_error)).0 > 0f64 { 
-                af_print!("cost partial_error",cols(&partial_error,0,10));
-                panic!("nan cost partial_error");
-            }
+            // if sum_all(&arrayfire::isnan(&partial_error)).0 > 0f64 { 
+            //     af_print!("cost partial_error",cols(&partial_error,0,10));
+            //     panic!("nan cost partial_error");
+            // }
 
             //panic!("partial_error");
 
