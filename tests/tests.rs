@@ -24,35 +24,35 @@ mod tests {
     // Tests `NeuralNetwork::new` panics when inputs is set to 0.
     #[test] // (0-Sigmoid->1)
     #[should_panic="Input size must be >0."]
-    fn new_0_input() { NeuralNetwork::new(0,&[Layer::new(1,Activation::Sigmoid)]); }
+    fn new_0_input() { NeuralNetwork::new(0,&[Layer::Dense(1,Activation::Sigmoid)]); }
 
     // Tests `NeuralNetwork::new` panics when a layerers length is 0.
     // --------------
     #[test] // (784-ReLU->0-Sigmoid->100-Softmax->10)
-    #[should_panic="layers[0].size == 0. All layer sizes must be >0."]
+    #[should_panic="All dense layer sizes must be >0."]
     fn new_small_layers_0() {
         NeuralNetwork::new(784,&[
-            Layer::new(0,Activation::ReLU),
-            Layer::new(100,Activation::Sigmoid),
-            Layer::new(10,Activation::Softmax)
+            Layer::Dense(0,Activation::ReLU),
+            Layer::Dense(100,Activation::Sigmoid),
+            Layer::Dense(10,Activation::Softmax)
         ]);
     }
     #[test] // (784-ReLU->800-Sigmoid->0-Softmax->10)
-    #[should_panic="layers[1].size == 0. All layer sizes must be >0."]
+    #[should_panic="All dense layer sizes must be >0."]
     fn new_small_layers_1() {
         NeuralNetwork::new(784,&[
-            Layer::new(800,Activation::ReLU),
-            Layer::new(0,Activation::Sigmoid),
-            Layer::new(10,Activation::Softmax)
+            Layer::Dense(800,Activation::ReLU),
+            Layer::Dense(0,Activation::Sigmoid),
+            Layer::Dense(10,Activation::Softmax)
         ]);
     }
     #[test] // (784-ReLU->800-Sigmoid->100-Softmax->0)
-    #[should_panic="layers[2].size == 0. All layer sizes must be >0."]
+    #[should_panic="All dense layer sizes must be >0."]
     fn new_small_layers_2() {
         NeuralNetwork::new(784,&[
-            Layer::new(800,Activation::ReLU),
-            Layer::new(100,Activation::Sigmoid),
-            Layer::new(0,Activation::Softmax)
+            Layer::Dense(800,Activation::ReLU),
+            Layer::Dense(100,Activation::Sigmoid),
+            Layer::Dense(0,Activation::Softmax)
         ]);
     }
 
@@ -60,10 +60,9 @@ mod tests {
     #[test]
     #[should_panic="Layer 2 does not exist. 0 <= given index < 2"]
     fn activation() {
-        
         let mut net = NeuralNetwork::new(2,&[
-            Layer::new(3,Activation::Sigmoid),
-            Layer::new(2,Activation::Sigmoid)
+            Layer::Dense(3,Activation::Sigmoid),
+            Layer::Dense(2,Activation::Sigmoid)
         ]);
         net.activation(2,Activation::Softmax); // Changes activation of output layer.
     }
@@ -81,8 +80,8 @@ mod tests {
             // ------------------------------------------------
             // Sets network
             let mut net = NeuralNetwork::new(2,&[
-                Layer::new(3,Activation::Sigmoid),
-                Layer::new(2,Activation::Softmax)
+                Layer::Dense(3,Activation::Sigmoid),
+                Layer::Dense(2,Activation::Softmax)
             ]);
             // Sets training and testing data
             let data = vec![
@@ -101,6 +100,8 @@ mod tests {
                 //.log_interval(MeasuredCondition::Iteration(100))
             .go();
 
+            //panic!("do we get here? outerside training");
+
             // Evaluation
             // ------------------------------------------------
             let evaluation = net.evaluate(&data,None);
@@ -116,8 +117,8 @@ mod tests {
             // ------------------------------------------------
             // Sets network
             let mut net = NeuralNetwork::new(2,&[
-                Layer::new(3,Activation::Sigmoid),
-                Layer::new(2,Activation::Sigmoid)
+                Layer::Dense(3,Activation::Sigmoid),
+                Layer::Dense(2,Activation::Sigmoid)
             ]);
             // Sets training and testing data
             let data = vec![
@@ -154,8 +155,8 @@ mod tests {
             // ------------------------------------------------
             // Sets network
             let mut net = NeuralNetwork::new(2,&[
-                Layer::new(3,Activation::Sigmoid),
-                Layer::new(2,Activation::Softmax)
+                Layer::Dense(3,Activation::Sigmoid),
+                Layer::Dense(2,Activation::Softmax)
             ]);
 
             // Sets training and testing data
@@ -172,6 +173,7 @@ mod tests {
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
+                .log_interval(MeasuredCondition::Iteration(100))
             .go();
 
             // Evaluation
@@ -191,8 +193,8 @@ mod tests {
             // Setup
             // ------------------------------------------------
             let mut net = NeuralNetwork::new(784,&[
-                Layer::new(300,Activation::ReLU),
-                Layer::new(10,Activation::Softmax)
+                Layer::Dense(300,Activation::ReLU),
+                Layer::Dense(10,Activation::Softmax)
             ]);
 
             //println!("size: {}kb",net.mem_size() / 1024);
@@ -223,9 +225,11 @@ mod tests {
             // Setup
             // ------------------------------------------------
             let mut net = NeuralNetwork::new(784,&[
-                Layer::new(1000,Activation::ReLU),
-                Layer::new(500,Activation::ReLU),
-                Layer::new(10,Activation::Softmax)
+                Layer::Dense(1000,Activation::ReLU),
+                Layer::Dropout(0.5),
+                Layer::Dense(500,Activation::ReLU),
+                Layer::Dropout(0.5),
+                Layer::Dense(10,Activation::Softmax)
             ]);
 
             // Sets training and testing data
@@ -238,7 +242,6 @@ mod tests {
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
                 //.tracking().log_interval(MeasuredCondition::Iteration(1))
-                .dropout(0.2f32)
             .go();
 
             // Evaluation
@@ -254,9 +257,9 @@ mod tests {
             // Setup
             // ------------------------------------------------
             let mut net = NeuralNetwork::new(784,&[
-                Layer::new(1000,Activation::ReLU),
-                Layer::new(500,Activation::ReLU),
-                Layer::new(10,Activation::Softmax)
+                Layer::Dense(1000,Activation::ReLU),
+                Layer::Dense(500,Activation::ReLU),
+                Layer::Dense(10,Activation::Softmax)
             ]);
 
             // Sets training and testing data
@@ -268,7 +271,38 @@ mod tests {
             net.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
-                //.tracking().log_interval(MeasuredCondition::Iteration(1))
+                .tracking().log_interval(MeasuredCondition::Iteration(1))
+                .l2(0.1f32)
+            .go();
+
+            // Evaluation
+            // ------------------------------------------------
+            let evaluation = net.evaluate(&testing_data,None);
+            assert!(evaluation.1 >= required_accuracy(&testing_data));
+        }
+    }
+    #[test] // (784-ReLU->800-Softmax->10) with L2
+    fn train_digits_3() {
+        let runs = TEST_RERUN_MULTIPLIER;
+        for _ in 0..runs {
+            // Setup
+            // ------------------------------------------------
+            let mut net = NeuralNetwork::new(784,&[
+                Layer::Dense(1000,Activation::ReLU),
+                Layer::Dense(500,Activation::ReLU),
+                Layer::Dense(10,Activation::Sigmoid)
+            ]);
+
+            // Sets training and testing data
+            let training_data = get_mnist_dataset(false);
+            let testing_data = get_mnist_dataset(true);
+
+            // Execution
+            // ------------------------------------------------
+            net.train(&training_data)
+                .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
+                .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
+                .tracking().log_interval(MeasuredCondition::Iteration(1))
                 .l2(0.1f32)
             .go();
 
