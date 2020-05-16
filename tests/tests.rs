@@ -3,10 +3,11 @@ mod tests {
     use cogent::core::{
         HaltCondition,EvaluationData,MeasuredCondition,Proportion,
         Activation,Layer,
-        DenseLayer,DropoutLayer,
         NeuralNetwork
     };
-    use arrayfire::{Array,Dim4,eq,sum_all,print_gen,af_print,HasAfEnum,randu,randn};
+    
+    use arrayfire::{Array,Dim4,HasAfEnum};
+
     use std::{
         io::Read,
         fs::File
