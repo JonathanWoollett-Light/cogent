@@ -20,8 +20,8 @@ Training a network to classify MNIST:
 // ----------
 // 784-Sigmoid->100-Softmax->10
 let mut neural_network = NeuralNetwork::new(784,&[
-    Layer::new(800,Activation::ReLU),
-    Layer::new(10,Activation::Softmax)
+    Layer::Dense(800,Activation::ReLU),
+    Layer::Dense(10,Activation::Softmax)
 ]);
 
 // Setting training and testing data
@@ -66,10 +66,10 @@ If you find any issues I would really appreciate if you could let me know (and p
 
  - GPU compute using [ArrayFire Rust Bindings](https://github.com/arrayfire/arrayfire-rust)
  - Optimisers: Stochastic gradient descent.
- - Layers: Dense
+ - Layers: Dense, Dropout
  - Activations: Softmax, Sigmoid, ReLU.
  - Loss functions: Mean sqaured error, Cross entropy.
- - Regularisation techniques: L2, Dropout.
+ - Misc: L2 regularisation
 
 
 
