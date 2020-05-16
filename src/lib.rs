@@ -322,7 +322,7 @@ pub mod core {
     }
     impl Activation {
         /// Computes activations given inputs.
-        fn run(&self,z:&Array<f32>) -> Array<f32> {
+        pub fn run(&self,z:&Array<f32>) -> Array<f32> {
             return match self {
                 Self::Sigmoid => sigmoid(z),
                 Self::Softmax => Activation::softmax(z),
@@ -420,7 +420,7 @@ pub mod core {
             return maxof(y,&zeros,false);
         }
     }
-    struct DenseLayer {
+    pub struct DenseLayer {
         activation:Activation,
         biases:Array<f32>,
         weights:Array<f32>
@@ -587,7 +587,7 @@ pub mod core {
             }
         }
     }
-    struct DropoutLayer {
+    pub struct DropoutLayer {
         p:f32,
         mask:Array<f32>
     }
@@ -643,8 +643,8 @@ pub mod core {
         /// use cogent::core::{NeuralNetwork,Layer,Activation};
         /// 
         /// let mut net = NeuralNetwork::new(2,&[
-        ///     Layer::new(3,Activation::Sigmoid),
-        ///     Layer::new(2,Activation::Softmax)
+        ///     Layer::Dense(3,Activation::Sigmoid),
+        ///     Layer::Dense(2,Activation::Softmax)
         /// ]);
         /// ```
         pub fn new(mut inputs:u64,layers: &[Layer]) -> NeuralNetwork {
@@ -733,8 +733,8 @@ pub mod core {
         /// 
         /// // Net (2 -Sigmoid-> 3 -Sigmoid-> 2)
         /// let mut net = NeuralNetwork::new(2,&[
-        ///     Layer::new(3,Activation::Sigmoid),
-        ///     Layer::new(2,Activation::Sigmoid)
+        ///     Layer::Dense(3,Activation::Sigmoid),
+        ///     Layer::Dense(2,Activation::Sigmoid)
         /// ]);
         /// 
         /// net.activation(1,Activation::Softmax); // Changes activation of output layer.
@@ -815,8 +815,8 @@ pub mod core {
         /// 
         /// // Sets network
         /// let mut neural_network = NeuralNetwork::new(2,&[
-        ///     Layer::new(3,Activation::Sigmoid),
-        ///     Layer::new(2,Activation::Softmax)
+        ///     Layer::Dense(3,Activation::Sigmoid),
+        ///     Layer::Dense(2,Activation::Softmax)
         /// ]);
         /// // Sets data
         /// // 0=false,  1=true.
@@ -1235,8 +1235,8 @@ pub mod core {
         /// # use cogent::core::{EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
         /// # 
         /// # let mut net = NeuralNetwork::new(2,&[
-        /// #     Layer::new(3,Activation::Sigmoid),
-        /// #     Layer::new(2,Activation::Softmax)
+        /// #     Layer::Dense(3,Activation::Sigmoid),
+        /// #     Layer::Dense(2,Activation::Softmax)
         /// # ]);
         /// # 
         /// let mut data = vec![
