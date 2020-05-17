@@ -454,7 +454,7 @@ pub mod core {
             };
         }
         // Forward propagates.
-        fn forepropagate(&self,a:&Array<f32>) -> (Array<f32>,Array<f32>) {
+        fn forepropagate(&self,a:&Array<f32>,ones:&Array<f32>) -> (Array<f32>,Array<f32>) {
             //println!("activation: {:.?}",self.activation);
             //af_print!("self.weights",self.weights);
             //af_print!("a",a);
@@ -463,20 +463,26 @@ pub mod core {
             //af_print!("weighted_inputs",weighted_inputs);
             //af_print!("cols(&weighted_inputs,0,10)",cols(&weighted_inputs,0,10));
 
-            //NeuralNetwork::mem_info("weighted inputs computed",false);
+            ////NeuralNetwork::mem_info("weighted inputs computed",false);
 
-            let input = add(&weighted_inputs,&self.biases,true);
+            // Using batch `arrayfire::add` is sooo slow, this is why we do it like this
+            let bias_matrix:Array<f32> = matmul(&self.biases,&ones,MatProp::NONE,MatProp::NONE);
+            //af_print!("bias_matrix",bias_matrix);
+            //af_print!("cols(&bias_matrix,0,10)",cols(&bias_matrix,0,10));
+            
+            let input = weighted_inputs + bias_matrix;
+            //let input = add(&weighted_inputs,&self.biases,true);
 
             //af_print!("input",input);
             //af_print!("cols(&input,0,10)",cols(&input,0,10));
 
-            //NeuralNetwork::mem_info("z computed",false);
+            ////NeuralNetwork::mem_info("z computed",false);
 
             let activation = self.activation.run(&input);
             //af_print!("activation",activation);
             //af_print!("cols(&activation,0,10)",cols(&activation,0,10));
 
-            //NeuralNetwork::mem_info("a computed",false);
+            ////NeuralNetwork::mem_info("a computed",false);
 
             return (activation,input);
         }
@@ -489,7 +495,7 @@ pub mod core {
             // δ
             let error = self.activation.derivative(z) * partial_error;
 
-            NeuralNetwork::mem_info("error computed",false);
+            //NeuralNetwork::mem_info("error computed",false);
 
             // Number of examples in batch
             let batch_len = z.dims().get()[1] as f32;
@@ -497,22 +503,22 @@ pub mod core {
             // Sets errors/gradients and sums through examples
             // ∂C/∂b
             let bias_error = sum(&error,1);
-            NeuralNetwork::mem_info("bias error computed",false);
+            //NeuralNetwork::mem_info("bias error computed",false);
 
-            println!("{} | {} -> {}",error.dims(),a.dims(),calc_weight_errors(&error,a).dims());
+            //println!("{} | {} -> {}",error.dims(),a.dims(),calc_weight_errors(&error,a).dims());
 
             // ∂C/∂w
-            let start = Instant::now();
+            //let start = Instant::now();
             let weight_error = calc_weight_errors(&error,a);
-            println!("Micros: {}",start.elapsed().as_micros());
-            NeuralNetwork::mem_info("weight error computed",false);
+            //println!("Micros: {}",start.elapsed().as_micros());
+            //NeuralNetwork::mem_info("weight error computed",false);
             
-            panic!("testing weight calculation");
+            //panic!("testing weight calculation");
 
             // w^T dot δ
             let nxt_partial_error = matmul(&self.weights,&error,MatProp::TRANS,MatProp::NONE);
 
-            NeuralNetwork::mem_info("partial error computed",false);
+            //NeuralNetwork::mem_info("partial error computed",false);
 
             // TODO Figure out best way to do weight and bias updates
             // = old weights - avg weight errors
@@ -523,12 +529,12 @@ pub mod core {
                 self.weights = &self.weights - (learning_rate * weight_error / batch_len);
             }
 
-            NeuralNetwork::mem_info("weights updated",false);
+            //NeuralNetwork::mem_info("weights updated",false);
             
             // = old biases - avg bias errors
             self.biases = &self.biases - (learning_rate * bias_error / batch_len);
 
-            NeuralNetwork::mem_info("biases updated",false);
+            //NeuralNetwork::mem_info("biases updated",false);
 
             // w^T dot δ
             return nxt_partial_error;
@@ -764,7 +770,7 @@ pub mod core {
             for layer in self.layers.iter_mut() {
                 activation = match layer {
                     InnerLayer::Dropout(dropout_layer) => dropout_layer.forepropagate(&activation,ones),
-                    InnerLayer::Dense(dense_layer) => dense_layer.forepropagate(&activation).0,
+                    InnerLayer::Dense(dense_layer) => dense_layer.forepropagate(&activation,&ones).0,
                 };
             }
 
@@ -895,14 +901,14 @@ pub mod core {
             let mut best_accuracy_instant = Instant::now();// Instant of best accuracy.
             let mut best_accuracy = 0u32; // Value of best accuracy.
 
-            NeuralNetwork::mem_info("Before any alloocation",false);
+            //NeuralNetwork::mem_info("Before any alloocation",false);
             // Sets array of evaluation data.
             let matrix_evaluation_data = self.matrixify(evaluation_data);
-            NeuralNetwork::mem_info("Evaluation data allocated",false);
+            //NeuralNetwork::mem_info("Evaluation data allocated",false);
 
             // Computes intial evaluation.
             let starting_evaluation = self.inner_evaluate(&matrix_evaluation_data,evaluation_data,cost);
-            NeuralNetwork::mem_info("Evaluation ran",false);
+            //NeuralNetwork::mem_info("Evaluation ran",false);
             
             
             // If `log_interval` has been defined, print intial evaluation.
@@ -926,11 +932,11 @@ pub mod core {
             loop {
                 // Sets array of training data.
                 let training_data_matrix = self.matrixify(training_data);
-                NeuralNetwork::mem_info("Training data allocated",false);
+                //NeuralNetwork::mem_info("Training data allocated",false);
 
                 // Split training data into batchs.
                 let batches = batch_chunks(&training_data_matrix,batch_size);
-                NeuralNetwork::mem_info("Training data batchs set",false);
+                //NeuralNetwork::mem_info("Training data batchs set",false);
 
                 
 
@@ -958,10 +964,9 @@ pub mod core {
                     for batch in batches {
                         self.backpropagate(&batch,learning_rate,cost,l2,training_data.len());
 
-                        NeuralNetwork::mem_info("Backpropagated",false);
-                        panic!("stop here");
+                        //NeuralNetwork::mem_info("Backpropagated",false);
+                        //panic!("stop here");
                     }
-                    
                 }
                 iterations_elapsed += 1;
 
@@ -1127,17 +1132,17 @@ pub mod core {
             for layer in self.layers.iter_mut() {
                 let (a,z) = match layer {
                     InnerLayer::Dropout(dropout_layer) => (dropout_layer.forepropagate(&input,ones),None),
-                    InnerLayer::Dense(dense_layer) => { let (a,z) = dense_layer.forepropagate(&input); (a,Some(z)) },
+                    InnerLayer::Dense(dense_layer) => { let (a,z) = dense_layer.forepropagate(&input,&ones); (a,Some(z)) },
                 };
                 layer_outs.push((input,z));
                 input = a;
-                NeuralNetwork::mem_info("Forepropagated layer",false);
+                //NeuralNetwork::mem_info("Forepropagated layer",false);
             }
             layer_outs.push((input,None));
 
-            NeuralNetwork::mem_info("Forepropagated",false);
+            //NeuralNetwork::mem_info("Forepropagated",false);
 
-            println!("step size: {:.4}mb",arrayfire::get_mem_step_size() as f32 / (1024f32*1024f32));
+            //println!("step size: {:.4}mb",arrayfire::get_mem_step_size() as f32 / (1024f32*1024f32));
 
             //panic!("panic after foreprop");
 
@@ -1159,7 +1164,7 @@ pub mod core {
                     InnerLayer::Dropout(dropout_layer) => dropout_layer.backpropagate(&partial_error),
                     InnerLayer::Dense(dense_layer) => dense_layer.backpropagate(&partial_error,&z.unwrap(),&a,learning_rate,l2,training_set_length),
                 };
-                NeuralNetwork::mem_info("Backpropagated layer",false);
+                //NeuralNetwork::mem_info("Backpropagated layer",false);
             }
         }
         

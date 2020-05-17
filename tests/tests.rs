@@ -617,7 +617,7 @@ mod tests {
             net.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
-                //.tracking().log_interval(MeasuredCondition::Iteration(1))
+                .tracking().log_interval(MeasuredCondition::Iteration(1))
                 .l2(0.1f32)
             .go();
 
