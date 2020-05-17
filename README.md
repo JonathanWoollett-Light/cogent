@@ -76,7 +76,7 @@ If you find any issues I would really appreciate if you could let me know (and p
 ## Installation
 
 1. [Setup ArrayFire Rust bindings](https://github.com/arrayfire/arrayfire-rust#use-from-cratesio--) (Ignore step 4).
-2. Add `cogent = "^0.3"` to `Cargo.toml`.
+2. Add `cogent = "^0.4"` to `Cargo.toml`.
 
 ## TODO
 
