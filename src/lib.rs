@@ -502,8 +502,12 @@ pub mod core {
             println!("{} | {} -> {}",error.dims(),a.dims(),calc_weight_errors(&error,a).dims());
 
             // ∂C/∂w
-            let weight_error = sum(&calc_weight_errors(&error,a),2);
+            let start = Instant::now();
+            let weight_error = calc_weight_errors(&error,a);
+            println!("Micros: {}",start.elapsed().as_micros());
             NeuralNetwork::mem_info("weight error computed",false);
+            
+            panic!("testing weight calculation");
 
             // w^T dot δ
             let nxt_partial_error = matmul(&self.weights,&error,MatProp::TRANS,MatProp::NONE);
@@ -529,30 +533,14 @@ pub mod core {
             // w^T dot δ
             return nxt_partial_error;
 
-            // TODO Better document this
-            fn calc_weight_errors(errors:&Array<f32>,activations:&Array<f32>) -> arrayfire::Array<f32> {
-                let examples:u64 = activations.dims().get()[1];
-                
-                let er_size:u64 = errors.dims().get()[0];
-                let act_size:u64 = activations.dims().get()[0];
-                let dims = arrayfire::Dim4::new(&[er_size,act_size,examples,1]);
             
-                let temp:arrayfire::Array<f32> = arrayfire::Array::<f32>::new_empty(dims);
-                
-                //NeuralNetwork::mem_info("set weight error slicing 0",false);
-                for i in 0..examples {
-                    let holder = arrayfire::matmul(
-                        &col(errors,i),
-                        &col(activations,i),
-                        MatProp::NONE,
-                        MatProp::TRANS
-                    );
-                    //NeuralNetwork::mem_info("set weight error slicing 1",false);
-                    arrayfire::set_slice(&temp,&holder,i); // TODO Why does this work? I don't think this should work.
-                    //NeuralNetwork::mem_info("set weight error slicing 2",false);
-                    //if i > 2 { panic!("stop spam"); }
-                }
-                
+            fn calc_weight_errors(error:&Array<f32>,a:&Array<f32>) -> Array<f32> {
+                let e_size:u64 = error.dims().get()[0];
+                let a_size:u64 = a.dims().get()[0];
+                let dims = Dim4::new(&[e_size,a_size,1,1]);
+                let mut temp:Array<f32> = Array::<f32>::new_empty(dims);
+                arrayfire::gemm(&mut temp,MatProp::NONE,MatProp::TRANS,vec![0.],error,a,vec![1.]);
+
                 return temp;
             }
         }
