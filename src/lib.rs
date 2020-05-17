@@ -7,7 +7,7 @@ pub mod core {
     use arrayfire::{
         Array, randu, Dim4, matmul, MatProp, constant, sigmoid, cols, col, exp, maxof, sum, pow,
         transpose, imax, eq, sum_all, log, diag_extract, sum_by_key, mul,div,sub, gt, and, max
-        ,mem_info,device_mem_info,print_gen,af_print
+        ,mem_info,device_mem_info,print_gen,af_print,add
     };
 
     use crossterm::{QueueableCommand, cursor};
@@ -448,35 +448,29 @@ pub mod core {
             };
         }
         // Forward propagates.
-        fn forepropagate(&self,a:&Array<f32>,ones:&Array<f32>) -> (Array<f32>,Array<f32>) {
+        fn forepropagate(&self,a:&Array<f32>) -> (Array<f32>,Array<f32>) {
             //println!("activation: {:.?}",self.activation);
             //af_print!("self.weights",self.weights);
             //af_print!("a",a);
-            
             
             let weighted_inputs:Array<f32> = matmul(&self.weights,&a,MatProp::NONE,MatProp::NONE);
             //af_print!("weighted_inputs",weighted_inputs);
             //af_print!("cols(&weighted_inputs,0,10)",cols(&weighted_inputs,0,10));
 
-            // TODO:
-            // Performance of the commented code versus used code here is extremely similar.
-            //  The used code benefits from caching and becomes more efficient when it is in more frequent use,
-            //   in this case run is not frequently used, simply being used for evaluation.
-            //  Notably when used for forward prop when training the performance difference is significant,
-            //   while the commented code appears simpler, for the sake of consistency between training 
-            //   and here we use the uncommented code.
-            //af_print!("ones",ones);
-            let bias_matrix:Array<f32> = matmul(&self.biases,&ones,MatProp::NONE,MatProp::NONE);
-            //af_print!("bias_matrix",bias_matrix);
-            //af_print!("cols(&bias_matrix,0,10)",cols(&bias_matrix,0,10));
-            
-            let input = weighted_inputs + bias_matrix;
+            //NeuralNetwork::mem_info("weighted inputs computed",false);
+
+            let input = add(&weighted_inputs,&self.biases,true);
+
             //af_print!("input",input);
             //af_print!("cols(&input,0,10)",cols(&input,0,10));
+
+            //NeuralNetwork::mem_info("z computed",false);
 
             let activation = self.activation.run(&input);
             //af_print!("activation",activation);
             //af_print!("cols(&activation,0,10)",cols(&activation,0,10));
+
+            //NeuralNetwork::mem_info("a computed",false);
 
             return (activation,input);
         }
@@ -489,17 +483,26 @@ pub mod core {
             // δ
             let error = self.activation.derivative(z) * partial_error;
 
+            NeuralNetwork::mem_info("error computed",false);
+
             // Number of examples in batch
             let batch_len = z.dims().get()[1] as f32;
 
             // Sets errors/gradients and sums through examples
             // ∂C/∂b
             let bias_error = sum(&error,1);
+            NeuralNetwork::mem_info("bias error computed",false);
+
+            println!("{} | {} -> {}",error.dims(),a.dims(),calc_weight_errors(&error,a).dims());
+
             // ∂C/∂w
             let weight_error = sum(&calc_weight_errors(&error,a),2);
+            NeuralNetwork::mem_info("weight error computed",false);
 
             // w^T dot δ
             let nxt_partial_error = matmul(&self.weights,&error,MatProp::TRANS,MatProp::NONE);
+
+            NeuralNetwork::mem_info("partial error computed",false);
 
             // TODO Figure out best way to do weight and bias updates
             // = old weights - avg weight errors
@@ -509,9 +512,13 @@ pub mod core {
             else {
                 self.weights = &self.weights - (learning_rate * weight_error / batch_len);
             }
+
+            NeuralNetwork::mem_info("weights updated",false);
             
             // = old biases - avg bias errors
             self.biases = &self.biases - (learning_rate * bias_error / batch_len);
+
+            NeuralNetwork::mem_info("biases updated",false);
 
             // w^T dot δ
             return nxt_partial_error;
@@ -526,6 +533,7 @@ pub mod core {
             
                 let temp:arrayfire::Array<f32> = arrayfire::Array::<f32>::new_empty(dims);
                 
+                //NeuralNetwork::mem_info("set weight error slicing 0",false);
                 for i in 0..examples {
                     let holder = arrayfire::matmul(
                         &col(errors,i),
@@ -533,7 +541,10 @@ pub mod core {
                         MatProp::NONE,
                         MatProp::TRANS
                     );
+                    //NeuralNetwork::mem_info("set weight error slicing 1",false);
                     arrayfire::set_slice(&temp,&holder,i); // TODO Why does this work? I don't think this should work.
+                    //NeuralNetwork::mem_info("set weight error slicing 2",false);
+                    //if i > 2 { panic!("stop spam"); }
                 }
                 
                 return temp;
@@ -557,6 +568,7 @@ pub mod core {
             let z_dims = z.dims();
             let z_dim_arr = z_dims.get();
             let mask_dims = Dim4::new(&[z_dim_arr[0],1,1,1]);
+            // TODO Look into using `tile`
             // Updates mask
             self.mask = matmul(&gt(&randu::<f32>(mask_dims),&self.p,false).cast::<f32>(),ones,MatProp::NONE,MatProp::NONE);
             // Applies mask
@@ -610,7 +622,7 @@ pub mod core {
         pub fn new(mut inputs:u64,layers: &[Layer]) -> NeuralNetwork {
             NeuralNetwork::new_checks(inputs,layers);
 
-            // Neccessary variable to use mutable `inputs` to nicely specify right layer sizes.
+            // Necessary variable to use mutable `inputs` to nicely specify right layer sizes.
             let net_inputs = inputs;
 
             // Sets holder for neural net layers
@@ -758,7 +770,7 @@ pub mod core {
             for layer in self.layers.iter_mut() {
                 activation = match layer {
                     InnerLayer::Dropout(dropout_layer) => dropout_layer.forepropagate(&activation,ones),
-                    InnerLayer::Dense(dense_layer) => dense_layer.forepropagate(&activation,ones).0,
+                    InnerLayer::Dense(dense_layer) => dense_layer.forepropagate(&activation).0,
                 };
             }
 
@@ -889,11 +901,14 @@ pub mod core {
             let mut best_accuracy_instant = Instant::now();// Instant of best accuracy.
             let mut best_accuracy = 0u32; // Value of best accuracy.
 
+            NeuralNetwork::mem_info("Before any alloocation",false);
             // Sets array of evaluation data.
             let matrix_evaluation_data = self.matrixify(evaluation_data);
+            NeuralNetwork::mem_info("Evaluation data allocated",false);
 
             // Computes intial evaluation.
-            let starting_evaluation = self.inner_evaluate(&matrix_evaluation_data,evaluation_data,cost); 
+            let starting_evaluation = self.inner_evaluate(&matrix_evaluation_data,evaluation_data,cost);
+            NeuralNetwork::mem_info("Evaluation ran",false);
             
             
             // If `log_interval` has been defined, print intial evaluation.
@@ -917,9 +932,13 @@ pub mod core {
             loop {
                 // Sets array of training data.
                 let training_data_matrix = self.matrixify(training_data);
+                NeuralNetwork::mem_info("Training data allocated",false);
 
                 // Split training data into batchs.
                 let batches = batch_chunks(&training_data_matrix,batch_size);
+                NeuralNetwork::mem_info("Training data batchs set",false);
+
+                
 
                 // Runs backpropagation on all batches:
                 //  If `tracking` output backpropagation percentage progress.
@@ -936,12 +955,17 @@ pub mod core {
                         stdout.flush().unwrap();
 
                         self.backpropagate(&batch,learning_rate,cost,l2,training_data.len());
+
+                        
                     }
                     stdout.write(format!("Backpropagated: {}\n",NeuralNetwork::time(backprop_start_instant)).as_bytes()).unwrap();
                 }
                 else {
                     for batch in batches {
                         self.backpropagate(&batch,learning_rate,cost,l2,training_data.len());
+
+                        NeuralNetwork::mem_info("Backpropagated",false);
+                        panic!("stop here");
                     }
                     
                 }
@@ -1109,12 +1133,19 @@ pub mod core {
             for layer in self.layers.iter_mut() {
                 let (a,z) = match layer {
                     InnerLayer::Dropout(dropout_layer) => (dropout_layer.forepropagate(&input,ones),None),
-                    InnerLayer::Dense(dense_layer) => { let (a,z) = dense_layer.forepropagate(&input,ones); (a,Some(z)) },
+                    InnerLayer::Dense(dense_layer) => { let (a,z) = dense_layer.forepropagate(&input); (a,Some(z)) },
                 };
                 layer_outs.push((input,z));
                 input = a;
+                NeuralNetwork::mem_info("Forepropagated layer",false);
             }
             layer_outs.push((input,None));
+
+            NeuralNetwork::mem_info("Forepropagated",false);
+
+            println!("step size: {:.4}mb",arrayfire::get_mem_step_size() as f32 / (1024f32*1024f32));
+
+            //panic!("panic after foreprop");
 
             // Backpropagates
             // --------------
@@ -1134,13 +1165,16 @@ pub mod core {
                     InnerLayer::Dropout(dropout_layer) => dropout_layer.backpropagate(&partial_error),
                     InnerLayer::Dense(dense_layer) => dense_layer.backpropagate(&partial_error,&z.unwrap(),&a,learning_rate,l2,training_set_length),
                 };
+                NeuralNetwork::mem_info("Backpropagated layer",false);
             }
         }
         
 
-        fn mem_info(msg:&str) {
+        fn mem_info(msg:&str,bytes:bool) {
             let mem_info = device_mem_info();
-            println!("{} : {:.4}mb ({} bytes), {}, {:.4}mb ({} bytes), {}",msg,mem_info.0 as f32/(1024f32*1024f32),mem_info.0,mem_info.1,mem_info.2 as f32/(1024f32*1024f32),mem_info.2,mem_info.3);
+            println!("{} : {:.4}mb | {:.4}mb",msg,mem_info.0 as f32/(1024f32*1024f32),mem_info.2 as f32/(1024f32*1024f32),);
+            println!("buffers: {} | {}",mem_info.1,mem_info.3);
+            if bytes { println!("bytes: {} | {}",mem_info.0,mem_info.2); }
         }
 
         /// Returns tuple: (Average cost across batch, Number of examples correctly classified).
