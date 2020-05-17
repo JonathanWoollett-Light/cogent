@@ -42,8 +42,11 @@ pub mod core {
 
     /// For setting `evaluation_data`.
     pub enum EvaluationData<'a> {
+        /// Set as a given number of examples from training data.
         Scalar(usize),
+        /// Set as a given percentage of examples from training data.
         Percent(f32),
+        /// Set as a given dataset.
         Actual(&'a Vec<(Vec<f32>,usize)>)
     }
     /// For setting a hyperparameter with measured intervals.
@@ -57,8 +60,11 @@ pub mod core {
     /// The training halt condition.
     #[derive(Clone,Copy)]
     pub enum HaltCondition {
+        /// Halt after completing a given number of iterations (epochs)
         Iteration(u32),
+        /// Halt after a given duration has elapsed.
         Duration(Duration),
+        /// Halt after acheiving a given accuracy.
         Accuracy(f32)
     }
     /// For setting a hyperparameter as a proportion of another.
