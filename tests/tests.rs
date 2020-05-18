@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use cogent::core::{
-        HaltCondition,EvaluationData,MeasuredCondition,Proportion,
+        HaltCondition,EvaluationData,MeasuredCondition,
         Activation,Layer,
         NeuralNetwork
     };
@@ -12,6 +12,7 @@ mod tests {
         io::Read,
         fs::File
     };
+    
     use itertools::izip;
 
     // Run with: `cargo test --release -- --test-threads=1` (You can set 1 higher if you have more VRAM)

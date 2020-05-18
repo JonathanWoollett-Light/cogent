@@ -5,9 +5,9 @@ pub mod core {
 
     // TODO Is this really a good way to include these?
     use arrayfire::{
-        Array, randu, Dim4, matmul, MatProp, constant, sigmoid, cols, col, exp, maxof, sum, pow,
-        transpose, imax, eq, sum_all, log, diag_extract, sum_by_key, mul,div,sub, gt, and, max
-        ,mem_info,device_mem_info,print_gen,af_print,add
+        Array, randu, Dim4, matmul, MatProp, constant, sigmoid, cols, exp, maxof, sum, pow,
+        transpose, imax, eq, sum_all, log, diag_extract, sum_by_key, mul,div, gt, and, max
+        ,device_mem_info
     };
 
     use crossterm::{QueueableCommand, cursor};
