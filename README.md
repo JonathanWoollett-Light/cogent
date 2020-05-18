@@ -67,7 +67,7 @@ If you find any issues I would really appreciate if you could let me know (and p
  - GPU compute using [ArrayFire Rust Bindings](https://github.com/arrayfire/arrayfire-rust)
  - Optimisers: Stochastic gradient descent.
  - Layers: Dense, Dropout
- - Activations: Softmax, Sigmoid, ReLU.
+ - Activations: Softmax, Sigmoid, Tanh, ReLU.
  - Loss functions: Mean sqaured error, Cross entropy.
  - Misc: L2 regularisation
 
