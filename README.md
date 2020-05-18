@@ -80,20 +80,11 @@ If you find any issues I would really appreciate if you could let me know (and p
 
 ## TODO
 
-Task types:
-
- - :ballot_box_with_check: = Completable
- - :repeat: = Perpetual
- 
-Tasks:
-
-1. :ballot_box_with_check: Convolutional layers.
-2. :ballot_box_with_check: Meticulous testing (making sure things work).
-3. :ballot_box_with_check: Optimise usage of VRAM.
-4. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
-5. :ballot_box_with_check: Meticulous benchmarking (making sure things are fast).
-6. :ballot_box_with_check: Benchmarking against other popular neural network libraries (TensorFlow etc.)
-6. :repeat: Improve defaults.
-7. :repeat: Learn more.
+1. Convolutional layers.
+2. Meticulous testing (making sure things work).
+3. Optimise usage of VRAM.
+4. Meticulous benchmarking (making sure things are fast).
+5. Benchmarking against other popular neural network libraries (TensorFlow etc.)
+6. Automatic net creation and layer setting from given dataset.
 
 Please note that things may not be developed inorder, it is only my estimation.
