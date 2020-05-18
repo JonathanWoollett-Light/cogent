@@ -92,6 +92,7 @@ Tasks:
 3. :ballot_box_with_check: Optimise usage of VRAM.
 4. :ballot_box_with_check: Automatic net creation and layer setting from given dataset.
 5. :ballot_box_with_check: Meticulous benchmarking (making sure things are fast).
+6. :ballot_box_with_check: Benchmarking against other popular neural network libraries (TensorFlow etc.)
 6. :repeat: Improve defaults.
 7. :repeat: Learn more.
 
