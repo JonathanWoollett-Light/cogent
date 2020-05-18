@@ -22,7 +22,7 @@ mod tests {
 
 
     // TODO Name this better
-    const TESTING_MIN_ACCURACY:f32 = 0.90f32; // 5% error min needed to pass tests
+    const TESTING_MIN_ACCURACY:f32 = 0.95f32; // 5% error min needed to pass tests
     // Returns `TESTING_MIN_ACCURACY` percentage as number of example in dataset.
     fn required_accuracy(test_data:&[(Vec<f32>,usize)]) -> u32 {
         ((test_data.len() as f32) * TESTING_MIN_ACCURACY).ceil() as u32
@@ -434,10 +434,10 @@ mod tests {
         close_enough(to_vec(observed),to_vec(predicted),10e-10);
     }
     // TODO Name this better
-    // Checks all percentage differences between all value pairs from `vec_1` and `vec_2` are less than `allowed_inequality`.
+    // Checks all differences between all value pairs from `vec_1` and `vec_2` are less than `allowed_inequality`.
     fn close_enough(vec_1:Vec<f32>,vec_2:Vec<f32>,allowed_inequality:f32) {
         for (a,b) in izip!(vec_1,vec_2) {
-            assert!((a-b).abs() <= allowed_inequality,format!("{} dif {} > {}",a,b,allowed_inequality))
+            assert!((a-b).abs() <= allowed_inequality,format!("{} dif {} > {}",a,b,allowed_inequality));
         }
     }
     fn to_vec<T:HasAfEnum+Default+Clone>(array:Array<T>) -> Vec<T> {
@@ -617,7 +617,7 @@ mod tests {
             net.train(&training_data)
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
-                .tracking().log_interval(MeasuredCondition::Iteration(1))
+                //.tracking().log_interval(MeasuredCondition::Iteration(1))
                 .l2(0.1f32)
             .go();
 

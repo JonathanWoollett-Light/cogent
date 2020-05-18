@@ -30,7 +30,7 @@ pub mod core {
     const DEFAULT_LEARNING_RATE:f32 = 0.1f32;
     // Default interval in iterations before early stopping.
     // early stopping = default early stopping * (size of examples / number of examples) Iterations
-    const DEFAULT_EARLY_STOPPING:f32 = 400f32;
+    const DEFAULT_EARLY_STOPPING:f32 = 500f32;
     // Default percentage minimum positive accuracy change required to prevent early stopping or learning rate decay (0.005=0.5%).
     const DEFAULT_EVALUATION_MIN_CHANGE:f32 = 0.001f32;
     // Default amount to decay learning rate after period of un-notable (what word should I use here?) change.
@@ -455,34 +455,17 @@ pub mod core {
         }
         // Forward propagates.
         fn forepropagate(&self,a:&Array<f32>,ones:&Array<f32>) -> (Array<f32>,Array<f32>) {
-            //println!("activation: {:.?}",self.activation);
-            //af_print!("self.weights",self.weights);
-            //af_print!("a",a);
-            
-            let weighted_inputs:Array<f32> = matmul(&self.weights,&a,MatProp::NONE,MatProp::NONE);
-            //af_print!("weighted_inputs",weighted_inputs);
-            //af_print!("cols(&weighted_inputs,0,10)",cols(&weighted_inputs,0,10));
 
-            ////NeuralNetwork::mem_info("weighted inputs computed",false);
+            let weighted_inputs:Array<f32> = matmul(&self.weights,&a,MatProp::NONE,MatProp::NONE);
 
             // Using batch `arrayfire::add` is sooo slow, this is why we do it like this
             let bias_matrix:Array<f32> = matmul(&self.biases,&ones,MatProp::NONE,MatProp::NONE);
-            //af_print!("bias_matrix",bias_matrix);
-            //af_print!("cols(&bias_matrix,0,10)",cols(&bias_matrix,0,10));
             
+            // z
             let input = weighted_inputs + bias_matrix;
-            //let input = add(&weighted_inputs,&self.biases,true);
 
-            //af_print!("input",input);
-            //af_print!("cols(&input,0,10)",cols(&input,0,10));
-
-            ////NeuralNetwork::mem_info("z computed",false);
-
+            // a
             let activation = self.activation.run(&input);
-            //af_print!("activation",activation);
-            //af_print!("cols(&activation,0,10)",cols(&activation,0,10));
-
-            ////NeuralNetwork::mem_info("a computed",false);
 
             return (activation,input);
         }
@@ -491,34 +474,20 @@ pub mod core {
         // Backpropagates.
         // (Updates weights and biases during this process).
         fn backpropagate(&mut self, partial_error:&Array<f32>,z:&Array<f32>,a:&Array<f32>,learning_rate:f32,l2:Option<f32>,training_set_length:usize) -> Array<f32> {
-
             // δ
             let error = self.activation.derivative(z) * partial_error;
 
-            //NeuralNetwork::mem_info("error computed",false);
-
-            // Number of examples in batch
-            let batch_len = z.dims().get()[1] as f32;
-
-            // Sets errors/gradients and sums through examples
             // ∂C/∂b
             let bias_error = sum(&error,1);
-            //NeuralNetwork::mem_info("bias error computed",false);
-
-            //println!("{} | {} -> {}",error.dims(),a.dims(),calc_weight_errors(&error,a).dims());
 
             // ∂C/∂w
-            //let start = Instant::now();
             let weight_error = calc_weight_errors(&error,a);
-            //println!("Micros: {}",start.elapsed().as_micros());
-            //NeuralNetwork::mem_info("weight error computed",false);
-            
-            //panic!("testing weight calculation");
 
             // w^T dot δ
             let nxt_partial_error = matmul(&self.weights,&error,MatProp::TRANS,MatProp::NONE);
 
-            //NeuralNetwork::mem_info("partial error computed",false);
+            // Number of examples in batch
+            let batch_len = z.dims().get()[1] as f32;
 
             // TODO Figure out best way to do weight and bias updates
             // = old weights - avg weight errors
@@ -528,24 +497,20 @@ pub mod core {
             else {
                 self.weights = &self.weights - (learning_rate * weight_error / batch_len);
             }
-
-            //NeuralNetwork::mem_info("weights updated",false);
             
             // = old biases - avg bias errors
             self.biases = &self.biases - (learning_rate * bias_error / batch_len);
 
-            //NeuralNetwork::mem_info("biases updated",false);
-
             // w^T dot δ
             return nxt_partial_error;
 
-            
+            // TODO Document this better
             fn calc_weight_errors(error:&Array<f32>,a:&Array<f32>) -> Array<f32> {
                 let e_size:u64 = error.dims().get()[0];
                 let a_size:u64 = a.dims().get()[0];
                 let dims = Dim4::new(&[e_size,a_size,1,1]);
                 let mut temp:Array<f32> = Array::<f32>::new_empty(dims);
-                arrayfire::gemm(&mut temp,MatProp::NONE,MatProp::TRANS,vec![0.],error,a,vec![1.]);
+                arrayfire::gemm(&mut temp,MatProp::NONE,MatProp::TRANS,vec![1.],error,a,vec![0.]);
 
                 return temp;
             }
@@ -901,15 +866,11 @@ pub mod core {
             let mut best_accuracy_instant = Instant::now();// Instant of best accuracy.
             let mut best_accuracy = 0u32; // Value of best accuracy.
 
-            //NeuralNetwork::mem_info("Before any alloocation",false);
             // Sets array of evaluation data.
             let matrix_evaluation_data = self.matrixify(evaluation_data);
-            //NeuralNetwork::mem_info("Evaluation data allocated",false);
 
             // Computes intial evaluation.
             let starting_evaluation = self.inner_evaluate(&matrix_evaluation_data,evaluation_data,cost);
-            //NeuralNetwork::mem_info("Evaluation ran",false);
-            
             
             // If `log_interval` has been defined, print intial evaluation.
             if let Some(_) = log_interval {
@@ -932,15 +893,11 @@ pub mod core {
             loop {
                 // Sets array of training data.
                 let training_data_matrix = self.matrixify(training_data);
-                //NeuralNetwork::mem_info("Training data allocated",false);
 
                 // Split training data into batchs.
                 let batches = batch_chunks(&training_data_matrix,batch_size);
-                //NeuralNetwork::mem_info("Training data batchs set",false);
 
-                
-
-                // Runs backpropagation on all batches:
+                // Iterates across batches running backpropagation.
                 //  If `tracking` output backpropagation percentage progress.
                 if tracking {
                     let mut percentage:f32 = 0f32;
@@ -954,18 +911,15 @@ pub mod core {
                         stdout.queue(cursor::RestorePosition).unwrap();
                         stdout.flush().unwrap();
 
+                        // Runs backpropagation
                         self.backpropagate(&batch,learning_rate,cost,l2,training_data.len());
-
-                        
                     }
                     stdout.write(format!("Backpropagated: {}\n",NeuralNetwork::time(backprop_start_instant)).as_bytes()).unwrap();
                 }
                 else {
                     for batch in batches {
+                        // Runs backpropagation
                         self.backpropagate(&batch,learning_rate,cost,l2,training_data.len());
-
-                        //NeuralNetwork::mem_info("Backpropagated",false);
-                        //panic!("stop here");
                     }
                 }
                 iterations_elapsed += 1;
@@ -1037,7 +991,7 @@ pub mod core {
                 }
 
                 // Shuffles training data
-                // Given trainin data is already shuffled, so don't need to shuffle on 1st itereation.
+                // Training data has been shuffled when it is intially passed to this function, so don't need to shuffle on the 1st itereation.
                 training_data.shuffle(&mut rng);
             }
 
@@ -1100,7 +1054,7 @@ pub mod core {
 
                 return chunks;
             }
-            // Outputs a checkpoint file
+            // Outputs a checkpoint file.
             fn checkpoint(net:&NeuralNetwork,marker:String,name:Option<&str>) {
                 if let Some(folder) = name {
                     net.export(&format!("checkpoints/{}/{}",folder,marker));
@@ -1168,7 +1122,8 @@ pub mod core {
             }
         }
         
-
+        // For debug purposes
+        #[allow(dead_code)]
         fn mem_info(msg:&str,bytes:bool) {
             let mem_info = device_mem_info();
             println!("{} : {:.4}mb | {:.4}mb",msg,mem_info.0 as f32/(1024f32*1024f32),mem_info.2 as f32/(1024f32*1024f32),);
