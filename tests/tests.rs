@@ -597,7 +597,7 @@ mod tests {
             assert!(evaluation.1 >= required_accuracy(&testing_data));
         }
     }
-    #[test] // (784-ReLU->800-Softmax->10) with L2
+    #[test] // (784-ReLU->1000-ReLU->500-Softmax->10) with L2
     fn train_digits_1() {
         let runs = TEST_RERUN_MULTIPLIER;
         for _ in 0..runs {
@@ -628,14 +628,14 @@ mod tests {
             assert!(evaluation.1 >= required_accuracy(&testing_data));
         }
     }
-    #[test] // (784-ReLU->800-Softmax->10) with L2
+    #[test] // (784-Sigmoid->1000-Sigmoid->500-Softmax->10) with L2
     fn train_digits_2() {
         let runs = TEST_RERUN_MULTIPLIER;
         for _ in 0..runs {
             // Setup
             // ------------------------------------------------
             let mut net = NeuralNetwork::new(784,&[
-                Layer::Dense(1000,Activation::ReLU),
+                Layer::Dense(1000,Activation::Sigmoid),
                 Layer::Dense(500,Activation::Sigmoid),
                 Layer::Dense(10,Activation::Softmax)
             ]);
@@ -650,6 +650,37 @@ mod tests {
                 .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
                 //.tracking().log_interval(MeasuredCondition::Iteration(1))
+                .l2(0.1f32)
+            .go();
+
+            // Evaluation
+            // ------------------------------------------------
+            let evaluation = net.evaluate(&testing_data,None);
+            assert!(evaluation.1 >= required_accuracy(&testing_data));
+        }
+    }
+    #[test] // (784-Tanh->1000-Tanh->500-Softmax->10) with L2
+    fn train_digits_3() {
+        let runs = TEST_RERUN_MULTIPLIER;
+        for _ in 0..runs {
+            // Setup
+            // ------------------------------------------------
+            let mut net = NeuralNetwork::new(784,&[
+                Layer::Dense(1000,Activation::Tanh),
+                Layer::Dense(500,Activation::Tanh),
+                Layer::Dense(10,Activation::Softmax)
+            ]);
+
+            // Sets training and testing data
+            let training_data = get_mnist_dataset(false);
+            let testing_data = get_mnist_dataset(true);
+
+            // Execution
+            // ------------------------------------------------
+            net.train(&training_data)
+                .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
+                .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
+                .tracking().log_interval(MeasuredCondition::Iteration(1))
                 .l2(0.1f32)
             .go();
 

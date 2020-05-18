@@ -5,7 +5,7 @@ pub mod core {
 
     // TODO Is this really a good way to include these?
     use arrayfire::{
-        Array, randu, Dim4, matmul, MatProp, constant, sigmoid, cols, exp, maxof, sum, pow,
+        Array, randu, Dim4, matmul, MatProp, constant, sigmoid, tanh, cols, exp, maxof, sum, pow,
         transpose, imax, eq, sum_all, log, diag_extract, sum_by_key, mul,div, gt, and, max
         ,device_mem_info
     };
@@ -323,6 +323,10 @@ pub mod core {
         /// 
         /// $ A(z)=\frac{1}{1+e^-z} $
         Sigmoid,
+        /// Tanh activation functions.
+        /// 
+        /// $ A(z)=\frac{2}{1+e^{-2z}}-1 $
+        Tanh,
         /// Softmax activation function.
         /// 
         /// $ A(\begin{bmatrix}z_1,\dots,z_k\end{bmatrix})=\begin{bmatrix}\frac{e^{z_1}}{\Sigma_{i=1}^k e^{z_i}} & \dots &\frac{e^{z_k}}{\Sigma_{i=1}^k e^{z_i}}\end{bmatrix} $
@@ -337,6 +341,7 @@ pub mod core {
         pub fn run(&self,z:&Array<f32>) -> Array<f32> {
             return match self {
                 Self::Sigmoid => sigmoid(z),
+                Self::Tanh => tanh(z),
                 Self::Softmax => Activation::softmax(z),
                 Self::ReLU => Activation::relu(z),
             };
@@ -346,6 +351,7 @@ pub mod core {
             // What should we name the derivative functions?
             return match self {
                 Self::Sigmoid => sigmoid_derivative(z),
+                Self::Tanh => tanh_derivative(z),
                 Self::Softmax => softmax_derivative(z),
                 Self::ReLU => relu_derivative(z),
             };
@@ -355,6 +361,11 @@ pub mod core {
             fn sigmoid_derivative(z:&Array<f32>) -> Array<f32> {
                 let s = sigmoid(z);
                 return s.clone()*(1f32-s); // TODO Can we remove the clone here?
+            }
+            // Derivative of sigmoid
+            // t' = 1-t^2
+            fn tanh_derivative(z:&Array<f32>) -> Array<f32> {
+                1 - pow(&tanh(z),&2,false)
             }
             // Derivative of softmax
             // e^z * (sum of other inputs e^input) / (sum of all inputs e^input)^2 = e^z * (exp_sum-e^z) / (exp_sum)^2
