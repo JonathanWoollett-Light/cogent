@@ -277,11 +277,6 @@ pub mod core {
             // Cross entropy cost
             // TODO Need to double check this
             fn cross_entropy(y: &Array<f32>, a: &Array<f32>) -> f32 {
-                // if sum_all(&arrayfire::isnan(a)).0 > 0f64 {
-                //     af_print!("a",cols(&a,0,10));
-                //     panic!("nan a");
-                // }
-
                 //af_print!("y",cols(&y,0,10));
 
                 // Adds very small value to a, to prevent log(0)=nan
@@ -311,23 +306,7 @@ pub mod core {
                     // TODO Double check we don't need to add a val to prevent 1-a=0 (commented out code below checks count of values where a>=1)
                     //let check = sum_all(&arrayfire::ge(a,&1f32,false)).0;
                     //if check != 0f64 { panic!("check: {}",check); }
-
-                    // if sum_all(&arrayfire::isinf(a)).0 > 0f64 {
-                    //     af_print!("a inf",cols(a,0,10));
-                    //     panic!("a inf");
-                    // }
-                    // if sum_all(&arrayfire::isnan(a)).0 > 0f64 {
-                    //     af_print!("a nan",cols(a,0,10));
-                    //     panic!("a nan");
-                    // }
-                    // if sum_all(&eq(a,&1f32,false)).0 > 0f64 {
-                    //     af_print!("a eq 1",cols(a,0,10));
-                    //     panic!("nan a eq 1");
-                    // }
-                    // if sum_all(&eq(a,&0f32,false)).0 > 0f64 {
-                    //     af_print!("a eq 0",cols(a,0,10));
-                    //     panic!("nan a eq 0");
-                    // }
+                    
                     return (-1 * y) / a + (1f32 - y) / (1f32 - a);
                 } // -y/a + (1-y)/(1-a)
             };
