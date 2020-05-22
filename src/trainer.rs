@@ -1,4 +1,4 @@
-use crate::cost::Cost;
+use crate::costs::Cost;
 use crate::neural_network::NeuralNetwork;
 use crate::setter_enums::*;
 

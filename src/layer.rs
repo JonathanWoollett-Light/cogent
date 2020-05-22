@@ -1,4 +1,4 @@
-use crate::activation::Activation;
+use crate::activations::Activation;
 
 use arrayfire::{constant, gt, matmul, mul, randu, sum, Array, Dim4, MatProp};
 

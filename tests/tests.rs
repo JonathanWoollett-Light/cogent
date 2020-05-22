@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use cogent::neural_network::{NeuralNetwork,Layer};
-    use cogent::activation::Activation;
+    use cogent::activations::Activation;
     use cogent::setter_enums::*;
     
     use arrayfire::{Array,Dim4,HasAfEnum};

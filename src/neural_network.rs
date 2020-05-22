@@ -1,13 +1,13 @@
-use crate::activation::Activation;
-use crate::cost::Cost;
+use crate::activations::Activation;
+use crate::costs::Cost;
 use crate::layer::{DenseLayer, DropoutLayer};
 use crate::setter_enums::*;
 use crate::trainer::Trainer;
 use serde::{Deserialize, Serialize};
 
 use arrayfire::{
-    cols, constant, device_mem_info, diag_extract, div, eq, imax, sum, sum_all, sum_by_key,
-    transpose, Array, Dim4,
+    cols, constant, device_mem_info, diag_extract, div, eq, imax, sum, sum_all, sum_by_key, transpose,
+    Array, Dim4,
 };
 
 use itertools::izip;
