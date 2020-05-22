@@ -58,23 +58,27 @@ impl Activation {
         // Derivative of softmax
         // e^z * (sum of other inputs e^input) / (sum of all inputs e^input)^2 = e^z * (exp_sum-e^z) / (exp_sum)^2
         fn softmax_derivative(z: &Array<f32>) -> Array<f32> {
+            // e^z
             let exponents = exp(z);
-            //af_print!("exponents",exponents);
             // Gets sum of each example (column)
             let sums = sum(&exponents, 0);
-            //af_print!("sums",sums);
-            // Sets squared sum of each example
-            let sqrd_sums = pow(&sums, &2, false); // is this better than `&sums*&sums`?
-                                                   //af_print!("sqrd_sums",sqrd_sums);
+
+            // This is done since `add(&a,&b,true)` is very slow.
             let ones = constant(1f32, Dim4::new(&[z.dims().get()[0], 1, 1, 1]));
-            //af_print!("ones",ones);
             let sums_matrix = matmul(&ones, &sums, MatProp::NONE, MatProp::NONE);
-            //af_print!("sums_matrix",sums_matrix);
+
+            // exp_sum-e^z
             let sums_sub = sums_matrix - &exponents;
-            //af_print!("sums_sub",sums_sub);
+
+            // (exp_sum)^2
+            // Gets squared sum of each example
+            let sqrd_sums = pow(&sums, &2, false); // is this better than `&sums*&sums`?
+
             // TODO Is it more efficient to do this matrix multiplication before or after squaring?
+            // This is done since `div(&a,&b,true)` is very slow.
             let sqrd_sums_matrix = matmul(&ones, &sqrd_sums, MatProp::NONE, MatProp::NONE);
-            //af_print!("sqrd_sums_matrix",sqrd_sums_matrix);
+            
+            // e^z * (exp_sum-e^z) / (exp_sum)^2
             let derivatives = exponents * sums_sub / sqrd_sums_matrix;
 
             return derivatives;
@@ -94,7 +98,6 @@ impl Activation {
     // Applies softmax activation
     fn softmax(y: &Array<f32>) -> Array<f32> {
         let ones = constant(1f32, Dim4::new(&[y.dims().get()[0], 1, 1, 1]));
-        //af_print!("ones",ones);
 
         // Subtracts example max output from all example outputs.
         //  Allowing softmax to handle large values in y.

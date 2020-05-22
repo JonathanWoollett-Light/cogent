@@ -30,15 +30,11 @@ impl Cost {
         // Cross entropy cost
         // TODO Need to double check this
         fn cross_entropy(y: &Array<f32>, a: &Array<f32>) -> f32 {
-            //af_print!("y",cols(&y,0,10));
-
             // Adds very small value to a, to prevent log(0)=nan
             let part1 = log(&(a + 1e-20)) * y;
             // Add very small value to prevent log(1-1)=log(0)=nan
             let part2 = log(&(1f32 - a + 1e-20)) * (1f32 - y);
 
-            //af_print!("part1",cols(&part1,0,10));
-            //af_print!("part2",cols(&part2,0,10));
 
             let mut cost: f32 = sum_all(&(part1 + part2)).0 as f32;
 
