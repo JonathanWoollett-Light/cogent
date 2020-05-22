@@ -1,17 +1,12 @@
 #[cfg(test)]
 mod tests {
-    use cogent::core::{
-        HaltCondition,EvaluationData,MeasuredCondition,
-        Activation,Layer,
-        NeuralNetwork
-    };
+    use cogent::neural_network::{NeuralNetwork,Layer};
+    use cogent::activation::Activation;
+    use cogent::setter_enums::*;
     
     use arrayfire::{Array,Dim4,HasAfEnum};
 
-    use std::{
-        io::Read,
-        fs::File
-    };
+    use std::{io::Read, fs::File};
     
     use itertools::izip;
 
