@@ -34,11 +34,11 @@ let testing_data:Vec<(Vec<f32>,usize)> = get_mnist_dataset(true);
 // Execution
 // ----------
 // Trains until no notable accuracy improvements are being made over a number of iterations.
-// By default this would end training if 0.5% accuracy improvement was not seen over 6 iterations (often referred to as 'epochs').
+// By default this would end training if 0.5% accuracy improvement was not seen over 12 iterations (often referred to as 'epochs').
 
 neural_network.train(&training_data)
     .evaluation_data(EvaluationData::Actual(&testing_data))
-    .l2(0.1f32)
+    .l2(2.)
     .go();
 
 // `.evaluation_data(...)` sets the evaluation data. 
