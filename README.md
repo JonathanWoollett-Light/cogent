@@ -19,7 +19,7 @@ Training a network to classify MNIST:
 // Setup
 // ----------
 // 784-Sigmoid->100-Softmax->10
-let mut neural_network = NeuralNetwork::new(784,&[
+let mut net = NeuralNetwork::new(784,&[
     Layer::Dense(800,Activation::ReLU),
     Layer::Dense(10,Activation::Softmax)
 ]);
@@ -28,23 +28,25 @@ let mut neural_network = NeuralNetwork::new(784,&[
 // `get_mnist_dataset(bool)` simply gets MNIST data in format of `Vec<(Vec<f32>,usize)>` where each entry is an example (tuple.0=input and tuple.1=class).
 // The boolean specifies if it is the MNIST testing data (`true`) or training data (`false`).
 
-let training_data:Vec<(Vec<f32>,usize)> = get_mnist_dataset(false);
-let testing_data:Vec<(Vec<f32>,usize)> = get_mnist_dataset(true);
+// Sets training and testing data
+let (mut train_data,mut train_labels) = get_mnist_dataset(false);
+let (test_data,test_labels) = get_mnist_dataset(true);
 
 // Execution
 // ----------
 // Trains until no notable accuracy improvements are being made over a number of iterations.
-// By default this would end training if 0.5% accuracy improvement was not seen over 12 iterations (often referred to as 'epochs').
+// By default this would end training if 0.5% accuracy improvement was not seen over 12 iterations/epochs.
 
-neural_network.train(&training_data)
-    .evaluation_data(EvaluationData::Actual(&testing_data))
-    .l2(2.)
+net.train(&mut train_data,&mut train_labels)
+    .evaluation_data(EvaluationData::Actual(&test_data,&test_labels))
+    .l2(0.1) // Implements L2 regularisation with a 0.1 lambda vlaue
+    .tracking() // Prints backpropgation progress within each iteration
+    .log_interval(MeasuredCondition::Iteration(1)) // Prints evaluation after each iteration
     .go();
 
 // `.evaluation_data(...)` sets the evaluation data. 
 // If evaluation data is not set it will simply shuffle and split off a random group from training data to be evaluation data.
 // In the case of MNIST where training and evaluation datasets are given seperately, it makes sense to set it as such.
-// `.l2(...)` sets the lambda value for L2 regularisation. 
 
 // Evaluation
 // ----------
