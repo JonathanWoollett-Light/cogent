@@ -18,19 +18,19 @@ Training a network to classify MNIST:
 ```rust
 // Setup
 // ----------
-// 784-Sigmoid->100-Softmax->10
+// 784-ReLU->800-Softmax->10
 let mut net = NeuralNetwork::new(784,&[
     Layer::Dense(800,Activation::ReLU),
     Layer::Dense(10,Activation::Softmax)
 ]);
 
-// Setting training and testing data
-// `get_mnist_dataset(bool)` simply gets MNIST data in format of `Vec<(Vec<f32>,usize)>` where each entry is an example (tuple.0=input and tuple.1=class).
+// Setting training and testing data.
+// `get_mnist_dataset(bool)` simply gets MNIST dataset.
 // The boolean specifies if it is the MNIST testing data (`true`) or training data (`false`).
 
-// Sets training and testing data
-let (mut train_data,mut train_labels) = get_mnist_dataset(false);
-let (test_data,test_labels) = get_mnist_dataset(true);
+// Sets training and testing data.
+let (mut train_data,mut train_labels):(Array2<f32>,Array2<usize>) = get_mnist_dataset(false);
+let (test_data,test_labels):(Array2<f32>,Array2<usize>) = get_mnist_dataset(true);
 
 // Execution
 // ----------
