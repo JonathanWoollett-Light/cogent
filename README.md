@@ -56,7 +56,7 @@ net.train(&mut train_data,&mut train_labels)
 
 // Evaluation
 // ----------
-let (cost,correctly_classified):(f32,u32) = net.evaluate(&test_data,&test_labels,None);; // (cost,examples correctly classified)
+let (cost,correctly_classified):(f32,u32) = net.evaluate(&test_data,&test_labels,None); // (cost,examples correctly classified)
 println!("Cost: {:.2}",cost);
 println!(
     "Accuracy: {}/{} ({:.2}%)",
