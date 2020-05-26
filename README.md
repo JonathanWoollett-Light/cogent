@@ -38,14 +38,13 @@ let (test_data,test_labels):(Array2<f32>,Array2<usize>) = get_mnist_dataset(true
 // By default this would end training if 0.5% accuracy improvement was not seen over 12 iterations/epochs.
 
 net.train(&mut train_data,&mut train_labels)
-    .evaluation_data(EvaluationData::Actual(&test_data,&test_labels))
+    .evaluation_data(EvaluationData::Actual(&test_data,&test_labels)) // Sets evaluation data
     .l2(0.1) // Implements L2 regularisation with a 0.1 lambda vlaue
     .tracking() // Prints backpropgation progress within each iteration
     .log_interval(MeasuredCondition::Iteration(1)) // Prints evaluation after each iteration
     .go();
 
-// `.evaluation_data(...)` sets the evaluation data. 
-// If evaluation data is not set it will simply shuffle and split off a random group from training data to be evaluation data.
+// If evaluation data is not set manually it will simply shuffle and split off a random group from training data to be evaluation data.
 // In the case of MNIST where training and evaluation datasets are given seperately, it makes sense to set it as such.
 
 // Evaluation
@@ -78,7 +77,7 @@ If you find any issues I would really appreciate if you could let me know (and p
 ## Installation
 
 1. [Setup ArrayFire Rust bindings](https://github.com/arrayfire/arrayfire-rust#use-from-cratesio--) (Ignore step 4).
-2. Add `cogent = "^0.4"` to `Cargo.toml`.
+2. Add `cogent = "^0.5"` to `Cargo.toml`.
 
 ## TODO
 
