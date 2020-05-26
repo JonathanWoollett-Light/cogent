@@ -403,8 +403,8 @@ impl<'a> NeuralNetwork {
         // Sets array of evaluation data.
         let matrix_evaluation_data = self.matrixify(&evaluation_data,&evaluation_labels);
 
-        println!("dims: {} | {}",matrix_evaluation_data.0.dims(),matrix_evaluation_data.1.dims());
-        panic!("tester");
+        // println!("dims: {} | {}",matrix_evaluation_data.0.dims(),matrix_evaluation_data.1.dims());
+        // panic!("tester");
 
         //af_print!("matrix_evaluation_data.0",matrix_evaluation_data.0);
         //af_print!("matrix_evaluation_data.1",matrix_evaluation_data.1);
@@ -420,8 +420,8 @@ impl<'a> NeuralNetwork {
                 iterations_elapsed,
                 NeuralNetwork::time(start_instant),
                 starting_evaluation.0,
-                starting_evaluation.1,evaluation_data.len(),
-                (starting_evaluation.1 as f32)/(evaluation_data.len() as f32) * 100f32,
+                starting_evaluation.1,evaluation_data.len_of(Axis(0)),
+                (starting_evaluation.1 as f32)/(evaluation_data.len_of(Axis(0)) as f32) * 100f32,
                 learning_rate
             ).as_bytes()).unwrap();
         }
@@ -460,7 +460,7 @@ impl<'a> NeuralNetwork {
                     stdout.flush().unwrap();
 
                     // Runs backpropagation
-                    self.backpropagate(&batch, learning_rate, cost, l2, training_data.len());
+                    self.backpropagate(&batch, learning_rate, cost, l2, training_data.len_of(Axis(0)));
                 }
                 stdout
                     .write(
@@ -474,7 +474,7 @@ impl<'a> NeuralNetwork {
             } else {
                 for batch in batches {
                     // Runs backpropagation
-                    self.backpropagate(&batch, learning_rate, cost, l2, training_data.len());
+                    self.backpropagate(&batch, learning_rate, cost, l2, training_data.len_of(Axis(0)));
                 }
             }
             iterations_elapsed += 1;
@@ -508,7 +508,7 @@ impl<'a> NeuralNetwork {
                             start_instant,
                             learning_rate,
                             evaluation,
-                            evaluation_data.len(),
+                            evaluation_data.len_of(Axis(1)),
                         );
                     }
                 }
@@ -520,7 +520,7 @@ impl<'a> NeuralNetwork {
                             start_instant,
                             learning_rate,
                             evaluation,
-                            evaluation_data.len(),
+                            evaluation_data.len_of(Axis(1)),
                         );
                         last_logged_instant = Instant::now();
                     }
@@ -836,6 +836,9 @@ impl<'a> NeuralNetwork {
     ) -> (f32, u32) {
         // Forepropgatates input
         let output = self.inner_run(input);
+
+        println!("eval dims: {} | {}",target.dims(),output.dims());
+
         // Computes cost
         let cost: f32 = cost.run(target, &output);
         // Computes example output classes
@@ -843,12 +846,21 @@ impl<'a> NeuralNetwork {
 
         // Sets array of target classes
         let target_classes:Vec<u32> = labels.axis_iter(Axis(0)).map(|x|x[0] as u32).collect();
+
+        println!("target_classes.len(): {}",target_classes.len());
+
         let number_of_examples = labels.len_of(Axis(0));
         let target_array = Array::<u32>::new(&target_classes,Dim4::new(&[1, number_of_examples as u64, 1, 1]));
+
+        println!("eval dims: {} | {}",output_classes.dims(),target_array.dims());
+        
 
         // Gets number of correct classifications.
         let correct_classifications = eq(&output_classes, &target_array, false); // TODO Can this be a bitwise AND?
         let correct_classifications_numb: u32 = sum_all(&correct_classifications).0 as u32;
+
+        println!("correct_classifications_numb: {}",correct_classifications_numb);
+        //panic!("eval panic");
 
         // Returns average cost and number of examples correctly classified.
         return (cost / number_of_examples as f32, correct_classifications_numb);
