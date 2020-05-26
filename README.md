@@ -50,13 +50,13 @@ net.train(&mut train_data,&mut train_labels)
 
 // Evaluation
 // ----------
-let (cost,correctly_classified):(f32,u32) = neural_network.evaluate(&testing_data,None); // (cost,examples correctly classified)
+let (cost,correctly_classified):(f32,u32) = net.evaluate(&test_data,&test_labels,None);; // (cost,examples correctly classified)
 println!("Cost: {:.2}",cost);
 println!(
     "Accuracy: {}/{} ({:.2}%)",
     correctly_classified,
-    testing_data.len(),
-    correctly_classified as f32 / testing_data.len() as f32
+    test_data.len_of(Axis(1)),
+    correctly_classified as f32 / test_data.len_of(Axis(1)) as f32
 );
 ```
 
