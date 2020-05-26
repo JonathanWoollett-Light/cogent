@@ -288,8 +288,8 @@ impl<'a> NeuralNetwork {
     pub fn train(&'a mut self, data: &'a mut ndarray::Array2<f32>, labels: &'a mut ndarray::Array2<usize>) -> Trainer<'a> {
         self.check_dataset(data, labels);
 
-        let number_of_examples = data.len_of(Axis(0));
-        let data_inputs = data.len_of(Axis(1));
+        let number_of_examples = data.len_of(Axis(1));
+        let data_inputs = data.len_of(Axis(0));
         let multiplier: f32 = data_inputs as f32 / number_of_examples as f32;
 
         let early_stopping_condition: u32 = (DEFAULT_EARLY_STOPPING * multiplier).ceil() as u32;
@@ -403,12 +403,6 @@ impl<'a> NeuralNetwork {
         // Sets array of evaluation data.
         let matrix_evaluation_data = self.matrixify(&evaluation_data,&evaluation_labels);
 
-        println!("evaluation dims: {} | {}",matrix_evaluation_data.0.dims(),matrix_evaluation_data.1.dims());
-
-        //af_print!("matrix_evaluation_data.0",matrix_evaluation_data.0);
-        //af_print!("matrix_evaluation_data.1",matrix_evaluation_data.1);
-        //panic!("got here");
-
         // Computes intial evaluation.
         let starting_evaluation =
             self.inner_evaluate(&matrix_evaluation_data, &evaluation_labels, cost);
@@ -435,13 +429,8 @@ impl<'a> NeuralNetwork {
         // ------------------------------------------------
         loop {
             // TODO Can `matrixify` and `batch_chunks` be combined in this use case to be more efficient?
-            //let time_check = Instant::now();
             // Sets array of training data.
             let training_data_matrix = self.matrixify(&training_data.view(),&training_labels.view());
-            //println!("time: {}",time_check.elapsed().as_millis());
-            //panic!("why this shit so slow?");
-
-            //println!("training dims: {} | {}",training_data_matrix.0.dims(),training_data_matrix.1.dims());
 
             // Split training data into batchs.
             let batches = batch_chunks(&training_data_matrix, batch_size);
@@ -454,11 +443,6 @@ impl<'a> NeuralNetwork {
                 let backprop_start_instant = Instant::now();
                 let percent_change: f32 =
                     100f32 * batch_size as f32 / training_data_matrix.0.dims().get()[1] as f32;
-
-                //println!("batch_size: {}",batch_size);
-                //println!("training_data_matrix.0.dims().get()[1] as f32: {:.4}",training_data_matrix.0.dims().get()[1] as f32);
-                //println!("percent_change: {}",percent_change);
-                //panic!("test");
 
                 for batch in batches {
                     stdout
@@ -846,8 +830,6 @@ impl<'a> NeuralNetwork {
         // Forepropgatates input
         let output = self.inner_run(input);
 
-        //println!("eval dims: {} | {}",target.dims(),output.dims());
-
         // Computes cost
         let cost: f32 = cost.run(target, &output);
         // Computes example output classes
@@ -855,21 +837,12 @@ impl<'a> NeuralNetwork {
 
         // Sets array of target classes
         let target_classes:Vec<u32> = labels.axis_iter(Axis(0)).map(|x|x[0] as u32).collect();
-
-        //println!("target_classes.len(): {}",target_classes.len());
-
         let number_of_examples = labels.len_of(Axis(0));
         let target_array = Array::<u32>::new(&target_classes,Dim4::new(&[1, number_of_examples as u64, 1, 1]));
-
-        //println!("eval dims: {} | {}",output_classes.dims(),target_array.dims());
         
-
         // Gets number of correct classifications.
         let correct_classifications = eq(&output_classes, &target_array, false); // TODO Can this be a bitwise AND?
         let correct_classifications_numb: u32 = sum_all(&correct_classifications).0 as u32;
-
-        //println!("correct_classifications_numb: {}",correct_classifications_numb);
-        //panic!("eval panic");
 
         // Returns average cost and number of examples correctly classified.
         return (cost / number_of_examples as f32, correct_classifications_numb);
@@ -1181,12 +1154,8 @@ impl<'a> NeuralNetwork {
         // Constructs input and output array
         let dims = Dim4::new(&[data.len_of(Axis(1)) as u64,number_of_examples,1,1]);
         let input = arrayfire::Array::new(&data.as_slice().unwrap(),dims);
-
-        
-
-        // TODO Would it be more efficient to create all possible target `arrayfire::array`s then set target array columns?
-        let target_dims = Dim4::new(&[net_outs as u64,1,1,1]);
-        
+    
+        // Creates all possible target vecs to be cloned when needed.
         let mut target_vecs:Vec<Vec<f32>> = vec!(vec!(0.;net_outs);net_outs);
         for i in 0..net_outs {
             target_vecs[i][i] = 1.;
@@ -1195,6 +1164,7 @@ impl<'a> NeuralNetwork {
         let flat_labels:Vec<f32> = labels.axis_iter(Axis(0)).map(|label| target_vecs[label[0]].clone()).flatten().collect();
 
         let target: Array<f32> = Array::<f32>::new(&flat_labels,Dim4::new(&[net_outs as u64, number_of_examples, 1, 1]));
+
         // Returns input and output array
         // Array(in,examples,1,1), Array(out,examples,1,1)
         return (input, target);

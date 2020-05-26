@@ -1,8 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use cogent::neural_network::{NeuralNetwork,Layer};
-    use cogent::activations::Activation;
-    use cogent::setter_enums::*;
+    use cogent::{
+        neural_network::{NeuralNetwork,Layer},
+        activations::Activation,
+        setter_enums::*
+    };
     
     use arrayfire::{Array,Dim4,HasAfEnum};
     use ndarray::{Array2,array,Axis};
@@ -714,7 +716,7 @@ mod tests {
             net.train(&mut train_data,&mut train_labels)
                 .evaluation_data(EvaluationData::Actual(&test_data,&test_labels))
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
-                .tracking().log_interval(MeasuredCondition::Iteration(1))
+                //.tracking().log_interval(MeasuredCondition::Iteration(1))
             .go();
 
             // Evaluation
