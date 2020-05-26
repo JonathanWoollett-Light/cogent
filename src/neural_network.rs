@@ -301,7 +301,7 @@ impl<'a> NeuralNetwork {
         let batch_size: usize = if number_of_examples < 100usize {
             number_of_examples
         } else {
-            let batch_holder: f32 = DEFAULT_BATCH_SIZE * data.len() as f32;
+            let batch_holder: f32 = DEFAULT_BATCH_SIZE * number_of_examples as f32;
             if batch_holder < 100f32 {
                 100usize
             } else {
@@ -403,8 +403,7 @@ impl<'a> NeuralNetwork {
         // Sets array of evaluation data.
         let matrix_evaluation_data = self.matrixify(&evaluation_data,&evaluation_labels);
 
-        // println!("dims: {} | {}",matrix_evaluation_data.0.dims(),matrix_evaluation_data.1.dims());
-        // panic!("tester");
+        println!("evaluation dims: {} | {}",matrix_evaluation_data.0.dims(),matrix_evaluation_data.1.dims());
 
         //af_print!("matrix_evaluation_data.0",matrix_evaluation_data.0);
         //af_print!("matrix_evaluation_data.1",matrix_evaluation_data.1);
@@ -436,8 +435,13 @@ impl<'a> NeuralNetwork {
         // ------------------------------------------------
         loop {
             // TODO Can `matrixify` and `batch_chunks` be combined in this use case to be more efficient?
+            //let time_check = Instant::now();
             // Sets array of training data.
             let training_data_matrix = self.matrixify(&training_data.view(),&training_labels.view());
+            //println!("time: {}",time_check.elapsed().as_millis());
+            //panic!("why this shit so slow?");
+
+            //println!("training dims: {} | {}",training_data_matrix.0.dims(),training_data_matrix.1.dims());
 
             // Split training data into batchs.
             let batches = batch_chunks(&training_data_matrix, batch_size);
@@ -450,6 +454,11 @@ impl<'a> NeuralNetwork {
                 let backprop_start_instant = Instant::now();
                 let percent_change: f32 =
                     100f32 * batch_size as f32 / training_data_matrix.0.dims().get()[1] as f32;
+
+                //println!("batch_size: {}",batch_size);
+                //println!("training_data_matrix.0.dims().get()[1] as f32: {:.4}",training_data_matrix.0.dims().get()[1] as f32);
+                //println!("percent_change: {}",percent_change);
+                //panic!("test");
 
                 for batch in batches {
                     stdout
@@ -508,7 +517,7 @@ impl<'a> NeuralNetwork {
                             start_instant,
                             learning_rate,
                             evaluation,
-                            evaluation_data.len_of(Axis(1)),
+                            evaluation_data.len_of(Axis(0)),
                         );
                     }
                 }
@@ -520,7 +529,7 @@ impl<'a> NeuralNetwork {
                             start_instant,
                             learning_rate,
                             evaluation,
-                            evaluation_data.len_of(Axis(1)),
+                            evaluation_data.len_of(Axis(0)),
                         );
                         last_logged_instant = Instant::now();
                     }
@@ -837,7 +846,7 @@ impl<'a> NeuralNetwork {
         // Forepropgatates input
         let output = self.inner_run(input);
 
-        println!("eval dims: {} | {}",target.dims(),output.dims());
+        //println!("eval dims: {} | {}",target.dims(),output.dims());
 
         // Computes cost
         let cost: f32 = cost.run(target, &output);
@@ -847,19 +856,19 @@ impl<'a> NeuralNetwork {
         // Sets array of target classes
         let target_classes:Vec<u32> = labels.axis_iter(Axis(0)).map(|x|x[0] as u32).collect();
 
-        println!("target_classes.len(): {}",target_classes.len());
+        //println!("target_classes.len(): {}",target_classes.len());
 
         let number_of_examples = labels.len_of(Axis(0));
         let target_array = Array::<u32>::new(&target_classes,Dim4::new(&[1, number_of_examples as u64, 1, 1]));
 
-        println!("eval dims: {} | {}",output_classes.dims(),target_array.dims());
+        //println!("eval dims: {} | {}",output_classes.dims(),target_array.dims());
         
 
         // Gets number of correct classifications.
         let correct_classifications = eq(&output_classes, &target_array, false); // TODO Can this be a bitwise AND?
         let correct_classifications_numb: u32 = sum_all(&correct_classifications).0 as u32;
 
-        println!("correct_classifications_numb: {}",correct_classifications_numb);
+        //println!("correct_classifications_numb: {}",correct_classifications_numb);
         //panic!("eval panic");
 
         // Returns average cost and number of examples correctly classified.
@@ -1173,22 +1182,19 @@ impl<'a> NeuralNetwork {
         let dims = Dim4::new(&[data.len_of(Axis(1)) as u64,number_of_examples,1,1]);
         let input = arrayfire::Array::new(&data.as_slice().unwrap(),dims);
 
-        let target: Array<f32> = Array::<f32>::new_empty(Dim4::new(&[net_outs as u64, number_of_examples, 1, 1]));
+        
 
         // TODO Would it be more efficient to create all possible target `arrayfire::array`s then set target array columns?
         let target_dims = Dim4::new(&[net_outs as u64,1,1,1]);
-        for (index,label) in labels.axis_iter(Axis(0)).enumerate() {
-            let mut target_temp:Vec<f32> = vec!(0.;net_outs);
-            target_temp[label[0]] = 1.;
-            //println!("target_temp: {:.?}",target_temp);
-            
-            let temp_array = Array::new(&target_temp,target_dims);
-
-            //af_print!("temp_array",temp_array);
-
-            set_col(&target,&temp_array,index as u64);
-            //af_print!("target",target);
+        
+        let mut target_vecs:Vec<Vec<f32>> = vec!(vec!(0.;net_outs);net_outs);
+        for i in 0..net_outs {
+            target_vecs[i][i] = 1.;
         }
+        
+        let flat_labels:Vec<f32> = labels.axis_iter(Axis(0)).map(|label| target_vecs[label[0]].clone()).flatten().collect();
+
+        let target: Array<f32> = Array::<f32>::new(&flat_labels,Dim4::new(&[net_outs as u64, number_of_examples, 1, 1]));
         // Returns input and output array
         // Array(in,examples,1,1), Array(out,examples,1,1)
         return (input, target);
