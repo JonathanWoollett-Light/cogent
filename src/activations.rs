@@ -9,7 +9,7 @@ use arrayfire::{
 pub enum Activation {
     /// Sigmoid activation functions.
     ///
-    /// $ A(z)=\frac{1}{1+e^-z} $
+    /// $ A(z)=\frac{1}{1+e^{-z}} $
     Sigmoid,
     /// Tanh activation functions.
     ///

@@ -6,12 +6,16 @@ use crate::trainer::Trainer;
 use serde::{Deserialize, Serialize};
 
 use arrayfire::{
-    cols, constant, device_mem_info, diag_extract, div, eq, imax, sum, sum_all, sum_by_key, transpose,
+    cols, set_col, constant, device_mem_info, diag_extract, div, eq, imax, sum, sum_all, sum_by_key, transpose,
     Array, Dim4,
+    af_print,print_gen
 };
 
 use itertools::izip;
-use rand::prelude::SliceRandom;
+
+use rand::{thread_rng, Rng};
+
+use ndarray::{Axis,ArrayViewMut2,ArrayView2};
 
 use crossterm::{cursor, QueueableCommand};
 
@@ -47,7 +51,7 @@ pub enum Layer {
     Dense(u64, Activation),
 }
 // Specifies layers within neural net.
-enum InnerLayer {
+pub enum InnerLayer {
     Dropout(DropoutLayer),
     Dense(DenseLayer),
 }
@@ -57,9 +61,9 @@ pub struct NeuralNetwork {
     // Inputs to network.
     inputs: u64,
     // Activations of layers.
-    layers: Vec<InnerLayer>,
+    layers: Vec<InnerLayer>
 }
-impl NeuralNetwork {
+impl<'a> NeuralNetwork {
     /// Constructs network of given layers.
     ///
     /// Returns constructed network.
@@ -195,19 +199,26 @@ impl NeuralNetwork {
             panic!("Layer {} does not have an activation function.", index);
         }
     }
+    // TODO Maybe renmae this to 'forepropagate'?
     /// Runs a batch of examples through the network.
     ///
     /// Returns classes.
-    pub fn run(&mut self, inputs: &Vec<Vec<f32>>) -> Vec<usize> {
-        let in_len = inputs[0].len();
-        let example_len = inputs.len();
+    pub fn run(&mut self, input: &ndarray::Array2<f32>) -> Vec<usize> {
 
-        // Converts 2d vec to array for input
-        let in_vec: Vec<f32> = inputs.iter().flat_map(|x| x.clone()).collect();
-        let input: Array<f32> = Array::<f32>::new(
-            &in_vec,
-            Dim4::new(&[example_len as u64, in_len as u64, 1, 1]),
-        );
+        if input.len_of(Axis(1)) as u64 != self.inputs {
+            panic!("Given data inputs don't match network inputs ({}!={})",input.len_of(Axis(1)),self.inputs);
+        }
+
+        // // Converts 2d vec to array for input
+        // let in_vec: Vec<f32> = inputs.iter().flat_map(|x| x.clone()).collect();
+        // let input: Array<f32> = Array::<f32>::new(
+        //     &in_vec,
+        //     Dim4::new(&[example_len as u64, in_len as u64, 1, 1]),
+        // );
+
+        // Converts `ndarray::Array2` to `arrayfire::Array`
+        let dims = Dim4::new(&[input.len_of(Axis(1)) as u64,input.len_of(Axis(0)) as u64,1,1]);
+        let input = arrayfire::Array::new(&input.as_slice().unwrap(),dims);
 
         // Forepropagates
         let output = self.inner_run(&input);
@@ -274,51 +285,34 @@ impl NeuralNetwork {
     ///     .evaluation_data(EvaluationData::Actual(&data)) // Use training data as evaluation data.
     /// .go();
     /// ```
-    pub fn train(&mut self, training_data: &[(Vec<f32>, usize)]) -> Trainer {
-        // Sets number of network outputs
-        let class_outs = match &self.layers[self.layers.len() - 1] {
-            InnerLayer::Dense(dense_layer) => dense_layer.biases.dims().get()[0] as usize,
-            _ => panic!("Last layer is somehow a dropout layer, this should not be possible"),
-        };
+    pub fn train(&'a mut self, data: &'a mut ndarray::Array2<f32>, labels: &'a mut ndarray::Array2<usize>) -> Trainer<'a> {
+        self.check_dataset(data, labels);
 
-        // Checks all examples fit the neural network.
-        for i in 0..training_data.len() {
-            // Checks number of input values of each example matchs number of network inputs.
-            if training_data[i].0.len() != self.inputs as usize {
-                panic!(
-                    "Input size of example {} ({}) != size of input layer ({}).",
-                    i,
-                    training_data[i].0.len(),
-                    self.inputs
-                );
-            }
-            // Checks number of classes in dataset does not exceed number of network outputs (presumes classes in data are labelled 0..n).
-            if training_data[i].1 >= class_outs {
-                panic!(
-                    "Output class of example {} ({}) >= number of output classes of network ({}).",
-                    i, training_data[i].1, class_outs
-                );
-            }
-        }
+        let number_of_examples = data.len_of(Axis(0));
+        let data_inputs = data.len_of(Axis(1));
+        let multiplier: f32 = data_inputs as f32 / number_of_examples as f32;
 
-        let multiplier: f32 = training_data[0].0.len() as f32 / training_data.len() as f32;
         let early_stopping_condition: u32 = (DEFAULT_EARLY_STOPPING * multiplier).ceil() as u32;
         let learning_rate_interval: u32 =
             (DEFAULT_LEARNING_RATE_INTERVAL * multiplier).ceil() as u32;
 
-        let batch_holder: f32 = DEFAULT_BATCH_SIZE * training_data.len() as f32;
-        // TODO What should we use as min batch size here instead of `100`?
-        let batch_size: usize = if training_data.len() < 100usize {
-            training_data.len()
-        } else if batch_holder < 100f32 {
-            100usize
+        
+        // TODO Do this better
+        let batch_size: usize = if number_of_examples < 100usize {
+            number_of_examples
         } else {
-            batch_holder.ceil() as usize
+            let batch_holder: f32 = DEFAULT_BATCH_SIZE * data.len() as f32;
+            if batch_holder < 100f32 {
+                100usize
+            } else {
+                batch_holder.ceil() as usize
+            }
         };
 
         return Trainer {
-            training_data: training_data.to_vec(),
-            evaluation_data: EvaluationData::Percent(DEFAULT_EVALUTATION_DATA),
+            training_data: data,
+            training_labels: labels,
+            evaluation_dataset: EvaluationData::Percent(DEFAULT_EVALUTATION_DATA),
             cost: Cost::Crossentropy,
             halt_condition: None,
             log_interval: None,
@@ -335,13 +329,37 @@ impl NeuralNetwork {
             neural_network: self,
         };
     }
+    pub fn check_dataset(&self,data: &ndarray::Array2<f32>, labels: &ndarray::Array2<usize>) {
+        // Checks data matches labels.
+        let number_of_examples = data.len_of(Axis(0));
+        if number_of_examples != labels.len_of(Axis(0)) {
+            panic!("Number of examples ({}) does not match number of labels ({}).",number_of_examples,labels.len_of(Axis(0)));
+        }
+
+        // Checks all examples fit the neural network.
+        let data_inputs = data.len_of(Axis(1));
+        if data_inputs != self.inputs as usize {
+            panic!("Input size of examples ({}) does not match input size of network ({}).",data_inputs,self.inputs);
+        }
+
+        // Gets number of network outputs
+        let net_outs = match &self.layers[self.layers.len() - 1] {
+            InnerLayer::Dense(dense_layer) => dense_layer.biases.dims().get()[0] as usize,
+            _ => panic!("Last layer is somehow a dropout layer, this should not be possible"),
+        };
+        for (index,label) in labels.axis_iter(Axis(0)).enumerate() {
+            if label[0] > net_outs { panic!("Label of example {} ({}) exceeds network outputs ({}).",index,label[0],net_outs); }
+        }
+    }
 
     // TODO Name this better
     // Runs training.
     pub fn train_details(
         &mut self,
-        training_data: &mut [(Vec<f32>, usize)], // TODO Look into `&mut [(Vec<f32>,Vec<f32>)]` vs `&mut Vec<(Vec<f32>,Vec<f32>)>`
-        evaluation_data: &[(Vec<f32>, usize)],
+        mut training_data: ArrayViewMut2<f32>,
+        mut training_labels: ArrayViewMut2<usize>,
+        evaluation_data: ArrayView2<f32>,
+        evaluation_labels: ArrayView2<usize>,
         cost: &Cost,
         halt_condition: Option<HaltCondition>,
         log_interval: Option<MeasuredCondition>,
@@ -374,7 +392,6 @@ impl NeuralNetwork {
         let mut learning_rate: f32 = intial_learning_rate;
 
         let mut stdout = stdout(); // Handle for standard output for this process.
-        let mut rng = rand::thread_rng(); // Random number generator.
 
         let start_instant = Instant::now(); // Beginning instant to compute duration of training.
         let mut iterations_elapsed = 0u32; // Iteration counter of training.
@@ -384,11 +401,18 @@ impl NeuralNetwork {
         let mut best_accuracy = 0u32; // Value of best accuracy.
 
         // Sets array of evaluation data.
-        let matrix_evaluation_data = self.matrixify(evaluation_data);
+        let matrix_evaluation_data = self.matrixify(&evaluation_data,&evaluation_labels);
+
+        println!("dims: {} | {}",matrix_evaluation_data.0.dims(),matrix_evaluation_data.1.dims());
+        panic!("tester");
+
+        //af_print!("matrix_evaluation_data.0",matrix_evaluation_data.0);
+        //af_print!("matrix_evaluation_data.1",matrix_evaluation_data.1);
+        //panic!("got here");
 
         // Computes intial evaluation.
         let starting_evaluation =
-            self.inner_evaluate(&matrix_evaluation_data, evaluation_data, cost);
+            self.inner_evaluate(&matrix_evaluation_data, &evaluation_labels, cost);
 
         // If `log_interval` has been defined, print intial evaluation.
         if let Some(_) = log_interval {
@@ -406,11 +430,14 @@ impl NeuralNetwork {
         let mut last_checkpointed_instant = Instant::now();
         let mut last_logged_instant = Instant::now();
 
+        //panic!("got here");
+
         // Backpropgation loop
         // ------------------------------------------------
         loop {
+            // TODO Can `matrixify` and `batch_chunks` be combined in this use case to be more efficient?
             // Sets array of training data.
-            let training_data_matrix = self.matrixify(training_data);
+            let training_data_matrix = self.matrixify(&training_data.view(),&training_labels.view());
 
             // Split training data into batchs.
             let batches = batch_chunks(&training_data_matrix, batch_size);
@@ -453,7 +480,7 @@ impl NeuralNetwork {
             iterations_elapsed += 1;
 
             // Computes iteration evaluation.
-            let evaluation = self.inner_evaluate(&matrix_evaluation_data, evaluation_data, cost);
+            let evaluation = self.inner_evaluate(&matrix_evaluation_data, &evaluation_labels, cost);
 
             // If `checkpoint_interval` number of iterations or length of duration passed, export weights  (`connections`) and biases (`biases`) to file.
             match checkpoint_interval {
@@ -502,7 +529,7 @@ impl NeuralNetwork {
             }
 
             // If 100% accuracy, halt.
-            if evaluation.1 as usize == evaluation_data.len() {
+            if evaluation.1 as usize == evaluation_data.len_of(Axis(0)) {
                 break;
             }
 
@@ -519,7 +546,7 @@ impl NeuralNetwork {
                     }
                 }
                 Some(HaltCondition::Accuracy(accuracy)) => {
-                    if evaluation.1 >= (evaluation_data.len() as f32 * accuracy) as u32 {
+                    if evaluation.1 >= (evaluation_data.len_of(Axis(0)) as f32 * accuracy) as u32 {
                         break;
                     }
                 }
@@ -530,8 +557,8 @@ impl NeuralNetwork {
             // If change in evaluation more than `evaluation_min_change` update `best_accuracy`,`best_accuracy_iteration` and `best_accuracy_instant`.
             match evaluation_min_change {
                 Proportion::Percent(percent) => {
-                    if (evaluation.1 as f32 / evaluation_data.len() as f32)
-                        > (best_accuracy as f32 / evaluation_data.len() as f32) + percent
+                    if (evaluation.1 as f32 / evaluation_data.len_of(Axis(0)) as f32)
+                        > (best_accuracy as f32 / evaluation_data.len_of(Axis(0)) as f32) + percent
                     {
                         best_accuracy = evaluation.1;
                         best_accuracy_iteration = iterations_elapsed;
@@ -579,15 +606,15 @@ impl NeuralNetwork {
 
             // Shuffles training data
             // Training data has been shuffled when it is intially passed to this function, so don't need to shuffle on the 1st itereation.
-            training_data.shuffle(&mut rng);
+            shuffle_dataset(&mut training_data, &mut training_labels);
         }
 
         // Compute and print final evaluation.
         // ------------------------------------------------
-        let evaluation = self.inner_evaluate(&matrix_evaluation_data, evaluation_data, cost);
-        let new_percent = (evaluation.1 as f32) / (evaluation_data.len() as f32) * 100f32;
+        let evaluation = self.inner_evaluate(&matrix_evaluation_data, &evaluation_labels, cost);
+        let new_percent = (evaluation.1 as f32) / (evaluation_data.len_of(Axis(0)) as f32) * 100f32;
         let starting_percent =
-            (starting_evaluation.1 as f32) / (evaluation_data.len() as f32) * 100f32;
+            (starting_evaluation.1 as f32) / (evaluation_data.len_of(Axis(0)) as f32) * 100f32;
         println!();
         println!("Cost: {:.4} -> {:.4}", starting_evaluation.0, evaluation.0);
         println!(
@@ -792,18 +819,19 @@ impl NeuralNetwork {
     /// let (cost,accuracy) = net.evaluate(&mut data,None);
     ///
     /// assert_eq!(accuracy,4u32);
-    pub fn evaluate(&mut self, test_data: &[(Vec<f32>, usize)], cost: Option<&Cost>) -> (f32, u32) {
+    pub fn evaluate(&mut self, data: &ndarray::Array2<f32>, labels: &ndarray::Array2<usize>, cost: Option<&Cost>) -> (f32, u32) {
         if let Some(cost_function) = cost {
-            return self.inner_evaluate(&self.matrixify(test_data), test_data, cost_function);
+            return self.inner_evaluate(&self.matrixify(&data.view(),&labels.view()), &labels.view(), cost_function);
         } else {
-            return self.inner_evaluate(&self.matrixify(test_data), test_data, &Cost::Crossentropy);
+            return self.inner_evaluate(&self.matrixify(&data.view(),&labels.view()), &labels.view(), &Cost::Crossentropy);
         }
     }
+    // TODO Rewrite to accept `&ArrayViewMut2` and `&Array2` for `labels`
     /// Returns tuple: (Average cost across batch, Number of examples correctly classified).
     fn inner_evaluate(
         &mut self,
         (input, target): &(Array<f32>, Array<f32>),
-        test_data: &[(Vec<f32>, usize)],
+        labels: &ArrayView2<usize>,
         cost: &Cost,
     ) -> (f32, u32) {
         // Forepropgatates input
@@ -814,20 +842,16 @@ impl NeuralNetwork {
         let output_classes = imax(&output, 0).1;
 
         // Sets array of target classes
-        let target_classes = Array::<u32>::new(
-            &test_data
-                .iter()
-                .map(|&(_, class)| class as u32)
-                .collect::<Vec<u32>>(),
-            Dim4::new(&[1, test_data.len() as u64, 1, 1]),
-        );
+        let target_classes:Vec<u32> = labels.axis_iter(Axis(0)).map(|x|x[0] as u32).collect();
+        let number_of_examples = labels.len_of(Axis(0));
+        let target_array = Array::<u32>::new(&target_classes,Dim4::new(&[1, number_of_examples as u64, 1, 1]));
 
         // Gets number of correct classifications.
-        let correct_classifications = eq(&output_classes, &target_classes, false); // TODO Can this be a bitwise AND?
+        let correct_classifications = eq(&output_classes, &target_array, false); // TODO Can this be a bitwise AND?
         let correct_classifications_numb: u32 = sum_all(&correct_classifications).0 as u32;
 
         // Returns average cost and number of examples correctly classified.
-        return (cost / test_data.len() as f32, correct_classifications_numb);
+        return (cost / number_of_examples as f32, correct_classifications_numb);
     }
     /// Returns tuple of: (Vector of class percentage accuracies, Percentage confusion matrix).
     /// ```ignore
@@ -1121,46 +1145,41 @@ impl NeuralNetwork {
         }
     }
     // TODO Document this better
-    // Converts [Vec<f32>,usize] to (Array<f32>,Array<f32>).
-    fn matrixify(&self, examples: &[(Vec<f32>, usize)]) -> (Array<f32>, Array<f32>) {
-        // Gets number of inputs.
-        let in_len = self.inputs;
-        // Gets number of outputs.
-        let out_len = match &self.layers[self.layers.len() - 1] {
+    // TODO Rewrite to accept `&ArrayView2`s and `&Array2`s
+    // Convert ndarray arrays to arrayfire arrays.
+    fn matrixify(&self, data:&ArrayView2<f32>,labels:&ArrayView2<usize>) -> (Array<f32>, Array<f32>) {
+        // TODO Is there a better way to do either of these?
+        // Flattens examples into `in_vec` and `out_vec`
+        let net_outs = match &self.layers[self.layers.len() - 1] {
             InnerLayer::Dense(dense_layer) => dense_layer.biases.dims().get()[0] as usize,
             _ => panic!("Last layer is somehow a dropout layer, this should not be possible"),
         };
-        // Gets number of exampels.
-        let example_len = examples.len();
 
-        // TODO Is there a better way to do either of these?
-        // Flattens examples into `in_vec` and `out_vec`
-        let in_vec: Vec<f32> = examples
-            .iter()
-            .flat_map(|(input, _)| (*input).clone())
-            .collect();
-        let out_vec: Vec<f32> = examples
-            .iter()
-            .flat_map(|(_, class)| {
-                let mut vec = vec![0f32; out_len];
-                vec[*class] = 1f32;
-                return vec;
-            })
-            .collect();
+        let number_of_examples = data.len_of(Axis(0)) as u64;
 
         // Constructs input and output array
-        let input: Array<f32> = Array::<f32>::new(
-            &in_vec,
-            Dim4::new(&[in_len as u64, example_len as u64, 1, 1]),
-        );
-        let output: Array<f32> = Array::<f32>::new(
-            &out_vec,
-            Dim4::new(&[out_len as u64, example_len as u64, 1, 1]),
-        );
+        let dims = Dim4::new(&[data.len_of(Axis(1)) as u64,number_of_examples,1,1]);
+        let input = arrayfire::Array::new(&data.as_slice().unwrap(),dims);
 
+        let target: Array<f32> = Array::<f32>::new_empty(Dim4::new(&[net_outs as u64, number_of_examples, 1, 1]));
+
+        // TODO Would it be more efficient to create all possible target `arrayfire::array`s then set target array columns?
+        let target_dims = Dim4::new(&[net_outs as u64,1,1,1]);
+        for (index,label) in labels.axis_iter(Axis(0)).enumerate() {
+            let mut target_temp:Vec<f32> = vec!(0.;net_outs);
+            target_temp[label[0]] = 1.;
+            //println!("target_temp: {:.?}",target_temp);
+            
+            let temp_array = Array::new(&target_temp,target_dims);
+
+            //af_print!("temp_array",temp_array);
+
+            set_col(&target,&temp_array,index as u64);
+            //af_print!("target",target);
+        }
         // Returns input and output array
         // Array(in,examples,1,1), Array(out,examples,1,1)
-        return (input, output);
+        return (input, target);
     }
     // Returns Instant::elapsed() as hh:mm:ss string.
     fn time(instant: Instant) -> String {
@@ -1258,4 +1277,30 @@ struct ImportExportNet {
 enum InnerLayerEnum {
     Dropout(f32),
     Dense(Activation, [u64; 4], Vec<f32>, [u64; 4], Vec<f32>),
+}
+
+// TODO Can this be consended with `trainer::shuffle_dataset(..)`?
+fn shuffle_dataset(data:&mut ArrayViewMut2<f32>,labels:&mut ArrayViewMut2<usize>) {
+    let examples = data.len_of(Axis(0));
+    let input_size = data.len_of(Axis(1));
+
+    let mut data_slice = data.as_slice_mut().unwrap();
+    let mut label_slice = labels.as_slice_mut().unwrap();
+
+    for i in 0..examples-1 {
+        let new_index:usize = thread_rng().gen_range(i,examples);
+        
+        let (data_indx_1,data_indx_2) = (i * input_size, new_index * input_size);
+        // TODO Can we swap slices better?
+        for t in 0..input_size {
+            swap(&mut data_slice,data_indx_1+t,data_indx_2+t);
+        }
+        swap(&mut label_slice,i,new_index);
+    }
+
+    fn swap<T:Copy>(list:&mut [T],a:usize,b:usize) {
+        let temp = list[a];
+        list[a] = list[b];
+        list[b] = temp;
+    }
 }

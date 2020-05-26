@@ -7,7 +7,7 @@ pub enum EvaluationData<'a> {
     /// Set as a given percentage of examples from training data.
     Percent(f32),
     /// Set as a given dataset.
-    Actual(&'a Vec<(Vec<f32>, usize)>),
+    Actual(&'a ndarray::Array2<f32>,&'a ndarray::Array2<usize>),
 }
 /// For setting a hyperparameter with measured intervals.
 #[derive(Clone, Copy)]

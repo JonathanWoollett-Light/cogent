@@ -5,6 +5,7 @@ mod tests {
     use cogent::setter_enums::*;
     
     use arrayfire::{Array,Dim4,HasAfEnum};
+    use ndarray::{Array2,array,Axis};
 
     use std::{io::Read, fs::File};
     
@@ -19,10 +20,6 @@ mod tests {
 
     // TODO Name this better
     const TESTING_MIN_ACCURACY:f32 = 0.95f32; // 5% error min needed to pass tests
-    // Returns `TESTING_MIN_ACCURACY` percentage as number of example in dataset.
-    fn required_accuracy(test_data:&[(Vec<f32>,usize)]) -> u32 {
-        ((test_data.len() as f32) * TESTING_MIN_ACCURACY).ceil() as u32
-    }
 
     // Tests `NeuralNetwork::new` panics when no layers are set.
     #[test] // (2-)
@@ -605,18 +602,14 @@ mod tests {
                 Layer::Dense(2,Activation::Softmax)
             ]);
             // Sets training and testing data
-            let data = vec![
-                (vec![0f32,0f32],0usize),
-                (vec![1f32,0f32],1usize),
-                (vec![0f32,1f32],1usize),
-                (vec![1f32,1f32],0usize)
-            ];
+            let mut data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
+            let mut labels:Array2<usize> = array![[0],[1],[1],[0]];
 
             // Execution
             // ------------------------------------------------
-            net.train(&data)
+            net.train(&mut data.clone(),&mut labels.clone())
                 .learning_rate(2f32)
-                .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
+                .evaluation_data(EvaluationData::Actual(&data,&labels)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
                 //.log_interval(MeasuredCondition::Iteration(50))
             .go();
@@ -625,8 +618,8 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&data,None);
-            assert!(evaluation.1 as usize == data.len());
+            let evaluation = net.evaluate(&data,&labels,None);
+            assert!(evaluation.1 as usize == data.len_of(Axis(0)));
         }
     }
     // (2-Softmax->3-Softmax->2)
@@ -642,25 +635,21 @@ mod tests {
                 Layer::Dense(2,Activation::Sigmoid)
             ]);
             // Sets training and testing data
-            let data = vec![
-                (vec![0f32,0f32],0usize),
-                (vec![1f32,0f32],1usize),
-                (vec![0f32,1f32],1usize),
-                (vec![1f32,1f32],0usize)
-            ];
+            let mut data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
+            let mut labels:Array2<usize> = array![[0],[1],[1],[0]];
 
             // Execution
             // ------------------------------------------------
-            net.train(&data)
+            net.train(&mut data.clone(),&mut labels.clone())
                 .learning_rate(2f32)
-                .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
+                .evaluation_data(EvaluationData::Actual(&data,&labels)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
             .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&data,None);
-            assert!(evaluation.1 as usize == data.len());
+            let evaluation = net.evaluate(&data,&labels,None);
+            assert!(evaluation.1 as usize == data.len_of(Axis(0)));
         }
     }
 
@@ -681,26 +670,22 @@ mod tests {
             ]);
 
             // Sets training and testing data
-            let data = vec![
-                (vec![0f32,0f32],0usize),
-                (vec![1f32,0f32],1usize),
-                (vec![0f32,1f32],1usize),
-                (vec![1f32,1f32],0usize)
-            ];
+            let mut data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
+            let mut labels:Array2<usize> = array![[0],[1],[1],[0]];
 
             // Execution
             // ------------------------------------------------
-            net.train(&data)
+            net.train(&mut data.clone(),&mut labels.clone())
                 .learning_rate(2f32)
-                .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
+                .evaluation_data(EvaluationData::Actual(&data,&labels)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(3000))
                 //.log_interval(MeasuredCondition::Iteration(100))
             .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&data,None);
-            assert!(evaluation.1 as usize == data.len());
+            let evaluation = net.evaluate(&data,&labels,None);
+            assert!(evaluation.1 as usize == data.len_of(Axis(0)));
         }
     }
 
@@ -721,21 +706,21 @@ mod tests {
             ]);
 
             // Sets training and testing data
-            let training_data = get_mnist_dataset(false);
-            let testing_data = get_mnist_dataset(true);
+            let (mut train_data,mut train_labels) = get_mnist_dataset(false);
+            let (test_data,test_labels) = get_mnist_dataset(true);
 
             // Execution
             // ------------------------------------------------
-            net.train(&training_data)
-                .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
+            net.train(&mut train_data,&mut train_labels)
+                .evaluation_data(EvaluationData::Actual(&test_data,&test_labels))
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
-                //.tracking().log_interval(MeasuredCondition::Iteration(1))
+                .tracking().log_interval(MeasuredCondition::Iteration(1))
             .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&testing_data,None);
-            assert!(evaluation.1 >= required_accuracy(&testing_data));
+            let evaluation = net.evaluate(&test_data,&test_labels,None);
+            assert!(evaluation.1 as f32 / test_data.len_of(Axis(0)) as f32 >= TESTING_MIN_ACCURACY);
         }
     }
     #[test] // (784-ReLU->1000-ReLU->500-Softmax->10) with L2
@@ -751,13 +736,13 @@ mod tests {
             ]);
 
             // Sets training and testing data
-            let training_data = get_mnist_dataset(false);
-            let testing_data = get_mnist_dataset(true);
+            let (mut train_data,mut train_labels) = get_mnist_dataset(false);
+            let (test_data,test_labels) = get_mnist_dataset(true);
 
             // Execution
             // ------------------------------------------------
-            net.train(&training_data)
-                .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
+            net.train(&mut train_data,&mut train_labels)
+                .evaluation_data(EvaluationData::Actual(&test_data,&test_labels))
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
                 //.tracking().log_interval(MeasuredCondition::Iteration(1))
                 .l2(0.1f32)
@@ -765,8 +750,8 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&testing_data,None);
-            assert!(evaluation.1 >= required_accuracy(&testing_data));
+            let evaluation = net.evaluate(&test_data,&test_labels,None);
+            assert!(evaluation.1 as f32 / test_data.len_of(Axis(0)) as f32 >= TESTING_MIN_ACCURACY);
         }
     }
     #[test] // (784-Sigmoid->1000-Sigmoid->500-Softmax->10) with L2
@@ -782,13 +767,13 @@ mod tests {
             ]);
 
             // Sets training and testing data
-            let training_data = get_mnist_dataset(false);
-            let testing_data = get_mnist_dataset(true);
+            let (mut train_data,mut train_labels) = get_mnist_dataset(false);
+            let (test_data,test_labels) = get_mnist_dataset(true);
 
             // Execution
             // ------------------------------------------------
-            net.train(&training_data)
-                .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
+            net.train(&mut train_data,&mut train_labels)
+                .evaluation_data(EvaluationData::Actual(&test_data,&test_labels))
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
                 //.tracking().log_interval(MeasuredCondition::Iteration(1))
                 .l2(0.1f32)
@@ -796,8 +781,8 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&testing_data,None);
-            assert!(evaluation.1 >= required_accuracy(&testing_data));
+            let evaluation = net.evaluate(&test_data,&test_labels,None);
+            assert!(evaluation.1 as f32 / test_data.len_of(Axis(0)) as f32 >= TESTING_MIN_ACCURACY);
         }
     }
     #[test] // (784-Tanh->1000-Tanh->500-Softmax->10) with L2
@@ -813,13 +798,13 @@ mod tests {
             ]);
 
             // Sets training and testing data
-            let training_data = get_mnist_dataset(false);
-            let testing_data = get_mnist_dataset(true);
+            let (mut train_data,mut train_labels) = get_mnist_dataset(false);
+            let (test_data,test_labels) = get_mnist_dataset(true);
 
             // Execution
             // ------------------------------------------------
-            net.train(&training_data)
-                .evaluation_data(EvaluationData::Actual(&testing_data)) // Use testing data as evaluation data.
+            net.train(&mut train_data,&mut train_labels)
+                .evaluation_data(EvaluationData::Actual(&test_data,&test_labels))
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
                 //.tracking().log_interval(MeasuredCondition::Iteration(1))
                 .l2(0.1f32)
@@ -827,63 +812,50 @@ mod tests {
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&testing_data,None);
-            assert!(evaluation.1 >= required_accuracy(&testing_data));
+            let evaluation = net.evaluate(&test_data,&test_labels,None);
+            assert!(evaluation.1 as f32 / test_data.len_of(Axis(0)) as f32 >= TESTING_MIN_ACCURACY);
         }
     }
     // Gets MNIST dataset.
-    fn get_mnist_dataset(testing:bool) -> Vec<(Vec<f32>,usize)> {
+    fn get_mnist_dataset(testing:bool) -> (ndarray::Array2<f32>,ndarray::Array2<usize>) {
         // Gets testing dataset.
         let (images,labels) = if testing {
-            (get_images("data/MNIST/t10k-images.idx3-ubyte"),get_labels("data/MNIST/t10k-labels.idx1-ubyte"))
+            (get_images("t10k-images.idx3-ubyte"),get_labels("t10k-labels.idx1-ubyte"))
         }
         // Gets training dataset.
         else {
-            (get_images("data/MNIST/train-images.idx3-ubyte"),get_labels("data/MNIST/train-labels.idx1-ubyte"))
+            (get_images("train-images.idx3-ubyte"),get_labels("train-labels.idx1-ubyte"))
         };
+        let img_size = 28*28;
 
-        let iterator = images.iter().zip(labels.iter());
-        let mut examples = Vec::new();
-        for (image,label) in iterator {
-            examples.push(
-                (
-                    image.clone(),
-                    *label as usize
-                )
-            );
-        }
-        return examples;
+        return (
+            ndarray::Array::from_shape_vec((images.len() / img_size,img_size),images).expect("Data shape wrong"),
+            ndarray::Array::from_shape_vec((labels.len(),1),labels).expect("Label shape wrong")
+        );
 
-        fn get_labels(path:&str) -> Vec<u8> {
-            let mut file = File::open(path).unwrap();
-            let mut label_buffer = Vec::new();
-            file.read_to_end(&mut label_buffer).expect("Couldn't read MNIST labels");
-
-            // TODO Look into better ways to remove the 1st 7 elements
-            return label_buffer.drain(8..).collect();
+        fn get_labels(path:&str) -> Vec<usize> {
+            let mut file = File::open(format!("data/MNIST/{}",path)).unwrap();
+            let mut label_buffer_u8:Vec<u8> = Vec::new();
+            file.read_to_end(&mut label_buffer_u8).expect("Couldn't read MNIST labels");
+            
+            // Remove the 1st 7 elements
+            label_buffer_u8 = label_buffer_u8.drain(8..).collect();
+            
+            // Converts from u8 to usize
+            return label_buffer_u8.into_iter().map(|a| a as usize).collect();
         }
 
-        fn get_images(path:&str) -> Vec<Vec<f32>> {
-            let mut file = File::open(path).unwrap();
-            let mut image_buffer_u8 = Vec::new();
+        fn get_images(path:&str) -> Vec<f32> {
+            let mut file = File::open(format!("data/MNIST/{}",path)).unwrap();
+            let mut image_buffer_u8:Vec<u8> = Vec::new();
             file.read_to_end(&mut image_buffer_u8).expect("Couldn't read MNIST images");
             // Removes 1st 16 bytes of meta data
             image_buffer_u8 = image_buffer_u8.drain(16..).collect();
 
             // Converts from u8 to f32
-            let mut image_buffer_f32 = Vec::new();
-            for pixel in image_buffer_u8 {
-                image_buffer_f32.push(pixel as f32 / 255f32);
-            }
+            let image_buffer_f32:Vec<f32> = image_buffer_u8.into_iter().map(|a| a as f32 / 255f32).collect();
 
-            // Splits buffer into vectors for each image
-            let mut images_vector = Vec::new();
-            for i in (0..image_buffer_f32.len() / (28 * 28)).rev() {
-                images_vector.push(image_buffer_f32.split_off(i * 28 * 28));
-            }
-            // Does splitting in reverse order due to how '.split_off' works, so reverses back to original order.
-            images_vector.reverse();
-            return images_vector;
+            return image_buffer_f32;
         }
     }
 }

@@ -1,13 +1,17 @@
 use crate::costs::Cost;
-use crate::neural_network::NeuralNetwork;
+use crate::neural_network::{NeuralNetwork};
 use crate::setter_enums::*;
+
+use ndarray::{Axis,ArrayViewMut2,ArrayView2,Array2};
 
 use rand::prelude::*; // TODO Make this more specific to required functionality
 
+
 /// To practicaly implement optional setting of training hyperparameters.
 pub struct Trainer<'a> {
-    pub training_data: Vec<(Vec<f32>, usize)>,
-    pub evaluation_data: EvaluationData<'a>,
+    pub training_data: &'a mut ndarray::Array2<f32>,
+    pub training_labels: &'a mut ndarray::Array2<usize>,
+    pub evaluation_dataset: EvaluationData<'a>,
     pub cost: Cost,
     // Will halt after at a certain iteration, accuracy or duration.
     pub halt_condition: Option<HaltCondition>,
@@ -38,7 +42,12 @@ impl<'a> Trainer<'a> {
     ///
     /// `evaluation_data` determines how to set the evaluation data.
     pub fn evaluation_data(&mut self, evaluation_data: EvaluationData<'a>) -> &mut Trainer<'a> {
-        self.evaluation_data = evaluation_data;
+        // Checks data fits net
+        if let EvaluationData::Actual(data,labels) = evaluation_data {
+            self.neural_network.check_dataset(data,labels);
+        }
+
+        self.evaluation_dataset = evaluation_data;
         return self;
     }
     /// Sets `cost`.
@@ -140,24 +149,52 @@ impl<'a> Trainer<'a> {
     }
     /// Begins training.
     pub fn go(&mut self) -> () {
-        // TODO How expensive is `rand::thread_rng()` would it be worth passing reference to `train_details`? (so as to avoid calling it again).
-        // Shuffles training data
-        self.training_data.shuffle(&mut rand::thread_rng());
+        // Shuffles training dataset
+        shuffle_dataset(self.training_data, self.training_labels);
 
         // Sets evaluation data
-        let evaluation_data = match self.evaluation_data {
-            EvaluationData::Scalar(scalar) => self
-                .training_data
-                .split_off(self.training_data.len() - scalar),
-            EvaluationData::Percent(percent) => self.training_data.split_off(
-                self.training_data.len() - (self.training_data.len() as f32 * percent) as usize,
-            ),
-            EvaluationData::Actual(actual) => actual.clone(),
+        let number_of_examples = self.training_data.len_of(Axis(0));
+        
+        // TODO Make this better (remove the `.to_owned()`s and `.clone()`s).
+        //  If `.split_at()` could return an `ArrayView` and an `ArrayViewMut` this would make this easier, maybe put feature request on ndarray github?
+        let (
+            (eval_data,train_data),
+            (eval_labels,train_labels)
+        ):(
+            (Array2<f32>,ArrayViewMut2<f32>),
+            (Array2<usize>,ArrayViewMut2<usize>)
+        ) = 
+        match self.evaluation_dataset {
+            EvaluationData::Scalar(scalar) => {
+                let (e_data,t_data) = self.training_data.view_mut().split_at(Axis(0),scalar);
+                let (e_labels,t_labels) = self.training_labels.view_mut().split_at(Axis(0),scalar);
+                (
+                    (e_data.to_owned(),t_data),
+                    (e_labels.to_owned(),t_labels)
+                )
+            },
+            EvaluationData::Percent(percent) => {
+                let (e_data,t_data) = self.training_data.view_mut().split_at(Axis(0),(number_of_examples as f32 * percent) as usize);
+                let (e_labels,t_labels) = self.training_labels.view_mut().split_at(Axis(0),(number_of_examples as f32 * percent) as usize);
+                (
+                    (e_data.to_owned(),t_data),
+                    (e_labels.to_owned(),t_labels)
+                )
+            },
+            EvaluationData::Actual(evaluation_data,evaluation_labels) => {
+                (
+                    (evaluation_data.clone(),self.training_data.view_mut()),
+                    (evaluation_labels.clone(),self.training_labels.view_mut())
+                )
+            }
         };
+        
         // Calls `train_details` starting training.
         self.neural_network.train_details(
-            &mut self.training_data,
-            &evaluation_data,
+            train_data,
+            train_labels,
+            eval_data.view(),
+            eval_labels.view(),
             &self.cost,
             self.halt_condition,
             self.log_interval,
@@ -172,5 +209,30 @@ impl<'a> Trainer<'a> {
             self.name,
             self.tracking,
         );
+    }
+}
+// TODO Can this be consended with `neural_network::shuffle_dataset(..)`?
+fn shuffle_dataset(data:&mut ndarray::Array2<f32>,labels:&mut ndarray::Array2<usize>) {
+    let examples = data.len_of(Axis(0));
+    let input_size = data.len_of(Axis(1));
+
+    let mut data_slice = data.as_slice_mut().unwrap();
+    let mut label_slice = labels.as_slice_mut().unwrap();
+
+    for i in 0..examples-1 {
+        let new_index:usize = thread_rng().gen_range(i,examples);
+        
+        let (data_indx_1,data_indx_2) = (i * input_size, new_index * input_size);
+        // TODO Can we swap slices better?
+        for t in 0..input_size {
+            swap(&mut data_slice,data_indx_1+t,data_indx_2+t);
+        }
+        swap(&mut label_slice,i,new_index);
+    }
+
+    fn swap<T:Copy>(list:&mut [T],a:usize,b:usize) {
+        let temp = list[a];
+        list[a] = list[b];
+        list[b] = temp;
     }
 }
