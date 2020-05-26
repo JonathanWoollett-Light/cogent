@@ -16,6 +16,13 @@ This is the most basic and not quite there yet implementation of that idea.
 
 Training a network to classify MNIST:
 ```rust
+// Uses
+use cogent::{
+    NeuralNetwork,
+    setter_enums::{EvaluationData,MeasuredCondition}
+};
+use ndarray::{Array2,Axis};
+
 // Setup
 // ----------
 // 784-ReLU->800-Softmax->10
