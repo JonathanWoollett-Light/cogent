@@ -55,7 +55,7 @@ pub enum InnerLayer {
     Dense(DenseLayer),
 }
 
-/// The fundemtnal neural network struct.
+/// The fundamental neural network struct.
 ///
 /// All other types are ancillary to this structure.
 pub struct NeuralNetwork {
