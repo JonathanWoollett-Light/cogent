@@ -931,7 +931,7 @@ impl<'a> NeuralNetwork {
             // Array(in,examples,1,1), Array(out,examples,1,1)
             return (input, classes);
         }
-        pub fn counting_sort(data:&ndarray::Array2<f32>,labels:&ndarray::Array2<usize>,k:usize) -> (ndarray::Array2<f32>,ndarray::Array2<usize>) {
+        fn counting_sort(data:&ndarray::Array2<f32>,labels:&ndarray::Array2<usize>,k:usize) -> (ndarray::Array2<f32>,ndarray::Array2<usize>) {
             let number_of_examples = data.len_of(Axis(1)); // = labels.len_of(Axis(1))
             let mut count:Vec<usize> = vec!(0usize;k);
             let mut output_vals:Vec<usize> = vec!(0usize;number_of_examples);
@@ -962,7 +962,7 @@ impl<'a> NeuralNetwork {
         }
         // TODO Surely there must be a better way to do this? (Why is such a method not obvious in the ndarray docs?)
         fn set_row(row_index:usize,from:&ndarray::Array2<f32>,to:&mut ndarray::Array2<f32>) {
-            for i in 0..from.len_of(Axis(0)) {
+            for i in 0..from.len_of(Axis(0)) { // TODO Double check `Axis(0)` (I mess it up a lot)
                 to[[i,row_index]] = from[[i,row_index]];
             }
         }
