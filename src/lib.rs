@@ -1,4 +1,4 @@
-//! Cogent is a library to cosntruct and train neural networks.
+//! Cogent is a library to construct and train neural networks.
 //!
 //! The goal of Cogent is to provide a simple library for usage of nueral networks.
 //! ## Crate Status
