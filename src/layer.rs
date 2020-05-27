@@ -2,7 +2,7 @@ use crate::activations::Activation;
 
 use arrayfire::{constant, gt, matmul, mul, randu, sum, Array, Dim4, MatProp};
 
-// Defines a dense layer
+/// A dense layer.
 pub struct DenseLayer {
     pub activation: Activation,
     pub biases: Array<f32>,
@@ -111,7 +111,7 @@ impl DenseLayer {
         }
     }
 }
-// Defines a dropout layer (mask)
+/// A dropout layer.
 pub struct DropoutLayer {
     pub p: f32,
     mask: Array<f32>,

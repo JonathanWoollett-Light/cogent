@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use arrayfire::{log, pow, sum_all, Array};
 
-/// Defines cost function of neural network.
+/// Defines cost function of a neural network.
 #[derive(Serialize, Deserialize)]
 pub enum Cost {
     /// Quadratic cost function.
@@ -15,9 +15,9 @@ pub enum Cost {
     Crossentropy,
 }
 impl Cost {
-    /// Runs cost functions
+    /// Runs cost functions.
     ///
-    /// y: Target out, a: Actual out
+    /// y: Target out, a: Actual out.
     pub fn run(&self, y: &Array<f32>, a: &Array<f32>) -> f32 {
         return match self {
             Self::Quadratic => quadratic(y, a),
@@ -45,9 +45,9 @@ impl Cost {
             return cost;
         }
     }
-    /// Derivative wrt layer output (∂C/∂a)
+    /// Derivative w.r.t. layer output (∂C/∂a).
     ///
-    /// y: Target out, a: Actual out
+    /// y: Target out, a: Actual out.
     pub fn derivative(&self, y: &Array<f32>, a: &Array<f32>) -> Array<f32> {
         return match self {
             Self::Quadratic => a - y,

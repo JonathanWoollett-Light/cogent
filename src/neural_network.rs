@@ -56,7 +56,9 @@ pub enum InnerLayer {
     Dense(DenseLayer),
 }
 
-/// Neural network.
+/// The fundemtnal neural network struct.
+///
+/// All other types are ancillary to this structure.
 pub struct NeuralNetwork {
     // Inputs to network.
     inputs: u64,
@@ -330,7 +332,11 @@ impl<'a> NeuralNetwork {
             neural_network: self,
         };
     }
-    /// Checks a dataset has equal number of example and labels and fits the network.
+    /// Checks a dataset has an equal number of example and labels and fits the network.
+    ///
+    /// This is called whenever you give a dataset to the library, you do not need to call this yourself.
+    ///
+    /// For example this is called when you pass a dataset to `.train(..)`.
     pub fn check_dataset(&self,data: &ndarray::Array2<f32>, labels: &ndarray::Array2<usize>) {
         // Checks data matches labels.
         let number_of_examples = data.len_of(Axis(0));
@@ -357,7 +363,9 @@ impl<'a> NeuralNetwork {
     // TODO Name this better
     /// Runs training.
     ///
-    /// In most cases you shouldn't call this, instead call `.train()` call the functions to set the hyperparameters, then call `.go()`.
+    /// In most cases you shouldn't call this, instead call `.train()` then call the functions to set the hyperparameters, then call `.go()` (which calls this).
+    ///
+    /// Using this function directly is ugly. Would not recommend.
     pub fn train_details(
         &mut self,
         mut training_data: ArrayViewMut2<f32>,
@@ -789,7 +797,9 @@ impl<'a> NeuralNetwork {
         }
     }
 
-    /// Returns tuple: (Average cost across batch, Number of examples correctly classified).
+    /// Evaluates dataset using network.
+    ///
+    /// Returns tuple: (Average cost across dataset, Number of examples correctly classified).
     /// ```
     /// # use cogent::{
     /// #     neural_network::{NeuralNetwork,Layer},

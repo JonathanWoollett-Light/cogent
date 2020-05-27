@@ -4,7 +4,7 @@ use arrayfire::{
     and, constant, exp, gt, matmul, max, maxof, pow, sigmoid, sum, tanh, Array, Dim4, MatProp,
 };
 
-/// Defines activations of layers in neural network.
+/// Defines the activation of a layer.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum Activation {
     /// Sigmoid activation functions.
@@ -25,7 +25,7 @@ pub enum Activation {
     ReLU, // Name it 'ReLU' or 'Relu'?
 }
 impl Activation {
-    /// Computes activations given inputs.
+    /// Computes activations given inputs (A(z)).
     pub fn run(&self, z: &Array<f32>) -> Array<f32> {
         return match self {
             Self::Sigmoid => sigmoid(z),
@@ -34,7 +34,7 @@ impl Activation {
             Self::ReLU => Activation::relu(z),
         };
     }
-    // Derivative wrt layer input (∂a/∂z)
+    /// Derivative w.r.t. layer input (∂a/∂z).
     pub fn derivative(&self, z: &Array<f32>) -> Array<f32> {
         // What should we name the derivative functions?
         return match self {

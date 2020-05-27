@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod tests {
     use cogent::{
-        neural_network::{NeuralNetwork,Layer},
-        activations::Activation,
-        setter_enums::*
+        NeuralNetwork,Layer,
+        Activation,
+        EvaluationData,MeasuredCondition,HaltCondition
     };
     
     use arrayfire::{Array,Dim4,HasAfEnum};
