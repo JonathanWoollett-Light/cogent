@@ -264,7 +264,11 @@ impl<'a> NeuralNetwork {
     ///
     /// Training a network to learn an XOR gate:
     /// ```
-    /// use cogent::core::{NeuralNetwork,Layer,Activation,EvaluationData};
+    /// use cogent::{
+    ///     neural_network::{NeuralNetwork,Layer},
+    ///     activations::Activation,
+    ///     setter_enums::*
+    /// };
     ///
     /// // Sets network
     /// let mut neural_network = NeuralNetwork::new(2,&[
@@ -273,16 +277,13 @@ impl<'a> NeuralNetwork {
     /// ]);
     /// // Sets data
     /// // 0=false,  1=true.
-    /// let data = vec![
-    ///     (vec![0f32,0f32],0),
-    ///     (vec![1f32,0f32],1),
-    ///     (vec![0f32,1f32],1),
-    ///     (vec![1f32,1f32],0)
-    /// ];
+    /// let mut data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
+    /// let mut labels:Array2<usize> = array![[0],[1],[1],[0]];
+    ///
     /// // Trains network
-    /// neural_network.train(&data)
+    /// net.train(&mut data.clone(),&mut labels.clone()) // `.clone()` neccessary to satisfy borrow checker concerning later immutable borrow as evaluation data.
     ///     .learning_rate(2f32)
-    ///     .evaluation_data(EvaluationData::Actual(&data)) // Use training data as evaluation data.
+    ///     .evaluation_data(EvaluationData::Actual(&data,&labels)) // Use testing data as evaluation data.
     /// .go();
     /// ```
     pub fn train(&'a mut self, data: &'a mut ndarray::Array2<f32>, labels: &'a mut ndarray::Array2<usize>) -> Trainer<'a> {
@@ -329,6 +330,7 @@ impl<'a> NeuralNetwork {
             neural_network: self,
         };
     }
+    /// Checks a dataset has equal number of example and labels and fits the network.
     pub fn check_dataset(&self,data: &ndarray::Array2<f32>, labels: &ndarray::Array2<usize>) {
         // Checks data matches labels.
         let number_of_examples = data.len_of(Axis(0));
@@ -353,7 +355,9 @@ impl<'a> NeuralNetwork {
     }
 
     // TODO Name this better
-    // Runs training.
+    /// Runs training.
+    ///
+    /// In most cases you shouldn't call this, instead call `.train()` call the functions to set the hyperparameters, then call `.go()`.
     pub fn train_details(
         &mut self,
         mut training_data: ArrayViewMut2<f32>,
@@ -787,31 +791,29 @@ impl<'a> NeuralNetwork {
 
     /// Returns tuple: (Average cost across batch, Number of examples correctly classified).
     /// ```
-    /// # use cogent::core::{EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
+    /// # use cogent::{
+    /// #     neural_network::{NeuralNetwork,Layer},
+    /// #     activations::Activation,
+    /// #     setter_enums::*
+    /// # };
     /// #
-    /// # let mut net = NeuralNetwork::new(2,&[
+    /// # let mut neural_network = NeuralNetwork::new(2,&[
     /// #     Layer::Dense(3,Activation::Sigmoid),
     /// #     Layer::Dense(2,Activation::Softmax)
     /// # ]);
     /// #
-    /// let mut data = vec![
-    ///     (vec![0f32,0f32],0usize),
-    ///     (vec![1f32,0f32],1usize),
-    ///     (vec![0f32,1f32],1usize),
-    ///     (vec![1f32,1f32],0usize)
-    /// ];
-    ///
-    /// # net.train(&data)
-    /// #     .learning_rate(2f32)
-    /// #     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
-    /// #     .early_stopping_condition(MeasuredCondition::Iteration(2000))
-    /// # .go();
+    /// let mut data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
+    /// let mut labels:Array2<usize> = array![[0],[1],[1],[0]];
     /// #
+    /// # net.train(&mut data.clone(),&mut labels.clone()) // `.clone()` neccessary to satisfy borrow checker concerning later immutable borrow as evaluation data.
+    /// #    .learning_rate(2f32)
+    /// #    .evaluation_data(EvaluationData::Actual(&data,&labels)) // Use testing data as evaluation data.
+    /// # .go();
     /// // `net` is neural network trained to 100% accuracy to mimic an XOR gate.
     /// // Passing `None` for the cost uses the default cost function (crossentropy).
-    /// let (cost,accuracy) = net.evaluate(&mut data,None);
+    /// let (cost,accuracy) = net.evaluate(&data,&labels,None);
     ///
-    /// assert_eq!(accuracy,4u32);
+    /// assert_eq!(accuracy,4);
     pub fn evaluate(&mut self, data: &ndarray::Array2<f32>, labels: &ndarray::Array2<usize>, cost: Option<&Cost>) -> (f32, u32) {
         if let Some(cost_function) = cost {
             return self.inner_evaluate(&self.matrixify(&data.view(),&labels.view()), &labels.view(), cost_function);
@@ -849,26 +851,24 @@ impl<'a> NeuralNetwork {
     }
     /// Returns tuple of: (Vector of class percentage accuracies, Percentage confusion matrix).
     /// ```ignore
-    /// # use cogent::core::{EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
+    /// # use cogent::{
+    /// #     neural_network::{NeuralNetwork,Layer},
+    /// #     activations::Activation,
+    /// #     setter_enums::*
+    /// # };
     /// #
-    /// # let mut net = NeuralNetwork::new(2,&[
-    /// #     Layer::new(3,Activation::Sigmoid),
-    /// #     Layer::new(2,Activation::Softmax)
+    /// # let mut neural_network = NeuralNetwork::new(2,&[
+    /// #     Layer::Dense(3,Activation::Sigmoid),
+    /// #     Layer::Dense(2,Activation::Softmax)
     /// # ]);
     /// #
-    /// let mut data = vec![
-    ///     (vec![0f32,0f32],0usize),
-    ///     (vec![1f32,0f32],1usize),
-    ///     (vec![0f32,1f32],1usize),
-    ///     (vec![1f32,1f32],0usize)
-    /// ];
-    ///
-    /// # net.train(&data)
-    /// #     .learning_rate(2f32)
-    /// #     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
-    /// #     .early_stopping_condition(MeasuredCondition::Iteration(2000))
-    /// # .go();
+    /// let mut data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
+    /// let mut labels:Array2<usize> = array![[0],[1],[1],[0]];
     /// #
+    /// # net.train(&mut data.clone(),&mut labels.clone()) // `.clone()` neccessary to satisfy borrow checker concerning later immutable borrow as evaluation data.
+    /// #    .learning_rate(2f32)
+    /// #    .evaluation_data(EvaluationData::Actual(&data,&labels)) // Use testing data as evaluation data.
+    /// # .go();
     /// // `net` is neural network trained to 100% accuracy to mimic an XOR gate.
     /// let (correct_vector,confusion_matrix) = net.analyze(&mut data);
     ///
@@ -878,11 +878,11 @@ impl<'a> NeuralNetwork {
     #[deprecated(
         note = "Not deprecated, just broken until ArrayFire update installer to match git (where issue has been reported and fixed)."
     )]
-    pub fn analyze(&mut self, data: &mut [(Vec<f32>, usize)]) -> (Vec<f32>, Vec<Vec<f32>>) {
+    pub fn analyze(&mut self, data: &ndarray::Array2<f32>, labels: &ndarray::Array2<usize>) -> (Vec<f32>, Vec<Vec<f32>>) {
         // Sorts by class
         data.sort_by(|(_, a), (_, b)| a.cmp(b));
-
-        let (input, classes) = matrixify_inputs(data);
+ 
+        let (input, classes) = matrixify_classes(data,labels);
         let outputs = self.inner_run(&input);
 
         let maxs: Array<f32> = arrayfire::max(&outputs, 1i32);
@@ -910,29 +910,20 @@ impl<'a> NeuralNetwork {
 
         return (diag_vec, matrix_vec);
 
-        fn matrixify_inputs(examples: &[(Vec<f32>, usize)]) -> (Array<f32>, Array<u32>) {
-            // Array(in,examples,1,1), Array(examples,1,1,1)
-            let in_len = examples[0].0.len();
-            let example_len = examples.len();
-
-            // Flattens examples into `in_vec` and `out_vec`
-            let in_vec: Vec<f32> = examples
-                .iter()
-                .flat_map(|(input, _)| input.clone())
-                .collect();
-            let out_vec: Vec<u32> = examples
-                .iter()
-                .map(|(_, class)| class.clone() as u32)
-                .collect();
-
-            let input: Array<f32> = Array::<f32>::new(
-                &in_vec,
-                Dim4::new(&[in_len as u64, example_len as u64, 1, 1]),
-            );
-            let output: Array<u32> =
-                Array::<u32>::new(&out_vec, Dim4::new(&[example_len as u64, 1, 1, 1]));
-
-            return (input, output);
+        fn matrixify_classes(data:&ndarray::Array2<f32>,labels:&ndarray::Array2<usize>) -> (Array<f32>, Array<u32>) {
+            let number_of_examples = data.len_of(Axis(0)) as u64;
+    
+            // Constructs input and output array
+            let dims = Dim4::new(&[data.len_of(Axis(1)) as u64,number_of_examples,1,1]);
+            let input = Array::new(&data.as_slice().unwrap(),dims);
+        
+            let labels_u32 = labels.mapv(|x| x as u32);
+            let dims = Dim4::new(&[number_of_examples,1,1,1]);
+            let classes: Array<u32> = Array::<u32>::new(labels_u32.as_slice().unwrap(),dims);
+    
+            // Returns input and output array
+            // Array(in,examples,1,1), Array(out,examples,1,1)
+            return (input, classes);
         }
     }
     /// Returns tuple of pretty strings of: (Vector of class percentage accuracies, Percentage confusion matrix).

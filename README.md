@@ -18,7 +18,7 @@ Training a network to classify MNIST:
 ```rust
 // Uses
 use cogent::{
-    NeuralNetwork,
+    neural_network::NeuralNetwork,
     setter_enums::{EvaluationData,MeasuredCondition}
 };
 use ndarray::{Array2,Axis};
