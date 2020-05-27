@@ -6,16 +6,15 @@ use crate::trainer::Trainer;
 use serde::{Deserialize, Serialize};
 
 use arrayfire::{
-    cols, set_col, constant, device_mem_info, diag_extract, div, eq, imax, sum, sum_all, sum_by_key, transpose,
-    Array, Dim4,
-    af_print,print_gen
+    af_print, cols, constant, device_mem_info, diag_extract, div, eq, imax, print_gen, set_col,
+    sum, sum_all, sum_by_key, transpose, Array, Dim4,
 };
 
 use itertools::izip;
 
 use rand::{thread_rng, Rng};
 
-use ndarray::{Axis,ArrayViewMut2,ArrayView2};
+use ndarray::{ArrayView2, ArrayViewMut2, Axis};
 
 use crossterm::{cursor, QueueableCommand};
 
@@ -63,7 +62,7 @@ pub struct NeuralNetwork {
     // Inputs to network.
     inputs: u64,
     // Activations of layers.
-    layers: Vec<InnerLayer>
+    layers: Vec<InnerLayer>,
 }
 impl<'a> NeuralNetwork {
     /// Constructs network of given layers.
@@ -206,9 +205,12 @@ impl<'a> NeuralNetwork {
     ///
     /// Returns classes.
     pub fn run(&mut self, input: &ndarray::Array2<f32>) -> Vec<usize> {
-
         if input.len_of(Axis(1)) as u64 != self.inputs {
-            panic!("Given data inputs don't match network inputs ({}!={})",input.len_of(Axis(1)),self.inputs);
+            panic!(
+                "Given data inputs don't match network inputs ({}!={})",
+                input.len_of(Axis(1)),
+                self.inputs
+            );
         }
 
         // // Converts 2d vec to array for input
@@ -219,8 +221,13 @@ impl<'a> NeuralNetwork {
         // );
 
         // Converts `ndarray::Array2` to `arrayfire::Array`
-        let dims = Dim4::new(&[input.len_of(Axis(1)) as u64,input.len_of(Axis(0)) as u64,1,1]);
-        let input = arrayfire::Array::new(&input.as_slice().unwrap(),dims);
+        let dims = Dim4::new(&[
+            input.len_of(Axis(1)) as u64,
+            input.len_of(Axis(0)) as u64,
+            1,
+            1,
+        ]);
+        let input = arrayfire::Array::new(&input.as_slice().unwrap(), dims);
 
         // Forepropagates
         let output = self.inner_run(&input);
@@ -288,7 +295,11 @@ impl<'a> NeuralNetwork {
     ///     .evaluation_data(EvaluationData::Actual(&data,&labels)) // Use testing data as evaluation data.
     /// .go();
     /// ```
-    pub fn train(&'a mut self, data: &'a mut ndarray::Array2<f32>, labels: &'a mut ndarray::Array2<usize>) -> Trainer<'a> {
+    pub fn train(
+        &'a mut self,
+        data: &'a mut ndarray::Array2<f32>,
+        labels: &'a mut ndarray::Array2<usize>,
+    ) -> Trainer<'a> {
         self.check_dataset(data, labels);
 
         let number_of_examples = data.len_of(Axis(1));
@@ -299,7 +310,6 @@ impl<'a> NeuralNetwork {
         let learning_rate_interval: u32 =
             (DEFAULT_LEARNING_RATE_INTERVAL * multiplier).ceil() as u32;
 
-        
         // TODO Do this better
         let batch_size: usize = if number_of_examples < 100usize {
             number_of_examples
@@ -337,17 +347,24 @@ impl<'a> NeuralNetwork {
     /// This is called whenever you give a dataset to the library, you do not need to call this yourself.
     ///
     /// For example this is called when you pass a dataset to `.train(..)`.
-    pub fn check_dataset(&self,data: &ndarray::Array2<f32>, labels: &ndarray::Array2<usize>) {
+    pub fn check_dataset(&self, data: &ndarray::Array2<f32>, labels: &ndarray::Array2<usize>) {
         // Checks data matches labels.
         let number_of_examples = data.len_of(Axis(0));
         if number_of_examples != labels.len_of(Axis(0)) {
-            panic!("Number of examples ({}) does not match number of labels ({}).",number_of_examples,labels.len_of(Axis(0)));
+            panic!(
+                "Number of examples ({}) does not match number of labels ({}).",
+                number_of_examples,
+                labels.len_of(Axis(0))
+            );
         }
 
         // Checks all examples fit the neural network.
         let data_inputs = data.len_of(Axis(1));
         if data_inputs != self.inputs as usize {
-            panic!("Input size of examples ({}) does not match input size of network ({}).",data_inputs,self.inputs);
+            panic!(
+                "Input size of examples ({}) does not match input size of network ({}).",
+                data_inputs, self.inputs
+            );
         }
 
         // Gets number of network outputs
@@ -355,8 +372,13 @@ impl<'a> NeuralNetwork {
             InnerLayer::Dense(dense_layer) => dense_layer.biases.dims().get()[0] as usize,
             _ => panic!("Last layer is somehow a dropout layer, this should not be possible"),
         };
-        for (index,label) in labels.axis_iter(Axis(0)).enumerate() {
-            if label[0] > net_outs { panic!("Label of example {} ({}) exceeds network outputs ({}).",index,label[0],net_outs); }
+        for (index, label) in labels.axis_iter(Axis(0)).enumerate() {
+            if label[0] > net_outs {
+                panic!(
+                    "Label of example {} ({}) exceeds network outputs ({}).",
+                    index, label[0], net_outs
+                );
+            }
         }
     }
 
@@ -413,7 +435,7 @@ impl<'a> NeuralNetwork {
         let mut best_accuracy = 0u32; // Value of best accuracy.
 
         // Sets array of evaluation data.
-        let matrix_evaluation_data = self.matrixify(&evaluation_data,&evaluation_labels);
+        let matrix_evaluation_data = self.matrixify(&evaluation_data, &evaluation_labels);
 
         // Computes intial evaluation.
         let starting_evaluation =
@@ -442,7 +464,8 @@ impl<'a> NeuralNetwork {
         loop {
             // TODO Can `matrixify` and `batch_chunks` be combined in this use case to be more efficient?
             // Sets array of training data.
-            let training_data_matrix = self.matrixify(&training_data.view(),&training_labels.view());
+            let training_data_matrix =
+                self.matrixify(&training_data.view(), &training_labels.view());
 
             // Split training data into batchs.
             let batches = batch_chunks(&training_data_matrix, batch_size);
@@ -465,7 +488,13 @@ impl<'a> NeuralNetwork {
                     stdout.flush().unwrap();
 
                     // Runs backpropagation
-                    self.backpropagate(&batch, learning_rate, cost, l2, training_data.len_of(Axis(0)));
+                    self.backpropagate(
+                        &batch,
+                        learning_rate,
+                        cost,
+                        l2,
+                        training_data.len_of(Axis(0)),
+                    );
                 }
                 stdout
                     .write(
@@ -479,7 +508,13 @@ impl<'a> NeuralNetwork {
             } else {
                 for batch in batches {
                     // Runs backpropagation
-                    self.backpropagate(&batch, learning_rate, cost, l2, training_data.len_of(Axis(0)));
+                    self.backpropagate(
+                        &batch,
+                        learning_rate,
+                        cost,
+                        l2,
+                        training_data.len_of(Axis(0)),
+                    );
                 }
             }
             iterations_elapsed += 1;
@@ -824,11 +859,24 @@ impl<'a> NeuralNetwork {
     /// let (cost,accuracy) = net.evaluate(&data,&labels,None);
     ///
     /// assert_eq!(accuracy,4);
-    pub fn evaluate(&mut self, data: &ndarray::Array2<f32>, labels: &ndarray::Array2<usize>, cost: Option<&Cost>) -> (f32, u32) {
+    pub fn evaluate(
+        &mut self,
+        data: &ndarray::Array2<f32>,
+        labels: &ndarray::Array2<usize>,
+        cost: Option<&Cost>,
+    ) -> (f32, u32) {
         if let Some(cost_function) = cost {
-            return self.inner_evaluate(&self.matrixify(&data.view(),&labels.view()), &labels.view(), cost_function);
+            return self.inner_evaluate(
+                &self.matrixify(&data.view(), &labels.view()),
+                &labels.view(),
+                cost_function,
+            );
         } else {
-            return self.inner_evaluate(&self.matrixify(&data.view(),&labels.view()), &labels.view(), &Cost::Crossentropy);
+            return self.inner_evaluate(
+                &self.matrixify(&data.view(), &labels.view()),
+                &labels.view(),
+                &Cost::Crossentropy,
+            );
         }
     }
     // TODO Rewrite to accept `&ArrayViewMut2` and `&Array2` for `labels`
@@ -848,16 +896,22 @@ impl<'a> NeuralNetwork {
         let output_classes = imax(&output, 0).1;
 
         // Sets array of target classes
-        let target_classes:Vec<u32> = labels.axis_iter(Axis(0)).map(|x|x[0] as u32).collect();
+        let target_classes: Vec<u32> = labels.axis_iter(Axis(0)).map(|x| x[0] as u32).collect();
         let number_of_examples = labels.len_of(Axis(0));
-        let target_array = Array::<u32>::new(&target_classes,Dim4::new(&[1, number_of_examples as u64, 1, 1]));
-        
+        let target_array = Array::<u32>::new(
+            &target_classes,
+            Dim4::new(&[1, number_of_examples as u64, 1, 1]),
+        );
+
         // Gets number of correct classifications.
         let correct_classifications = eq(&output_classes, &target_array, false); // TODO Can this be a bitwise AND?
         let correct_classifications_numb: u32 = sum_all(&correct_classifications).0 as u32;
 
         // Returns average cost and number of examples correctly classified.
-        return (cost / number_of_examples as f32, correct_classifications_numb);
+        return (
+            cost / number_of_examples as f32,
+            correct_classifications_numb,
+        );
     }
     /// Returns tuple of: (Vector of class percentage accuracies, Percentage confusion matrix).
     /// ```ignore
@@ -888,17 +942,20 @@ impl<'a> NeuralNetwork {
     #[deprecated(
         note = "Not deprecated, just broken until ArrayFire update installer to match git (where issue has been reported and fixed)."
     )]
-    pub fn analyze(&mut self, data: &ndarray::Array2<f32>, labels: &ndarray::Array2<usize>) -> (Vec<f32>, Vec<Vec<f32>>) {
-        
+    pub fn analyze(
+        &mut self,
+        data: &ndarray::Array2<f32>,
+        labels: &ndarray::Array2<usize>,
+    ) -> (Vec<f32>, Vec<Vec<f32>>) {
         // Gets number of network outputs
         let net_outs = match &self.layers[self.layers.len() - 1] {
             InnerLayer::Dense(dense_layer) => dense_layer.biases.dims().get()[0] as usize,
             _ => panic!("Last layer is somehow a dropout layer, this should not be possible"),
         };
         // Sorts by class labels
-        let (sorted_data,sorted_labels) = counting_sort(data,labels,net_outs);
- 
-        let (input, classes) = matrixify_classes(&sorted_data,&sorted_labels);
+        let (sorted_data, sorted_labels) = counting_sort(data, labels, net_outs);
+
+        let (input, classes) = matrixify_classes(&sorted_data, &sorted_labels);
         let outputs = self.inner_run(&input);
 
         let maxs: Array<f32> = arrayfire::max(&outputs, 1i32);
@@ -926,54 +983,61 @@ impl<'a> NeuralNetwork {
 
         return (diag_vec, matrix_vec);
 
-        fn matrixify_classes(data:&ndarray::Array2<f32>,labels:&ndarray::Array2<usize>) -> (Array<f32>, Array<u32>) {
+        fn matrixify_classes(
+            data: &ndarray::Array2<f32>,
+            labels: &ndarray::Array2<usize>,
+        ) -> (Array<f32>, Array<u32>) {
             let number_of_examples = data.len_of(Axis(0)) as u64;
-    
+
             // Constructs input and output array
-            let dims = Dim4::new(&[data.len_of(Axis(1)) as u64,number_of_examples,1,1]);
-            let input = Array::new(&data.as_slice().unwrap(),dims);
-        
+            let dims = Dim4::new(&[data.len_of(Axis(1)) as u64, number_of_examples, 1, 1]);
+            let input = Array::new(&data.as_slice().unwrap(), dims);
+
             let labels_u32 = labels.mapv(|x| x as u32);
-            let dims = Dim4::new(&[number_of_examples,1,1,1]);
-            let classes: Array<u32> = Array::<u32>::new(labels_u32.as_slice().unwrap(),dims);
-    
+            let dims = Dim4::new(&[number_of_examples, 1, 1, 1]);
+            let classes: Array<u32> = Array::<u32>::new(labels_u32.as_slice().unwrap(), dims);
+
             // Returns input and output array
             // Array(in,examples,1,1), Array(out,examples,1,1)
             return (input, classes);
         }
-        fn counting_sort(data:&ndarray::Array2<f32>,labels:&ndarray::Array2<usize>,k:usize) -> (ndarray::Array2<f32>,ndarray::Array2<usize>) {
+        fn counting_sort(
+            data: &ndarray::Array2<f32>,
+            labels: &ndarray::Array2<usize>,
+            k: usize,
+        ) -> (ndarray::Array2<f32>, ndarray::Array2<usize>) {
             let number_of_examples = data.len_of(Axis(1)); // = labels.len_of(Axis(1))
-            let mut count:Vec<usize> = vec!(0usize;k);
-            let mut output_vals:Vec<usize> = vec!(0usize;number_of_examples);
-    
+            let mut count: Vec<usize> = vec![0usize; k];
+            let mut output_vals: Vec<usize> = vec![0usize; number_of_examples];
+
             for i in 0..number_of_examples {
-                let class = labels[[i,1]];
-    
+                let class = labels[[i, 1]];
+
                 count[class] += 1usize;
                 output_vals[i] = class;
             }
             for i in 1..count.len() {
-                count[i] += count[i-1];
+                count[i] += count[i - 1];
             }
-    
+
             let input_size = data.len_of(Axis(0));
-            let mut sorted_data = ndarray::Array2::from_elem(data.dim(),f32::default());
-            let mut sorted_labels = ndarray::Array2::from_elem(labels.dim(),usize::default());
-    
+            let mut sorted_data = ndarray::Array2::from_elem(data.dim(), f32::default());
+            let mut sorted_labels = ndarray::Array2::from_elem(labels.dim(), usize::default());
+
             for i in 0..number_of_examples {
-                
-                set_row(count[output_vals[i]]-1,data,&mut sorted_data);
-                sorted_labels[[count[output_vals[i]]-1,1]] = labels[[i,1]];
+                set_row(count[output_vals[i]] - 1, data, &mut sorted_data);
+                sorted_labels[[count[output_vals[i]] - 1, 1]] = labels[[i, 1]];
 
                 count[output_vals[i]] -= 1;
             }
-    
-            return (sorted_data,sorted_labels);
+
+            return (sorted_data, sorted_labels);
         }
         // TODO Surely there must be a better way to do this? (Why is such a method not obvious in the ndarray docs?)
-        fn set_row(row_index:usize,from:&ndarray::Array2<f32>,to:&mut ndarray::Array2<f32>) {
-            for i in 0..from.len_of(Axis(0)) { // TODO Double check `Axis(0)` (I mess it up a lot)
-                to[[i,row_index]] = from[[i,row_index]];
+        fn set_row(row_index: usize, from: &ndarray::Array2<f32>, to: &mut ndarray::Array2<f32>) {
+            for i in 0..from.len_of(Axis(0)) {
+                // TODO Double check `Axis(0)` (I mess it up a lot)
+                to[[i, row_index]] = from[[i, row_index]];
             }
         }
     }
@@ -1069,11 +1133,12 @@ impl<'a> NeuralNetwork {
     )]
     pub fn analyze_string(
         &mut self,
-        data: &ndarray::Array2<f32>, labels: &ndarray::Array2<usize>,
+        data: &ndarray::Array2<f32>,
+        labels: &ndarray::Array2<usize>,
         precision: usize,
         dict_opt: Option<HashMap<usize, &str>>,
     ) -> (String, String) {
-        let (vector, matrix) = self.analyze(data,labels);
+        let (vector, matrix) = self.analyze(data, labels);
 
         let class_outs = match &self.layers[self.layers.len() - 1] {
             InnerLayer::Dense(dense_layer) => dense_layer.biases.dims().get()[0] as usize,
@@ -1183,7 +1248,11 @@ impl<'a> NeuralNetwork {
     // TODO Document this better
     // TODO Rewrite to accept `&ArrayView2`s and `&Array2`s
     // Convert ndarray arrays to arrayfire arrays.
-    fn matrixify(&self, data:&ArrayView2<f32>,labels:&ArrayView2<usize>) -> (Array<f32>, Array<f32>) {
+    fn matrixify(
+        &self,
+        data: &ArrayView2<f32>,
+        labels: &ArrayView2<usize>,
+    ) -> (Array<f32>, Array<f32>) {
         // TODO Is there a better way to do either of these?
         // Flattens examples into `in_vec` and `out_vec`
         let net_outs = match &self.layers[self.layers.len() - 1] {
@@ -1194,18 +1263,25 @@ impl<'a> NeuralNetwork {
         let number_of_examples = data.len_of(Axis(0)) as u64;
 
         // Constructs input and output array
-        let dims = Dim4::new(&[data.len_of(Axis(1)) as u64,number_of_examples,1,1]);
-        let input = arrayfire::Array::new(&data.as_slice().unwrap(),dims);
-    
+        let dims = Dim4::new(&[data.len_of(Axis(1)) as u64, number_of_examples, 1, 1]);
+        let input = arrayfire::Array::new(&data.as_slice().unwrap(), dims);
+
         // Creates all possible target vecs to be cloned when needed.
-        let mut target_vecs:Vec<Vec<f32>> = vec!(vec!(0.;net_outs);net_outs);
+        let mut target_vecs: Vec<Vec<f32>> = vec![vec!(0.; net_outs); net_outs];
         for i in 0..net_outs {
             target_vecs[i][i] = 1.;
         }
-        
-        let flat_labels:Vec<f32> = labels.axis_iter(Axis(0)).map(|label| target_vecs[label[0]].clone()).flatten().collect();
 
-        let target: Array<f32> = Array::<f32>::new(&flat_labels,Dim4::new(&[net_outs as u64, number_of_examples, 1, 1]));
+        let flat_labels: Vec<f32> = labels
+            .axis_iter(Axis(0))
+            .map(|label| target_vecs[label[0]].clone())
+            .flatten()
+            .collect();
+
+        let target: Array<f32> = Array::<f32>::new(
+            &flat_labels,
+            Dim4::new(&[net_outs as u64, number_of_examples, 1, 1]),
+        );
 
         // Returns input and output array
         // Array(in,examples,1,1), Array(out,examples,1,1)
@@ -1310,25 +1386,25 @@ enum InnerLayerEnum {
 }
 
 // TODO Can this be consended with `trainer::shuffle_dataset(..)`?
-fn shuffle_dataset(data:&mut ArrayViewMut2<f32>,labels:&mut ArrayViewMut2<usize>) {
+fn shuffle_dataset(data: &mut ArrayViewMut2<f32>, labels: &mut ArrayViewMut2<usize>) {
     let examples = data.len_of(Axis(0));
     let input_size = data.len_of(Axis(1));
 
     let mut data_slice = data.as_slice_mut().unwrap();
     let mut label_slice = labels.as_slice_mut().unwrap();
 
-    for i in 0..examples-1 {
-        let new_index:usize = thread_rng().gen_range(i,examples);
-        
-        let (data_indx_1,data_indx_2) = (i * input_size, new_index * input_size);
+    for i in 0..examples - 1 {
+        let new_index: usize = thread_rng().gen_range(i, examples);
+
+        let (data_indx_1, data_indx_2) = (i * input_size, new_index * input_size);
         // TODO Can we swap slices better?
         for t in 0..input_size {
-            swap(&mut data_slice,data_indx_1+t,data_indx_2+t);
+            swap(&mut data_slice, data_indx_1 + t, data_indx_2 + t);
         }
-        swap(&mut label_slice,i,new_index);
+        swap(&mut label_slice, i, new_index);
     }
 
-    fn swap<T:Copy>(list:&mut [T],a:usize,b:usize) {
+    fn swap<T: Copy>(list: &mut [T], a: usize, b: usize) {
         let temp = list[a];
         list[a] = list[b];
         list[b] = temp;

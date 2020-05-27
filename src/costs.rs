@@ -35,7 +35,6 @@ impl Cost {
             // Add very small value to prevent log(1-1)=log(0)=nan
             let part2 = log(&(1f32 - a + 1e-20)) * (1f32 - y);
 
-
             let mut cost: f32 = sum_all(&(part1 + part2)).0 as f32;
 
             //if cost.is_nan() { panic!("nan cost"); }

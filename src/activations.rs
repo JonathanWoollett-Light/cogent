@@ -77,7 +77,7 @@ impl Activation {
             // TODO Is it more efficient to do this matrix multiplication before or after squaring?
             // This is done since `div(&a,&b,true)` is very slow.
             let sqrd_sums_matrix = matmul(&ones, &sqrd_sums, MatProp::NONE, MatProp::NONE);
-            
+
             // e^z * (exp_sum-e^z) / (exp_sum)^2
             let derivatives = exponents * sums_sub / sqrd_sums_matrix;
 
