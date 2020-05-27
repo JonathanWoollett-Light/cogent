@@ -879,10 +879,16 @@ impl<'a> NeuralNetwork {
         note = "Not deprecated, just broken until ArrayFire update installer to match git (where issue has been reported and fixed)."
     )]
     pub fn analyze(&mut self, data: &ndarray::Array2<f32>, labels: &ndarray::Array2<usize>) -> (Vec<f32>, Vec<Vec<f32>>) {
-        // Sorts by class
-        data.sort_by(|(_, a), (_, b)| a.cmp(b));
+        
+        // Gets number of network outputs
+        let net_outs = match &self.layers[self.layers.len() - 1] {
+            InnerLayer::Dense(dense_layer) => dense_layer.biases.dims().get()[0] as usize,
+            _ => panic!("Last layer is somehow a dropout layer, this should not be possible"),
+        };
+        // Sorts by class labels
+        let (sorted_data,sorted_labels) = counting_sort(data,labels,net_outs);
  
-        let (input, classes) = matrixify_classes(data,labels);
+        let (input, classes) = matrixify_classes(&sorted_data,&sorted_labels);
         let outputs = self.inner_run(&input);
 
         let maxs: Array<f32> = arrayfire::max(&outputs, 1i32);
@@ -924,6 +930,41 @@ impl<'a> NeuralNetwork {
             // Returns input and output array
             // Array(in,examples,1,1), Array(out,examples,1,1)
             return (input, classes);
+        }
+        pub fn counting_sort(data:&ndarray::Array2<f32>,labels:&ndarray::Array2<usize>,k:usize) -> (ndarray::Array2<f32>,ndarray::Array2<usize>) {
+            let number_of_examples = data.len_of(Axis(1)); // = labels.len_of(Axis(1))
+            let mut count:Vec<usize> = vec!(0usize;k);
+            let mut output_vals:Vec<usize> = vec!(0usize;number_of_examples);
+    
+            for i in 0..number_of_examples {
+                let class = labels[[i,1]];
+    
+                count[class] += 1usize;
+                output_vals[i] = class;
+            }
+            for i in 1..count.len() {
+                count[i] += count[i-1];
+            }
+    
+            let input_size = data.len_of(Axis(0));
+            let mut sorted_data = ndarray::Array2::from_elem(data.dim(),f32::default());
+            let mut sorted_labels = ndarray::Array2::from_elem(labels.dim(),usize::default());
+    
+            for i in 0..number_of_examples {
+                
+                set_row(count[output_vals[i]]-1,data,&mut sorted_data);
+                sorted_labels[[count[output_vals[i]]-1,1]] = labels[[i,1]];
+
+                count[output_vals[i]] -= 1;
+            }
+    
+            return (sorted_data,sorted_labels);
+        }
+        // TODO Surely there must be a better way to do this? (Why is such a method not obvious in the ndarray docs?)
+        fn set_row(row_index:usize,from:&ndarray::Array2<f32>,to:&mut ndarray::Array2<f32>) {
+            for i in 0..from.len_of(Axis(0)) {
+                to[[i,row_index]] = from[[i,row_index]];
+            }
         }
     }
     /// Returns tuple of pretty strings of: (Vector of class percentage accuracies, Percentage confusion matrix).
@@ -1018,11 +1059,11 @@ impl<'a> NeuralNetwork {
     )]
     pub fn analyze_string(
         &mut self,
-        data: &mut [(Vec<f32>, usize)],
+        data: &ndarray::Array2<f32>, labels: &ndarray::Array2<usize>,
         precision: usize,
         dict_opt: Option<HashMap<usize, &str>>,
     ) -> (String, String) {
-        let (vector, matrix) = self.analyze(data);
+        let (vector, matrix) = self.analyze(data,labels);
 
         let class_outs = match &self.layers[self.layers.len() - 1] {
             InnerLayer::Dense(dense_layer) => dense_layer.biases.dims().get()[0] as usize,
