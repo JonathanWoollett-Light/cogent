@@ -69,7 +69,7 @@ impl<'a> NeuralNetwork {
     ///
     /// Returns constructed network.
     /// ```
-    /// use cogent::core::{NeuralNetwork,Layer,Activation};
+    /// use cogent::{NeuralNetwork,Layer,Activation};
     ///
     /// let mut net = NeuralNetwork::new(2,&[
     ///     Layer::Dense(3,Activation::Sigmoid),
@@ -173,7 +173,7 @@ impl<'a> NeuralNetwork {
     }
     /// Sets activation of layer specified by index (excluding input layer).
     /// ```
-    /// use cogent::core::{NeuralNetwork,Layer,Activation};
+    /// use cogent::{NeuralNetwork,Layer,Activation};
     ///
     /// // Net (2 -Sigmoid-> 3 -Sigmoid-> 2)
     /// let mut net = NeuralNetwork::new(2,&[
@@ -274,9 +274,9 @@ impl<'a> NeuralNetwork {
     /// Training a network to learn an XOR gate:
     /// ```
     /// use cogent::{
-    ///     neural_network::{NeuralNetwork,Layer},
-    ///     activations::Activation,
-    ///     setter_enums::*
+    ///     NeuralNetwork,Layer,
+    ///     Activation,
+    ///     EvaluationData
     /// };
     ///
     /// // Sets network
@@ -837,9 +837,9 @@ impl<'a> NeuralNetwork {
     /// Returns tuple: (Average cost across dataset, Number of examples correctly classified).
     /// ```
     /// # use cogent::{
-    /// #     neural_network::{NeuralNetwork,Layer},
-    /// #     activations::Activation,
-    /// #     setter_enums::*
+    /// #     NeuralNetwork,Layer,
+    /// #     Activation,
+    /// #     EvaluationData
     /// # };
     /// #
     /// # let mut neural_network = NeuralNetwork::new(2,&[
@@ -916,9 +916,9 @@ impl<'a> NeuralNetwork {
     /// Returns tuple of: (Vector of class percentage accuracies, Percentage confusion matrix).
     /// ```ignore
     /// # use cogent::{
-    /// #     neural_network::{NeuralNetwork,Layer},
-    /// #     activations::Activation,
-    /// #     setter_enums::*
+    /// #     NeuralNetwork,Layer,
+    /// #     Activation,
+    /// #     EvaluationData
     /// # };
     /// #
     /// # let mut neural_network = NeuralNetwork::new(2,&[
@@ -1045,7 +1045,7 @@ impl<'a> NeuralNetwork {
     ///
     /// Example without dictionairy:
     /// ```ignore
-    /// # use cogent::core::{EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
+    /// # use cogent::{EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
     /// #
     /// # let mut net = NeuralNetwork::new(2,&[
     /// #     Layer::new(3,Activation::Sigmoid),
@@ -1085,7 +1085,7 @@ impl<'a> NeuralNetwork {
     /// ```
     /// Example with dictionairy:
     /// ```ignore
-    /// # use cogent::core::{EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
+    /// # use cogent::{EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
     /// # use std::collections::HashMap;
     /// #
     /// # let mut net = NeuralNetwork::new(2,&[
@@ -1299,7 +1299,7 @@ impl<'a> NeuralNetwork {
     }
     /// Exports neural network to `path.json`.
     /// ```ignore
-    /// use cogent::core::{Activation,Layer,NeuralNetwork};
+    /// use cogent::{Activation,Layer,NeuralNetwork};
     ///
     /// let net = NeuralNetwork::new(2,&[
     ///     Layer::new(3,Activation::Sigmoid),
@@ -1341,7 +1341,7 @@ impl<'a> NeuralNetwork {
     }
     /// Imports neural network from `path.json`.
     /// ```ignore
-    /// use cogent::core::NeuralNetwork;
+    /// use cogent::NeuralNetwork;
     /// let net = NeuralNetwork::import("my_neural_network");
     /// ```
     pub fn import(path: &str) -> NeuralNetwork {
