@@ -3,7 +3,7 @@ mod tests {
     use cogent::{
         NeuralNetwork,Layer,
         Activation,
-        EvaluationData,MeasuredCondition,HaltCondition
+        EvaluationData,MeasuredCondition,HaltCondition,Proportion
     };
     
     use arrayfire::{Array,Dim4,HasAfEnum};
@@ -748,6 +748,7 @@ mod tests {
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
                 .tracking().log_interval(MeasuredCondition::Iteration(1))
                 .l2(0.1)
+                .batch_size(Proportion::Percent(0.2))
             .go();
 
             // Evaluation
