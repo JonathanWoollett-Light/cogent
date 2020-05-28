@@ -183,8 +183,8 @@ impl<'a> Trainer<'a> {
             ),
         };
 
-        // Calls `train_details` starting training.
-        self.neural_network.train_details(
+        // Calls `inner_train` starting training.
+        self.neural_network.inner_train(
             train_data,
             train_labels,
             eval_data.view(),

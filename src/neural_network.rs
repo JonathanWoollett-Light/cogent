@@ -388,7 +388,7 @@ impl<'a> NeuralNetwork {
     /// In most cases you shouldn't call this, instead call `.train()` then call the functions to set the hyperparameters, then call `.go()` (which calls this).
     ///
     /// Using this function directly is ugly. Would not recommend.
-    pub fn train_details(
+    pub fn inner_train(
         &mut self,
         mut training_data: ArrayViewMut2<f32>,
         mut training_labels: ArrayViewMut2<usize>,
