@@ -18,6 +18,8 @@ pub struct Trainer<'a> {
     pub log_interval: Option<MeasuredCondition>,
     pub batch_size: usize,
     pub learning_rate: f32,
+    // μ (in a sense, how slippery the slope of the function is)
+    pub momentum_coefficient: f32, 
     // Lambda value if using L2
     pub l2: Option<f32>,
     // Can stop after a lack of cost improvement over a certain number of iterations/durations, or not at all.
@@ -78,12 +80,17 @@ impl<'a> Trainer<'a> {
         };
         return self;
     }
-    /// Sets `learning_rate`.
+    /// Sets `learning_rate` (η)(eta).
     pub fn learning_rate(&mut self, learning_rate: f32) -> &mut Trainer<'a> {
         self.learning_rate = learning_rate;
         return self;
     }
-    /// Sets lambda ($ \lambda $) for `l2`.
+    /// Sets `momentum_coefficient` (μ)(mu).
+    pub fn momentum_coefficient(&mut self, momentum_coefficient: f32) -> &mut Trainer<'a> {
+        self.momentum_coefficient = momentum_coefficient;
+        return self;
+    }
+    /// Sets λ (lambda) for `l2`.
     ///
     /// If $ \lambda $ set, implements L2 regularization with $ \lambda $ value.
     pub fn l2(&mut self, lambda: f32) -> &mut Trainer<'a> {
@@ -194,6 +201,7 @@ impl<'a> Trainer<'a> {
             self.log_interval,
             self.batch_size,
             self.learning_rate,
+            self.momentum_coefficient,
             self.l2,
             self.early_stopping_condition,
             self.evaluation_min_change,

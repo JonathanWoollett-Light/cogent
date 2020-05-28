@@ -1,6 +1,6 @@
 use crate::activations::Activation;
 
-use arrayfire::{constant, gt, matmul, mul, randu, sum, Array, Dim4, MatProp};
+use arrayfire::{constant, gt, matmul, mul, randu, sum, Array, Dim4, MatProp,add};
 
 /// A dense layer.
 pub struct DenseLayer {
@@ -59,6 +59,8 @@ impl DenseLayer {
         learning_rate: f32,
         l2: Option<f32>,
         training_set_length: usize,
+        momentum_coefficient_weight_matrix: f32,
+        (weight_velocity,bias_velocity): &mut (Array<f32>,Array<f32>)
     ) -> Array<f32> {
         // δ
         let error = self.activation.derivative(z) * partial_error;
@@ -75,18 +77,36 @@ impl DenseLayer {
         // Number of examples in batch
         let batch_len = z.dims().get()[1] as f32;
 
+        //println!("weight_velocity.dims: {}",weight_velocity.dims());
+        //println!("weight_error.dims: {}",weight_error.dims());
+        //println!("self.weights.dims: {}",self.weights.dims());
+
+        //panic!("did it get here?");
+        
+        // TODO Can this be done more cleanly?
+        // v' = μ*v - η*(∂C/∂w)/n
+        *weight_velocity = mul(&momentum_coefficient,weight_velocity,false) - (learning_rate * weight_error / batch_len);
+        // v' = μ*v - η*(∂C/∂b)/n
+        *bias_velocity = mul(&momentum_coefficient,bias_velocity,false) - (learning_rate * bias_error / batch_len);
+
+        //panic!("did it get here?");
+
         // TODO Figure out best way to do weight and bias updates
-        // = old weights - avg weight errors
+        // weights = old weights + velocity
+        // w' = w + v'
         if let Some(lambda) = l2 {
-            self.weights = ((1f32 - (learning_rate * lambda / training_set_length as f32))
-                * &self.weights)
-                - (learning_rate * weight_error / batch_len)
+            self.weights = add(
+                &((1f32 - (learning_rate * lambda / training_set_length as f32)) * &self.weights),
+                weight_velocity,
+                false
+            );
         } else {
-            self.weights = &self.weights - (learning_rate * weight_error / batch_len);
+            self.weights = add(&self.weights,weight_velocity,false);
         }
 
-        // = old biases - avg bias errors
-        self.biases = &self.biases - (learning_rate * bias_error / batch_len);
+        // biases = old biases + velocity
+        // b' = b + v'
+        self.biases = add(&self.biases,bias_velocity,false);
 
         // w^T dot δ
         return nxt_partial_error;

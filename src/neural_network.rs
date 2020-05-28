@@ -43,6 +43,7 @@ const DEFAULT_LEARNING_RATE_DECAY: f32 = 0.5f32;
 // Default interval in iterations before learning rate decay.
 // interval = default learning rate interval * (size of examples / number of examples) iterations.
 const DEFAULT_LEARNING_RATE_INTERVAL: f32 = 200f32;
+const DEFAULT_MOMENTUM: f32 = 0f32;
 
 /// Specifies layers to cosntruct neural net.
 pub enum Layer {
@@ -331,6 +332,7 @@ impl<'a> NeuralNetwork {
             log_interval: None,
             batch_size: batch_size,
             learning_rate: DEFAULT_LEARNING_RATE,
+            momentum_coefficient: DEFAULT_MOMENTUM,
             l2: None,
             early_stopping_condition: MeasuredCondition::Iteration(early_stopping_condition),
             evaluation_min_change: Proportion::Percent(DEFAULT_EVALUATION_MIN_CHANGE),
@@ -399,6 +401,7 @@ impl<'a> NeuralNetwork {
         log_interval: Option<MeasuredCondition>,
         batch_size: usize,
         intial_learning_rate: f32,
+        momentum_coefficient: f32,
         l2: Option<f32>,
         early_stopping_n: MeasuredCondition,
         evaluation_min_change: Proportion,
@@ -459,6 +462,18 @@ impl<'a> NeuralNetwork {
 
         //panic!("got here");
 
+        // Sets velocities.
+        // (weight velocities, bias velocities)
+        let mut velocities:Vec<Option<(Array<f32>,Array<f32>)>> = self.layers.iter().map(
+            |l| 
+            if let InnerLayer::Dense(dense_layer) = l { 
+                Some((
+                    constant(0f32,dense_layer.weights.dims()),
+                    constant(0f32,dense_layer.biases.dims())
+                ))
+            } else { None }
+        ).collect();
+
         // Backpropgation loop
         // ------------------------------------------------
         loop {
@@ -494,6 +509,8 @@ impl<'a> NeuralNetwork {
                         cost,
                         l2,
                         training_data.len_of(Axis(0)),
+                        momentum_coefficient,
+                        &mut velocities
                     );
                 }
                 stdout
@@ -514,6 +531,8 @@ impl<'a> NeuralNetwork {
                         cost,
                         l2,
                         training_data.len_of(Axis(0)),
+                        momentum_coefficient,
+                        &mut velocities
                     );
                 }
             }
@@ -748,6 +767,8 @@ impl<'a> NeuralNetwork {
         cost: &Cost,
         l2: Option<f32>,
         training_set_length: usize,
+        momentum_coefficient: f32,
+        velocities: &mut Vec<Option<(Array<f32>,Array<f32>)>>
     ) {
         // Feeds forward
         // --------------
@@ -792,13 +813,14 @@ impl<'a> NeuralNetwork {
 
         let mut out_iter = layer_outs.into_iter().rev();
         let l_iter = self.layers.iter_mut().rev();
+        let v_iter = velocities.iter_mut().rev();
 
         let last_activation = &out_iter.next().unwrap().0;
 
         // ∇(a)C
         let mut partial_error = cost.derivative(target, last_activation);
 
-        for (layer, (a, z)) in izip!(l_iter, out_iter) {
+        for (layer, (a, z),v) in izip!(l_iter, out_iter,v_iter) {
             // w(i)^T dot δ(i)
             // Error of layer i matrix multiplied by transposition of weights connections layer i-1 to layer i.
             partial_error = match layer {
@@ -810,6 +832,8 @@ impl<'a> NeuralNetwork {
                     learning_rate,
                     l2,
                     training_set_length,
+                    momentum_coefficient,
+                    v.as_mut().unwrap()
                 ),
             };
             //NeuralNetwork::mem_info("Backpropagated layer",false);
