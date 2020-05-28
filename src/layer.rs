@@ -59,7 +59,7 @@ impl DenseLayer {
         learning_rate: f32,
         l2: Option<f32>,
         training_set_length: usize,
-        momentum_coefficient_weight_matrix: f32,
+        momentum_coefficient: f32,
         (weight_velocity,bias_velocity): &mut (Array<f32>,Array<f32>)
     ) -> Array<f32> {
         // δ
