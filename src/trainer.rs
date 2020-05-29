@@ -73,7 +73,7 @@ impl<'a> Trainer<'a> {
     /// Sets `batch_size`.
     pub fn batch_size(&mut self, batch_size: Proportion) -> &mut Trainer<'a> {
         self.batch_size = match batch_size {
-            Proportion::Percent(percent) => (self.training_data.len() as f32 * percent) as usize,
+            Proportion::Percent(percent) => (self.training_data.len_of(Axis(0)) as f32 * percent) as usize,
             Proportion::Scalar(scalar) => scalar as usize,
         };
         return self;
