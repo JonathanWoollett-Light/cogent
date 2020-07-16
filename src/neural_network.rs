@@ -273,6 +273,7 @@ impl<'a> NeuralNetwork {
     ///
     /// Training a network to learn an XOR gate:
     /// ```
+    /// use ndarray::{Array2,array};
     /// use cogent::{
     ///     NeuralNetwork,Layer,
     ///     Activation,
@@ -280,7 +281,7 @@ impl<'a> NeuralNetwork {
     /// };
     ///
     /// // Sets network
-    /// let mut neural_network = NeuralNetwork::new(2,&[
+    /// let mut net = NeuralNetwork::new(2,&[
     ///     Layer::Dense(3,Activation::Sigmoid),
     ///     Layer::Dense(2,Activation::Softmax)
     /// ]);
@@ -836,13 +837,14 @@ impl<'a> NeuralNetwork {
     ///
     /// Returns tuple: (Average cost across dataset, Number of examples correctly classified).
     /// ```
+    /// # use ndarray::{Array2,array};
     /// # use cogent::{
     /// #     NeuralNetwork,Layer,
     /// #     Activation,
     /// #     EvaluationData
     /// # };
     /// #
-    /// # let mut neural_network = NeuralNetwork::new(2,&[
+    /// # let mut net = NeuralNetwork::new(2,&[
     /// #     Layer::Dense(3,Activation::Sigmoid),
     /// #     Layer::Dense(2,Activation::Softmax)
     /// # ]);
@@ -914,14 +916,15 @@ impl<'a> NeuralNetwork {
         );
     }
     /// Returns tuple of: (Vector of class percentage accuracies, Percentage confusion matrix).
-    /// ```ignore
+    /// ```
+    /// # use ndarray::{Array2,array};
     /// # use cogent::{
     /// #     NeuralNetwork,Layer,
     /// #     Activation,
     /// #     EvaluationData
     /// # };
     /// #
-    /// # let mut neural_network = NeuralNetwork::new(2,&[
+    /// # let mut net = NeuralNetwork::new(2,&[
     /// #     Layer::Dense(3,Activation::Sigmoid),
     /// #     Layer::Dense(2,Activation::Softmax)
     /// # ]);
@@ -929,19 +932,19 @@ impl<'a> NeuralNetwork {
     /// let mut data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
     /// let mut labels:Array2<usize> = array![[0],[1],[1],[0]];
     /// #
-    /// # net.train(&mut data.clone(),&mut labels.clone()) // `.clone()` neccessary to satisfy borrow checker concerning later immutable borrow as evaluation data.
+    /// # net.train(&mut data.clone(),&mut labels.clone()) // `.clone()` neccessary to satisfy borrow checker concerning later immutable borrow for `analyze`.
     /// #    .learning_rate(2f32)
     /// #    .evaluation_data(EvaluationData::Actual(&data,&labels)) // Use testing data as evaluation data.
     /// # .go();
     /// // `net` is neural network trained to 100% accuracy to mimic an XOR gate.
-    /// let (correct_vector,confusion_matrix) = net.analyze(&mut data);
+    /// let (correct_vector,confusion_matrix) = net.analyze(&data,&labels);
     ///
     /// assert_eq!(correct_vector,vec![1f32,1f32]);
     /// assert_eq!(confusion_matrix,vec![[1f32,0f32],[0f32,1f32]]);
     /// ```
-    #[deprecated(
-        note = "Not deprecated, just broken until ArrayFire update installer to match git (where issue has been reported and fixed)."
-    )]
+    // #[deprecated(
+    //     note = "Not deprecated, just broken until ArrayFire update installer to match git (where issue has been reported and fixed)."
+    // )]
     pub fn analyze(
         &mut self,
         data: &ndarray::Array2<f32>,
@@ -952,16 +955,19 @@ impl<'a> NeuralNetwork {
             InnerLayer::Dense(dense_layer) => dense_layer.biases.dims().get()[0] as usize,
             _ => panic!("Last layer is somehow a dropout layer, this should not be possible"),
         };
+
         // Sorts by class labels
         let (sorted_data, sorted_labels) = counting_sort(data, labels, net_outs);
 
         let (input, classes) = matrixify_classes(&sorted_data, &sorted_labels);
         let outputs = self.inner_run(&input);
 
-        let maxs: Array<f32> = arrayfire::max(&outputs, 1i32);
+        let maxs: Array<f32> = arrayfire::max(&outputs, 0i32);
+
         let class_vectors: Array<bool> = eq(&outputs, &maxs, true);
+
         let confusion_matrix: Array<f32> =
-            sum_by_key(&classes, &class_vectors, 0i32).1.cast::<f32>();
+            sum_by_key(&classes, &class_vectors, 1i32).1.cast::<f32>();
 
         let class_lengths: Array<f32> = sum(&confusion_matrix, 1i32); // Number of examples of each class
 
@@ -1006,12 +1012,12 @@ impl<'a> NeuralNetwork {
             labels: &ndarray::Array2<usize>,
             k: usize,
         ) -> (ndarray::Array2<f32>, ndarray::Array2<usize>) {
-            let number_of_examples = data.len_of(Axis(1)); // = labels.len_of(Axis(1))
+            let n = data.len_of(Axis(0)); // = labels.len_of(Axis(1))
             let mut count: Vec<usize> = vec![0usize; k];
-            let mut output_vals: Vec<usize> = vec![0usize; number_of_examples];
+            let mut output_vals: Vec<usize> = vec![0usize; n];
 
-            for i in 0..number_of_examples {
-                let class = labels[[i, 1]];
+            for i in 0..n {
+                let class = labels[[i, 0]];
 
                 count[class] += 1usize;
                 output_vals[i] = class;
@@ -1020,53 +1026,48 @@ impl<'a> NeuralNetwork {
                 count[i] += count[i - 1];
             }
 
-            let input_size = data.len_of(Axis(0));
             let mut sorted_data = ndarray::Array2::from_elem(data.dim(), f32::default());
             let mut sorted_labels = ndarray::Array2::from_elem(labels.dim(), usize::default());
 
-            for i in 0..number_of_examples {
-                set_row(count[output_vals[i]] - 1, data, &mut sorted_data);
-                sorted_labels[[count[output_vals[i]] - 1, 1]] = labels[[i, 1]];
-
+            for i in 0..n {
+                set_row(i,count[output_vals[i]] - 1, data, &mut sorted_data);
+                sorted_labels[[count[output_vals[i]] - 1, 0]] = labels[[i, 0]];
                 count[output_vals[i]] -= 1;
             }
 
             return (sorted_data, sorted_labels);
         }
         // TODO Surely there must be a better way to do this? (Why is such a method not obvious in the ndarray docs?)
-        fn set_row(row_index: usize, from: &ndarray::Array2<f32>, to: &mut ndarray::Array2<f32>) {
-            for i in 0..from.len_of(Axis(0)) {
+        fn set_row(from_index:usize,to_index: usize, from: &ndarray::Array2<f32>, to: &mut ndarray::Array2<f32>) {
+            for i in 0..from.len_of(Axis(1)) {
                 // TODO Double check `Axis(0)` (I mess it up a lot)
-                to[[i, row_index]] = from[[i, row_index]];
+                to[[to_index,i]] = from[[from_index,i]];
             }
         }
     }
+
     /// Returns tuple of pretty strings of: (Vector of class percentage accuracies, Percentage confusion matrix).
     ///
     /// Example without dictionairy:
-    /// ```ignore
+    /// ```
+    /// # use ndarray::{Array2,array};
     /// # use cogent::{EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
     /// #
     /// # let mut net = NeuralNetwork::new(2,&[
-    /// #     Layer::new(3,Activation::Sigmoid),
-    /// #     Layer::new(2,Activation::Softmax)
+    /// #     Layer::Dense(3,Activation::Sigmoid),
+    /// #     Layer::Dense(2,Activation::Softmax)
     /// # ]);
     /// #
-    /// let mut data = vec![
-    ///     (vec![0f32,0f32],0usize),
-    ///     (vec![1f32,0f32],1usize),
-    ///     (vec![0f32,1f32],1usize),
-    ///     (vec![1f32,1f32],0usize)
-    /// ];
-    ///
-    /// # net.train(&data)
-    /// #     .learning_rate(2f32)
-    /// #     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
-    /// #     .early_stopping_condition(MeasuredCondition::Iteration(2000))
+    /// let mut data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
+    /// let mut labels:Array2<usize> = array![[0],[1],[1],[0]];
+    /// 
+    /// # net.train(&mut data.clone(),&mut labels.clone()) // `.clone()` neccessary to satisfy borrow checker concerning later immutable borrow for `analyze_string`.
+    /// #    .learning_rate(2f32)
+    /// #    .evaluation_data(EvaluationData::Actual(&data,&labels)) // Use testing data as evaluation data.
     /// # .go();
     /// #
     /// // `net` is neural network trained to 100% accuracy to mimic an XOR gate.
-    /// let (correct_vector,confusion_matrix) = net.analyze_string(&mut data,2,None);
+    /// let (correct_vector,confusion_matrix) = net.analyze_string(&data,&labels,2,None);
     ///
     /// let expected_vector:&str =
     /// "    0    1   
@@ -1084,26 +1085,22 @@ impl<'a> NeuralNetwork {
     /// assert_eq!(&confusion_matrix,expected_matrix);
     /// ```
     /// Example with dictionairy:
-    /// ```ignore
+    /// ```
+    /// # use ndarray::{Array2,array};
     /// # use cogent::{EvaluationData,MeasuredCondition,Activation,Layer,NeuralNetwork};
     /// # use std::collections::HashMap;
     /// #
     /// # let mut net = NeuralNetwork::new(2,&[
-    /// #     Layer::new(3,Activation::Sigmoid),
-    /// #     Layer::new(2,Activation::Softmax)
+    /// #     Layer::Dense(3,Activation::Sigmoid),
+    /// #     Layer::Dense(2,Activation::Softmax)
     /// # ]);
     /// #
-    /// let mut data = vec![
-    ///     (vec![0f32,0f32],0usize),
-    ///     (vec![1f32,0f32],1usize),
-    ///     (vec![0f32,1f32],1usize),
-    ///     (vec![1f32,1f32],0usize)
-    /// ];
+    /// let mut data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
+    /// let mut labels:Array2<usize> = array![[0],[1],[1],[0]];
     ///
-    /// # net.train(&data)
-    /// #     .learning_rate(2f32)
-    /// #     .evaluation_data(EvaluationData::Actual(&data)) // Use testing data as evaluation data.
-    /// #     .early_stopping_condition(MeasuredCondition::Iteration(2000))
+    /// # net.train(&mut data.clone(),&mut labels.clone()) // `.clone()` neccessary to satisfy borrow checker concerning later immutable borrow for `analyze_string`.
+    /// #    .learning_rate(2f32)
+    /// #    .evaluation_data(EvaluationData::Actual(&data,&labels)) // Use testing data as evaluation data.
     /// # .go();
     /// #
     /// let mut dictionairy:HashMap<usize,&str> = HashMap::new();
@@ -1111,26 +1108,26 @@ impl<'a> NeuralNetwork {
     /// dictionairy.insert(1,"True");
     ///
     /// // `net` is neural network trained to 100% accuracy to mimic an XOR gate.
-    /// let (correct_vector,confusion_matrix) = net.analyze_string(&mut data,2,Some(dictionairy));
+    /// let (correct_vector,confusion_matrix) = net.analyze_string(&data,&labels,2,Some(dictionairy));
     ///
     /// let expected_vector:&str =
-    /// "     False True
+    /// "     False True 
     ///   ┌              ┐
     /// % │  1.00  1.00  │
     ///   └              ┘\n";
     /// assert_eq!(&correct_vector,expected_vector);
     ///
     /// let expected_matrix:&str =
-    /// "    %    False True
+    /// "    %    False True 
     ///       ┌              ┐
     /// False │  1.00  0.00  │
     ///  True │  0.00  1.00  │
     ///       └              ┘\n";
     /// assert_eq!(&confusion_matrix,expected_matrix);
     /// ```
-    #[deprecated(
-        note = "Not deprecated, just broken until ArrayFire update installer to match git (where issue has been reported and fixed)."
-    )]
+    // #[deprecated(
+    //     note = "Not deprecated, just broken until ArrayFire update installer to match git (where issue has been reported and fixed)."
+    // )]
     pub fn analyze_string(
         &mut self,
         data: &ndarray::Array2<f32>,

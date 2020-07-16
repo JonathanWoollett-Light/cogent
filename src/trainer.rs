@@ -2,7 +2,7 @@ use crate::costs::Cost;
 use crate::neural_network::NeuralNetwork;
 use crate::setter_enums::*;
 
-use ndarray::{Array2, ArrayView2, ArrayViewMut2, Axis};
+use ndarray::{Array2, ArrayViewMut2, Axis};
 
 use rand::prelude::*; // TODO Make this more specific to required functionality
 
