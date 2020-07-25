@@ -79,8 +79,6 @@ If you find any issues I would really appreciate if you could let me know (and p
  - Loss functions: Mean sqaured error, Cross entropy.
  - Misc: L2 regularisation
 
-
-
 ## Installation
 
 1. [Setup ArrayFire Rust bindings](https://github.com/arrayfire/arrayfire-rust#use-from-cratesio--) (Ignore step 4).
