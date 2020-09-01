@@ -3,6 +3,10 @@
  - [Cargo](https://crates.io/crates/cogent)
  - [Documentation](https://docs.rs/cogent/)
 
+## A note
+
+I am currently working on some GPU compute stuff that I will eventually use in Cogent. This is why for now development of Cogent is paused (or atleast development of user facing stuff).
+
 ## Introduction
 
 Cogent is a very basic library for training basic neural networks for classification tasks.
