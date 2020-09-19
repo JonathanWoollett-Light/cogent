@@ -5,7 +5,7 @@
 
 ## A note
 
-I am currently working on some GPU compute stuff that I will eventually use in Cogent. This is why for now development of Cogent is paused (or atleast development of user facing stuff).
+I am currently working on some GPU compute stuff that I will eventually use in Cogent. This is why for now development of Cogent is paused (or atleast overt development).
 
 ## Introduction
 
