@@ -8,7 +8,6 @@
 
 pub use crate::activations::*;
 mod activations;
-
 pub use crate::costs::*;
 mod costs;
 

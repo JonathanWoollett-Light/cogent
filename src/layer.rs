@@ -60,16 +60,22 @@ impl DenseLayer {
         l2: Option<f32>,
         training_set_length: usize,
     ) -> Array<f32> {
-        // δ
+        // ∂C/∂z = ∂a/∂z * ∂C/∂a
+        // (∂C/∂z = δ)
         let error = self.activation.derivative(z) * partial_error;
 
-        // ∂C/∂b
+        // ∂C/∂b = ∂C/∂z (summed across examples)
         let bias_error = sum(&error, 1);
 
-        // ∂C/∂w
+        // In single (not this case):  ∂C/∂w = (∂C/∂z)^T * a
+        // In batch (this case): Each row of `∂C/∂z` is transposed then multiplied with each row of `a` forming a matrix of weight errors for each example.
+        //  We then sum through these matricies (a_{1,1} from matrix 1 is added to a_{1,1} from matrix 2 and so on),
+        //  resulting in a matrix of summed weight errors.
+        //  This can be best represented and supported with einstein notation, but arrayfire does not support this, this is something I'm working on
         let weight_error = calc_weight_errors(&error, a);
 
-        // w^T dot δ
+        // ∂C/∂a = w^T dot δ
+        // (where `a` is of previous layer)
         let nxt_partial_error = matmul(&self.weights, &error, MatProp::TRANS, MatProp::NONE);
 
         // Number of examples in batch
@@ -88,7 +94,7 @@ impl DenseLayer {
         // = old biases - avg bias errors
         self.biases = &self.biases - (learning_rate * bias_error / batch_len);
 
-        // w^T dot δ
+        // ∂C/∂a (where `a` is of previous layer)
         return nxt_partial_error;
 
         // TODO Document this better
