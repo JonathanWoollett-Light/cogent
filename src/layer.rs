@@ -53,9 +53,9 @@ impl DenseLayer {
     // (Updates weights and biases during this process).
     pub fn backpropagate(
         &mut self,
-        partial_error: &Array<f32>,
-        z: &Array<f32>,
-        a: &Array<f32>,
+        partial_error: &Array<f32>, // ∂C/∂a as formed by ∇(a)C or (w^{l+1})^T * δ^{l+1}
+        z: &Array<f32>, // l
+        a: &Array<f32>, // l-1
         learning_rate: f32,
         l2: Option<f32>,
         training_set_length: usize,
@@ -64,18 +64,17 @@ impl DenseLayer {
         // (∂C/∂z = δ)
         let error = self.activation.derivative(z) * partial_error;
 
-        // ∂C/∂b = ∂C/∂z (summed across examples)
+        // ∂C/∂b = ∂C/∂z 
         let bias_error = sum(&error, 1);
 
-        // In single (not this case):  ∂C/∂w = (∂C/∂z)^T * a
+        // In single (not this case):  ∂C/∂w = (∂C/∂z^l)^T matmul a^{l-1}
         // In batch (this case): Each row of `∂C/∂z` is transposed then multiplied with each row of `a` forming a matrix of weight errors for each example.
-        //  We then sum through these matricies (a_{1,1} from matrix 1 is added to a_{1,1} from matrix 2 and so on),
+        //  We then sum through these matricies (p_{1,1} from matrix 1 is added to p_{1,1} from matrix 2 and so on),
         //  resulting in a matrix of summed weight errors.
         //  This can be best represented and supported with einstein notation, but arrayfire does not support this, this is something I'm working on
         let weight_error = calc_weight_errors(&error, a);
 
-        // ∂C/∂a = w^T dot δ
-        // (where `a` is of previous layer)
+        // ∂C/∂a^{l-1} = w^T matmul ∂C/∂z
         let nxt_partial_error = matmul(&self.weights, &error, MatProp::TRANS, MatProp::NONE);
 
         // Number of examples in batch
@@ -94,7 +93,7 @@ impl DenseLayer {
         // = old biases - avg bias errors
         self.biases = &self.biases - (learning_rate * bias_error / batch_len);
 
-        // ∂C/∂a (where `a` is of previous layer)
+        // ∂C/∂a^{l-1}
         return nxt_partial_error;
 
         // TODO Document this better

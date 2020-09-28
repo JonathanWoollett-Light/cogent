@@ -591,7 +591,7 @@ mod tests {
     // --------------
 
     // (2-Sigmoid->3-Sigmoid->2)
-    //#[test]
+    #[test]
     fn train_xor_0() {
         let runs = 10 * TEST_RERUN_MULTIPLIER;
         
