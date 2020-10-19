@@ -54,8 +54,8 @@ impl DenseLayer {
     pub fn backpropagate(
         &mut self,
         partial_error: &Array<f32>, // ∂C/∂a as formed by ∇(a)C or (w^{l+1})^T * δ^{l+1}
-        z: &Array<f32>, // l (input of this layer)
-        a: &Array<f32>, // l-1 (activation from previous layer)
+        z: &Array<f32>,             // l (input of this layer)
+        a: &Array<f32>,             // l-1 (activation from previous layer)
         learning_rate: f32,
         l2: Option<f32>,
         training_set_length: usize,
@@ -64,11 +64,11 @@ impl DenseLayer {
         // (∂C/∂z = δ)
         let error = self.activation.derivative(z) * partial_error;
 
-        // ∂C/∂b = ∂C/∂z 
+        // ∂C/∂b = ∂C/∂z
         let bias_error = sum(&error, 1);
 
         // ∂C/∂w = δ matmul a^T
-        let weight_error = matmul(&error,a,MatProp::NONE, MatProp::TRANS);
+        let weight_error = matmul(&error, a, MatProp::NONE, MatProp::TRANS);
 
         // ∂C/∂a^{l-1} = w^T matmul ∂C/∂z
         let nxt_partial_error = matmul(&self.weights, &error, MatProp::TRANS, MatProp::NONE);

@@ -1,78 +1,92 @@
 #[cfg(test)]
 mod tests {
     use cogent::{
-        NeuralNetwork,Layer,
-        Activation,
-        EvaluationData,MeasuredCondition,HaltCondition
+        Activation, EvaluationData, HaltCondition, Layer, MeasuredCondition, NeuralNetwork,
     };
-    
-    use arrayfire::{Array,Dim4,HasAfEnum};
-    use ndarray::{Array2,array,Axis};
 
-    use std::{io::Read, fs::File};
-    
+    use arrayfire::{Array, Dim4, HasAfEnum};
+    use ndarray::{array, Array2, Axis};
+
+    use std::{fs::File, io::Read};
+
     use itertools::izip;
 
     // Run with: `cargo test --release -- --test-threads=1` (You can set 1 higher if you have more VRAM)
     // Using more threads will likely overload vram and crash.
 
     // TODO Name this better
-    const TEST_RERUN_MULTIPLIER:usize = 1usize; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be > 0)
-
+    const TEST_RERUN_MULTIPLIER: usize = 1usize; // Multiplies how many times we rerun tests (we rerun certain tests, due to random variation) (must be > 0)
 
     // TODO Name this better
-    const TESTING_MIN_ACCURACY:f32 = 0.95f32; // 5% error min needed to pass tests
+    const TESTING_MIN_ACCURACY: f32 = 0.95f32; // 5% error min needed to pass tests
 
     // Tests `NeuralNetwork::new` panics when no layers are set.
     #[test] // (2-)
-    #[should_panic="Requires output layer (layers.len() must be >0)."]
-    fn new_no_layers() { NeuralNetwork::new(2,&[]); }
+    #[should_panic = "Requires output layer (layers.len() must be >0)."]
+    fn new_no_layers() {
+        NeuralNetwork::new(2, &[]);
+    }
     // Tests `NeuralNetwork::new` panics when inputs is set to 0.
     #[test] // (0-Sigmoid->1)
-    #[should_panic="Input size must be >0."]
-    fn new_0_input() { NeuralNetwork::new(0,&[Layer::Dense(1,Activation::Sigmoid)]); }
+    #[should_panic = "Input size must be >0."]
+    fn new_0_input() {
+        NeuralNetwork::new(0, &[Layer::Dense(1, Activation::Sigmoid)]);
+    }
 
     // Tests `NeuralNetwork::new` panics when a layerers length is 0.
     // --------------
     #[test] // (784-ReLU->0-Sigmoid->100-Softmax->10)
-    #[should_panic="All dense layer sizes must be >0."]
+    #[should_panic = "All dense layer sizes must be >0."]
     fn new_small_layers_0() {
-        NeuralNetwork::new(784,&[
-            Layer::Dense(0,Activation::ReLU),
-            Layer::Dense(100,Activation::Sigmoid),
-            Layer::Dense(10,Activation::Softmax)
-        ]);
+        NeuralNetwork::new(
+            784,
+            &[
+                Layer::Dense(0, Activation::ReLU),
+                Layer::Dense(100, Activation::Sigmoid),
+                Layer::Dense(10, Activation::Softmax),
+            ],
+        );
     }
     #[test] // (784-ReLU->800-Sigmoid->0-Softmax->10)
-    #[should_panic="All dense layer sizes must be >0."]
+    #[should_panic = "All dense layer sizes must be >0."]
     fn new_small_layers_1() {
-        NeuralNetwork::new(784,&[
-            Layer::Dense(800,Activation::ReLU),
-            Layer::Dense(0,Activation::Sigmoid),
-            Layer::Dense(10,Activation::Softmax)
-        ]);
+        NeuralNetwork::new(
+            784,
+            &[
+                Layer::Dense(800, Activation::ReLU),
+                Layer::Dense(0, Activation::Sigmoid),
+                Layer::Dense(10, Activation::Softmax),
+            ],
+        );
     }
     #[test] // (784-ReLU->800-Sigmoid->100-Softmax->0)
-    #[should_panic="All dense layer sizes must be >0."]
+    #[should_panic = "All dense layer sizes must be >0."]
     fn new_small_layers_2() {
-        NeuralNetwork::new(784,&[
-            Layer::Dense(800,Activation::ReLU),
-            Layer::Dense(100,Activation::Sigmoid),
-            Layer::Dense(0,Activation::Softmax)
-        ]);
+        NeuralNetwork::new(
+            784,
+            &[
+                Layer::Dense(800, Activation::ReLU),
+                Layer::Dense(100, Activation::Sigmoid),
+                Layer::Dense(0, Activation::Softmax),
+            ],
+        );
     }
 
     // Tests changing activation of layer using out of range index.
     #[test]
-    #[should_panic="Layer 2 does not exist. 0 <= given index < 2"]
+    #[should_panic = "Layer 2 does not exist. 0 <= given index < 2"]
     fn activation() {
-        let mut net = NeuralNetwork::new(2,&[
-            Layer::Dense(3,Activation::Sigmoid),
-            Layer::Dense(2,Activation::Sigmoid)
-        ]);
-        net.activation(2,Activation::Softmax); // Changes activation of output layer.
+        let mut net = NeuralNetwork::new(
+            2,
+            &[
+                Layer::Dense(3, Activation::Sigmoid),
+                Layer::Dense(2, Activation::Sigmoid),
+            ],
+        );
+        net.activation(2, Activation::Softmax); // Changes activation of output layer.
     }
     #[test]
+    #[rustfmt::skip]
     fn relu_run() {
         let data = Array::new(
             &[
@@ -93,6 +107,7 @@ mod tests {
         assert_eq!(to_vec(observed),to_vec(predicted));
     }
     #[test]
+    #[rustfmt::skip]
     fn relu_run_randn() {
         let data:Array<f32> = Array::new(
             &[
@@ -133,6 +148,7 @@ mod tests {
         assert_eq!(to_vec(observed),to_vec(predicted));
     }
     #[test]
+    #[rustfmt::skip]
     fn relu_run_randn_big() {
         let data = Array::<f32>::new(
             &[
@@ -173,6 +189,7 @@ mod tests {
         close_enough(to_vec(observed),to_vec(predicted),10e-5);
     }
     #[test]
+    #[rustfmt::skip]
     fn relu_run_randn_small() {
         let data = Array::<f32>::new(
             &[
@@ -213,6 +230,7 @@ mod tests {
         close_enough(to_vec(observed),to_vec(predicted),10e-5);
     }
     #[test]
+    #[rustfmt::skip]
     fn sigmoid_run() {
         let data:Array<f32> = Array::new(
             &[
@@ -240,6 +258,7 @@ mod tests {
         assert_eq!(to_vec(observed),to_vec(predicted));
     }
     #[test]
+    #[rustfmt::skip]
     fn sigmoid_run_randn() {
         let data:Array<f32> = Array::new(
             &[
@@ -280,6 +299,7 @@ mod tests {
         close_enough(to_vec(observed),to_vec(predicted),10e-5);
     }
     #[test]
+    #[rustfmt::skip]
     fn sigmoid_run_randn_big() {
         let data = Array::<f32>::new(
             &[
@@ -320,6 +340,7 @@ mod tests {
         close_enough(to_vec(observed),to_vec(predicted),10e-15);
     }
     #[test]
+    #[rustfmt::skip]
     fn sigmoid_run_randn_small() {
         let data = Array::<f32>::new(
             &[
@@ -361,32 +382,30 @@ mod tests {
     }
     #[test]
     fn tanh_run() {
-        let data:Array<f32> = Array::new(
-            &[
-                0.,0.,
-                1.,0.,
-                0.,1.,
-                1.,1.
-            ],
-            Dim4::new(&[2,4,1,1])
-        );
+        let data: Array<f32> =
+            Array::new(&[0., 0., 1., 0., 0., 1., 1., 1.], Dim4::new(&[2, 4, 1, 1]));
         let activation = Activation::Tanh;
 
         let observed = activation.run(&data);
 
-        let predicted:Array<f32> = Array::new(
+        let predicted: Array<f32> = Array::new(
             &[
-                0.         ,0.         ,
-                0.761594156,0.         ,
-                0.         ,0.761594156,
-                0.761594156,0.761594156
+                0.,
+                0.,
+                0.761594156,
+                0.,
+                0.,
+                0.761594156,
+                0.761594156,
+                0.761594156,
             ],
-            Dim4::new(&[2,4,1,1])
+            Dim4::new(&[2, 4, 1, 1]),
         );
 
-        close_enough(to_vec(observed),to_vec(predicted),10e-8);
+        close_enough(to_vec(observed), to_vec(predicted), 10e-8);
     }
     #[test]
+    #[rustfmt::skip]
     fn tanh_run_randn() {
         let data:Array<f32> = Array::new(
             &[
@@ -427,6 +446,7 @@ mod tests {
         close_enough(to_vec(observed),to_vec(predicted),10e-5);
     }
     #[test]
+    #[rustfmt::skip]
     fn tanh_run_randn_big() {
         let data = Array::<f32>::new(
             &[
@@ -467,6 +487,7 @@ mod tests {
         close_enough(to_vec(observed),to_vec(predicted),10e-15);
     }
     #[test]
+    #[rustfmt::skip]
     fn tanh_run_randn_small() {
         let data = Array::<f32>::new(
             &[
@@ -507,6 +528,7 @@ mod tests {
         close_enough(to_vec(observed),to_vec(predicted),10e-10);
     }
     #[test]
+    #[rustfmt::skip]
     fn softmax_run() {
         let data:Array<f32> = Array::new(
             &[
@@ -535,6 +557,7 @@ mod tests {
         assert_eq!(to_vec(observed),to_vec(predicted));
     }
     #[test]
+    #[rustfmt::skip]
     fn softmax_run_randu() {
         let data:Array<f32> = Array::new(
             &[
@@ -576,13 +599,16 @@ mod tests {
     }
     // TODO Name this better
     // Checks all differences between all value pairs from `vec_1` and `vec_2` are less than `allowed_inequality`.
-    fn close_enough(vec_1:Vec<f32>,vec_2:Vec<f32>,allowed_inequality:f32) {
-        for (a,b) in izip!(vec_1,vec_2) {
-            assert!((a-b).abs() <= allowed_inequality,format!("{} dif {} > {}",a,b,allowed_inequality));
+    fn close_enough(vec_1: Vec<f32>, vec_2: Vec<f32>, allowed_inequality: f32) {
+        for (a, b) in izip!(vec_1, vec_2) {
+            assert!(
+                (a - b).abs() <= allowed_inequality,
+                format!("{} dif {} > {}", a, b, allowed_inequality)
+            );
         }
     }
-    fn to_vec<T:HasAfEnum+Default+Clone>(array:Array<T>) -> Vec<T> {
-        let mut vec = vec!(T::default();array.elements());
+    fn to_vec<T: HasAfEnum + Default + Clone>(array: Array<T>) -> Vec<T> {
+        let mut vec = vec![T::default(); array.elements()];
         array.host(&mut vec);
         return vec;
     }
@@ -594,33 +620,36 @@ mod tests {
     #[test]
     fn train_xor_0() {
         let runs = 10 * TEST_RERUN_MULTIPLIER;
-        
+
         for _ in 0..runs {
             // Setup
             // ------------------------------------------------
             // Sets network
-            let mut net = NeuralNetwork::new(2,&[
-                Layer::Dense(3,Activation::Sigmoid),
-                Layer::Dense(2,Activation::Softmax)
-            ]);
+            let mut net = NeuralNetwork::new(
+                2,
+                &[
+                    Layer::Dense(3, Activation::Sigmoid),
+                    Layer::Dense(2, Activation::Softmax),
+                ],
+            );
             // Sets training and testing data
-            let data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
-            let labels:Array2<usize> = array![[0],[1],[1],[0]];
+            let data: Array2<f32> = array![[0., 0.], [1., 0.], [0., 1.], [1., 1.]];
+            let labels: Array2<usize> = array![[0], [1], [1], [0]];
 
             // Execution
             // ------------------------------------------------
-            net.train(&mut data.clone(),&mut labels.clone())
+            net.train(&mut data.clone(), &mut labels.clone())
                 .learning_rate(2f32)
-                .evaluation_data(EvaluationData::Actual(&data,&labels)) // Use testing data as evaluation data.
+                .evaluation_data(EvaluationData::Actual(&data, &labels)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(4000))
                 //.log_interval(MeasuredCondition::Iteration(50))
-            .go();
+                .go();
 
             //panic!("do we get here? outerside training");
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&data,&labels,None);
+            let evaluation = net.evaluate(&data, &labels, None);
             assert!(evaluation.1 as usize == data.len_of(Axis(0)));
         }
     }
@@ -632,25 +661,28 @@ mod tests {
             // Setup
             // ------------------------------------------------
             // Sets network
-            let mut net = NeuralNetwork::new(2,&[
-                Layer::Dense(3,Activation::Sigmoid),
-                Layer::Dense(2,Activation::Sigmoid)
-            ]);
+            let mut net = NeuralNetwork::new(
+                2,
+                &[
+                    Layer::Dense(3, Activation::Sigmoid),
+                    Layer::Dense(2, Activation::Sigmoid),
+                ],
+            );
             // Sets training and testing data
-            let data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
-            let labels:Array2<usize> = array![[0],[1],[1],[0]];
+            let data: Array2<f32> = array![[0., 0.], [1., 0.], [0., 1.], [1., 1.]];
+            let labels: Array2<usize> = array![[0], [1], [1], [0]];
 
             // Execution
             // ------------------------------------------------
-            net.train(&mut data.clone(),&mut labels.clone())
+            net.train(&mut data.clone(), &mut labels.clone())
                 .learning_rate(2f32)
-                .evaluation_data(EvaluationData::Actual(&data,&labels)) // Use testing data as evaluation data.
+                .evaluation_data(EvaluationData::Actual(&data, &labels)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(5000))
-            .go();
+                .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&data,&labels,None);
+            let evaluation = net.evaluate(&data, &labels, None);
             assert!(evaluation.1 as usize == data.len_of(Axis(0)));
         }
     }
@@ -666,27 +698,30 @@ mod tests {
             // Setup
             // ------------------------------------------------
             // Sets network
-            let mut net = NeuralNetwork::new(2,&[
-                Layer::Dense(3,Activation::Sigmoid),
-                Layer::Dense(2,Activation::Softmax)
-            ]);
+            let mut net = NeuralNetwork::new(
+                2,
+                &[
+                    Layer::Dense(3, Activation::Sigmoid),
+                    Layer::Dense(2, Activation::Softmax),
+                ],
+            );
 
             // Sets training and testing data
-            let data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
-            let labels:Array2<usize> = array![[0],[1],[1],[0]];
+            let data: Array2<f32> = array![[0., 0.], [1., 0.], [0., 1.], [1., 1.]];
+            let labels: Array2<usize> = array![[0], [1], [1], [0]];
 
             // Execution
             // ------------------------------------------------
-            net.train(&mut data.clone(),&mut labels.clone()) // `clone` required since `data` and `labels` are reused later
+            net.train(&mut data.clone(), &mut labels.clone()) // `clone` required since `data` and `labels` are reused later
                 .learning_rate(2f32)
-                .evaluation_data(EvaluationData::Actual(&data,&labels)) // Use testing data as evaluation data.
+                .evaluation_data(EvaluationData::Actual(&data, &labels)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(5000))
                 //.log_interval(MeasuredCondition::Iteration(100))
-            .go();
+                .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&data,&labels,None);
+            let evaluation = net.evaluate(&data, &labels, None);
             assert!(evaluation.1 as usize == data.len_of(Axis(0)));
         }
     }
@@ -699,30 +734,36 @@ mod tests {
         for _ in 0..runs {
             // Setup
             // ------------------------------------------------
-            let mut net = NeuralNetwork::new(784,&[
-                Layer::Dense(1000,Activation::ReLU),
-                Layer::Dropout(0.2),
-                Layer::Dense(500,Activation::ReLU),
-                Layer::Dropout(0.2),
-                Layer::Dense(10,Activation::Softmax)
-            ]);
+            let mut net = NeuralNetwork::new(
+                784,
+                &[
+                    Layer::Dense(1000, Activation::ReLU),
+                    Layer::Dropout(0.2),
+                    Layer::Dense(500, Activation::ReLU),
+                    Layer::Dropout(0.2),
+                    Layer::Dense(10, Activation::Softmax),
+                ],
+            );
 
             // Sets training and testing data
-            let (mut train_data,mut train_labels) = get_mnist_dataset(false);
-            let (test_data,test_labels) = get_mnist_dataset(true);
+            let (mut train_data, mut train_labels) = get_mnist_dataset(false);
+            let (test_data, test_labels) = get_mnist_dataset(true);
 
             // Execution
             // ------------------------------------------------
-            net.train(&mut train_data,&mut train_labels)
-                .evaluation_data(EvaluationData::Actual(&test_data,&test_labels))
+            net.train(&mut train_data, &mut train_labels)
+                .evaluation_data(EvaluationData::Actual(&test_data, &test_labels))
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
                 //.tracking().log_interval(MeasuredCondition::Iteration(1))
-            .go();
+                .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&test_data,&test_labels,None);
-            assert!(evaluation.1 as f32 / test_data.len_of(Axis(0)) as f32 >= TESTING_MIN_ACCURACY - 0.25f32); // `0.25f32` is allowance since on test run dropout layers will be different to last training run
+            let evaluation = net.evaluate(&test_data, &test_labels, None);
+            assert!(
+                evaluation.1 as f32 / test_data.len_of(Axis(0)) as f32
+                    >= TESTING_MIN_ACCURACY - 0.25f32
+            ); // `0.25f32` is allowance since on test run dropout layers will be different to last training run
         }
     }
     #[test] // (784-ReLU->1000-ReLU->500-Softmax->10) with L2
@@ -731,28 +772,31 @@ mod tests {
         for _ in 0..runs {
             // Setup
             // ------------------------------------------------
-            let mut net = NeuralNetwork::new(784,&[
-                Layer::Dense(1000,Activation::ReLU),
-                Layer::Dense(500,Activation::ReLU),
-                Layer::Dense(10,Activation::Softmax)
-            ]);
+            let mut net = NeuralNetwork::new(
+                784,
+                &[
+                    Layer::Dense(1000, Activation::ReLU),
+                    Layer::Dense(500, Activation::ReLU),
+                    Layer::Dense(10, Activation::Softmax),
+                ],
+            );
 
             // Sets training and testing data
-            let (mut train_data,mut train_labels) = get_mnist_dataset(false);
-            let (test_data,test_labels) = get_mnist_dataset(true);
+            let (mut train_data, mut train_labels) = get_mnist_dataset(false);
+            let (test_data, test_labels) = get_mnist_dataset(true);
 
             // Execution
             // ------------------------------------------------
-            net.train(&mut train_data,&mut train_labels)
-                .evaluation_data(EvaluationData::Actual(&test_data,&test_labels))
+            net.train(&mut train_data, &mut train_labels)
+                .evaluation_data(EvaluationData::Actual(&test_data, &test_labels))
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
                 //.tracking().log_interval(MeasuredCondition::Iteration(1))
                 .l2(0.1)
-            .go();
+                .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&test_data,&test_labels,None);
+            let evaluation = net.evaluate(&test_data, &test_labels, None);
             assert!(evaluation.1 as f32 / test_data.len_of(Axis(0)) as f32 >= TESTING_MIN_ACCURACY);
         }
     }
@@ -762,28 +806,31 @@ mod tests {
         for _ in 0..runs {
             // Setup
             // ------------------------------------------------
-            let mut net = NeuralNetwork::new(784,&[
-                Layer::Dense(1000,Activation::Sigmoid),
-                Layer::Dense(500,Activation::Sigmoid),
-                Layer::Dense(10,Activation::Softmax)
-            ]);
+            let mut net = NeuralNetwork::new(
+                784,
+                &[
+                    Layer::Dense(1000, Activation::Sigmoid),
+                    Layer::Dense(500, Activation::Sigmoid),
+                    Layer::Dense(10, Activation::Softmax),
+                ],
+            );
 
             // Sets training and testing data
-            let (mut train_data,mut train_labels) = get_mnist_dataset(false);
-            let (test_data,test_labels) = get_mnist_dataset(true);
+            let (mut train_data, mut train_labels) = get_mnist_dataset(false);
+            let (test_data, test_labels) = get_mnist_dataset(true);
 
             // Execution
             // ------------------------------------------------
-            net.train(&mut train_data,&mut train_labels)
-                .evaluation_data(EvaluationData::Actual(&test_data,&test_labels))
+            net.train(&mut train_data, &mut train_labels)
+                .evaluation_data(EvaluationData::Actual(&test_data, &test_labels))
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
                 //.tracking().log_interval(MeasuredCondition::Iteration(1))
                 .l2(0.1f32)
-            .go();
+                .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&test_data,&test_labels,None);
+            let evaluation = net.evaluate(&test_data, &test_labels, None);
             assert!(evaluation.1 as f32 / test_data.len_of(Axis(0)) as f32 >= TESTING_MIN_ACCURACY);
         }
     }
@@ -793,69 +840,84 @@ mod tests {
         for _ in 0..runs {
             // Setup
             // ------------------------------------------------
-            let mut net = NeuralNetwork::new(784,&[
-                Layer::Dense(1000,Activation::Tanh),
-                Layer::Dense(500,Activation::Tanh),
-                Layer::Dense(10,Activation::Softmax)
-            ]);
+            let mut net = NeuralNetwork::new(
+                784,
+                &[
+                    Layer::Dense(1000, Activation::Tanh),
+                    Layer::Dense(500, Activation::Tanh),
+                    Layer::Dense(10, Activation::Softmax),
+                ],
+            );
 
             // Sets training and testing data
-            let (mut train_data,mut train_labels) = get_mnist_dataset(false);
-            let (test_data,test_labels) = get_mnist_dataset(true);
+            let (mut train_data, mut train_labels) = get_mnist_dataset(false);
+            let (test_data, test_labels) = get_mnist_dataset(true);
 
             // Execution
             // ------------------------------------------------
-            net.train(&mut train_data,&mut train_labels)
-                .evaluation_data(EvaluationData::Actual(&test_data,&test_labels))
+            net.train(&mut train_data, &mut train_labels)
+                .evaluation_data(EvaluationData::Actual(&test_data, &test_labels))
                 .halt_condition(HaltCondition::Accuracy(TESTING_MIN_ACCURACY))
                 //.tracking().log_interval(MeasuredCondition::Iteration(1))
                 .l2(0.1f32)
-            .go();
+                .go();
 
             // Evaluation
             // ------------------------------------------------
-            let evaluation = net.evaluate(&test_data,&test_labels,None);
+            let evaluation = net.evaluate(&test_data, &test_labels, None);
             assert!(evaluation.1 as f32 / test_data.len_of(Axis(0)) as f32 >= TESTING_MIN_ACCURACY);
         }
     }
     // Gets MNIST dataset.
-    fn get_mnist_dataset(testing:bool) -> (ndarray::Array2<f32>,ndarray::Array2<usize>) {
+    fn get_mnist_dataset(testing: bool) -> (ndarray::Array2<f32>, ndarray::Array2<usize>) {
         // Gets testing dataset.
-        let (images,labels) = if testing {
-            (get_images("t10k-images.idx3-ubyte"),get_labels("t10k-labels.idx1-ubyte"))
+        let (images, labels) = if testing {
+            (
+                get_images("t10k-images.idx3-ubyte"),
+                get_labels("t10k-labels.idx1-ubyte"),
+            )
         }
         // Gets training dataset.
         else {
-            (get_images("train-images.idx3-ubyte"),get_labels("train-labels.idx1-ubyte"))
+            (
+                get_images("train-images.idx3-ubyte"),
+                get_labels("train-labels.idx1-ubyte"),
+            )
         };
-        let img_size = 28*28;
+        let img_size = 28 * 28;
 
         return (
-            ndarray::Array::from_shape_vec((images.len() / img_size,img_size),images).expect("Data shape wrong"),
-            ndarray::Array::from_shape_vec((labels.len(),1),labels).expect("Label shape wrong")
+            ndarray::Array::from_shape_vec((images.len() / img_size, img_size), images)
+                .expect("Data shape wrong"),
+            ndarray::Array::from_shape_vec((labels.len(), 1), labels).expect("Label shape wrong"),
         );
 
-        fn get_labels(path:&str) -> Vec<usize> {
-            let mut file = File::open(format!("data/MNIST/{}",path)).unwrap();
-            let mut label_buffer_u8:Vec<u8> = Vec::new();
-            file.read_to_end(&mut label_buffer_u8).expect("Couldn't read MNIST labels");
-            
+        fn get_labels(path: &str) -> Vec<usize> {
+            let mut file = File::open(format!("data/MNIST/{}", path)).unwrap();
+            let mut label_buffer_u8: Vec<u8> = Vec::new();
+            file.read_to_end(&mut label_buffer_u8)
+                .expect("Couldn't read MNIST labels");
+
             // Remove the 1st 7 elements
             label_buffer_u8 = label_buffer_u8.drain(8..).collect();
-            
+
             // Converts from u8 to usize
             return label_buffer_u8.into_iter().map(|a| a as usize).collect();
         }
 
-        fn get_images(path:&str) -> Vec<f32> {
-            let mut file = File::open(format!("data/MNIST/{}",path)).unwrap();
-            let mut image_buffer_u8:Vec<u8> = Vec::new();
-            file.read_to_end(&mut image_buffer_u8).expect("Couldn't read MNIST images");
+        fn get_images(path: &str) -> Vec<f32> {
+            let mut file = File::open(format!("data/MNIST/{}", path)).unwrap();
+            let mut image_buffer_u8: Vec<u8> = Vec::new();
+            file.read_to_end(&mut image_buffer_u8)
+                .expect("Couldn't read MNIST images");
             // Removes 1st 16 bytes of meta data
             image_buffer_u8 = image_buffer_u8.drain(16..).collect();
 
             // Converts from u8 to f32
-            let image_buffer_f32:Vec<f32> = image_buffer_u8.into_iter().map(|a| a as f32 / 255f32).collect();
+            let image_buffer_f32: Vec<f32> = image_buffer_u8
+                .into_iter()
+                .map(|a| a as f32 / 255f32)
+                .collect();
 
             return image_buffer_f32;
         }

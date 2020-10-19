@@ -6,8 +6,8 @@ use crate::trainer::Trainer;
 use serde::{Deserialize, Serialize};
 
 use arrayfire::{
-    cols, constant, device_mem_info, diag_extract, div, eq, imax,
-    sum, sum_all, sum_by_key, transpose, Array, Dim4,
+    cols, constant, device_mem_info, diag_extract, div, eq, imax, sum, sum_all, sum_by_key,
+    transpose, Array, Dim4,
 };
 
 use itertools::izip;
@@ -1030,7 +1030,7 @@ impl<'a> NeuralNetwork {
             let mut sorted_labels = ndarray::Array2::from_elem(labels.dim(), usize::default());
 
             for i in 0..n {
-                set_row(i,count[output_vals[i]] - 1, data, &mut sorted_data);
+                set_row(i, count[output_vals[i]] - 1, data, &mut sorted_data);
                 sorted_labels[[count[output_vals[i]] - 1, 0]] = labels[[i, 0]];
                 count[output_vals[i]] -= 1;
             }
@@ -1038,10 +1038,15 @@ impl<'a> NeuralNetwork {
             return (sorted_data, sorted_labels);
         }
         // TODO Surely there must be a better way to do this? (Why is such a method not obvious in the ndarray docs?)
-        fn set_row(from_index:usize,to_index: usize, from: &ndarray::Array2<f32>, to: &mut ndarray::Array2<f32>) {
+        fn set_row(
+            from_index: usize,
+            to_index: usize,
+            from: &ndarray::Array2<f32>,
+            to: &mut ndarray::Array2<f32>,
+        ) {
             for i in 0..from.len_of(Axis(1)) {
                 // TODO Double check `Axis(0)` (I mess it up a lot)
-                to[[to_index,i]] = from[[from_index,i]];
+                to[[to_index, i]] = from[[from_index, i]];
             }
         }
     }
@@ -1060,7 +1065,7 @@ impl<'a> NeuralNetwork {
     /// #
     /// let mut data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
     /// let mut labels:Array2<usize> = array![[0],[1],[1],[0]];
-    /// 
+    ///
     /// # net.train(&mut data.clone(),&mut labels.clone()) // `.clone()` neccessary to satisfy borrow checker concerning later immutable borrow for `analyze_string`.
     /// #    .learning_rate(2f32)
     /// #    .evaluation_data(EvaluationData::Actual(&data,&labels)) // Use testing data as evaluation data.
@@ -1111,14 +1116,14 @@ impl<'a> NeuralNetwork {
     /// let (correct_vector,confusion_matrix) = net.analyze_string(&data,&labels,2,Some(dictionairy));
     ///
     /// let expected_vector:&str =
-    /// "     False True 
+    /// "     False True
     ///   ┌              ┐
     /// % │  1.00  1.00  │
     ///   └              ┘\n";
     /// assert_eq!(&correct_vector,expected_vector);
     ///
     /// let expected_matrix:&str =
-    /// "    %    False True 
+    /// "    %    False True
     ///       ┌              ┐
     /// False │  1.00  0.00  │
     ///  True │  0.00  1.00  │
