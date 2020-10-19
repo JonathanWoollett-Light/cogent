@@ -54,8 +54,8 @@ impl DenseLayer {
     pub fn backpropagate(
         &mut self,
         partial_error: &Array<f32>, // ∂C/∂a as formed by ∇(a)C or (w^{l+1})^T * δ^{l+1}
-        z: &Array<f32>, // l
-        a: &Array<f32>, // l-1
+        z: &Array<f32>, // l (input of this layer)
+        a: &Array<f32>, // l-1 (activation from previous layer)
         learning_rate: f32,
         l2: Option<f32>,
         training_set_length: usize,
@@ -67,12 +67,8 @@ impl DenseLayer {
         // ∂C/∂b = ∂C/∂z 
         let bias_error = sum(&error, 1);
 
-        // In single (not this case):  ∂C/∂w = (∂C/∂z^l)^T matmul a^{l-1}
-        // In batch (this case): Each row of `∂C/∂z` is transposed then multiplied with each row of `a` forming a matrix of weight errors for each example.
-        //  We then sum through these matricies (p_{1,1} from matrix 1 is added to p_{1,1} from matrix 2 and so on),
-        //  resulting in a matrix of summed weight errors.
-        //  This can be best represented and supported with einstein notation, but arrayfire does not support this, this is something I'm working on
-        let weight_error = calc_weight_errors(&error, a);
+        // ∂C/∂w = δ matmul a^T
+        let weight_error = matmul(&error,a,MatProp::NONE, MatProp::TRANS);
 
         // ∂C/∂a^{l-1} = w^T matmul ∂C/∂z
         let nxt_partial_error = matmul(&self.weights, &error, MatProp::TRANS, MatProp::NONE);
@@ -95,25 +91,6 @@ impl DenseLayer {
 
         // ∂C/∂a^{l-1}
         return nxt_partial_error;
-
-        // TODO Document this better
-        fn calc_weight_errors(error: &Array<f32>, a: &Array<f32>) -> Array<f32> {
-            let e_size: u64 = error.dims().get()[0];
-            let a_size: u64 = a.dims().get()[0];
-            let dims = Dim4::new(&[e_size, a_size, 1, 1]);
-            let mut temp: Array<f32> = Array::<f32>::new_empty(dims);
-            arrayfire::gemm(
-                &mut temp,
-                MatProp::NONE,
-                MatProp::TRANS,
-                vec![1.],
-                error,
-                a,
-                vec![0.],
-            );
-
-            return temp;
-        }
     }
 }
 /// A dropout layer.
