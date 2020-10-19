@@ -6,7 +6,7 @@ use crate::trainer::Trainer;
 use serde::{Deserialize, Serialize};
 
 use arrayfire::{
-    af_print, cols, constant, device_mem_info, diag_extract, div, eq, imax, print_gen, set_col,
+    cols, constant, device_mem_info, diag_extract, div, eq, imax,
     sum, sum_all, sum_by_key, transpose, Array, Dim4,
 };
 

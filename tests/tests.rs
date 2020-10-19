@@ -604,15 +604,15 @@ mod tests {
                 Layer::Dense(2,Activation::Softmax)
             ]);
             // Sets training and testing data
-            let mut data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
-            let mut labels:Array2<usize> = array![[0],[1],[1],[0]];
+            let data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
+            let labels:Array2<usize> = array![[0],[1],[1],[0]];
 
             // Execution
             // ------------------------------------------------
             net.train(&mut data.clone(),&mut labels.clone())
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data,&labels)) // Use testing data as evaluation data.
-                .early_stopping_condition(MeasuredCondition::Iteration(3000))
+                .early_stopping_condition(MeasuredCondition::Iteration(4000))
                 //.log_interval(MeasuredCondition::Iteration(50))
             .go();
 
@@ -637,8 +637,8 @@ mod tests {
                 Layer::Dense(2,Activation::Sigmoid)
             ]);
             // Sets training and testing data
-            let mut data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
-            let mut labels:Array2<usize> = array![[0],[1],[1],[0]];
+            let data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
+            let labels:Array2<usize> = array![[0],[1],[1],[0]];
 
             // Execution
             // ------------------------------------------------
@@ -672,8 +672,8 @@ mod tests {
             ]);
 
             // Sets training and testing data
-            let mut data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
-            let mut labels:Array2<usize> = array![[0],[1],[1],[0]];
+            let data:Array2<f32> = array![[0.,0.],[1.,0.],[0.,1.],[1.,1.]];
+            let labels:Array2<usize> = array![[0],[1],[1],[0]];
 
             // Execution
             // ------------------------------------------------
