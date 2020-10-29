@@ -1,7 +1,8 @@
 //! Utility functions
 //!
-//! A dense file is binary file of seqeuantial training examples (example->label->example->label->etc.) without any metadata, seperators or anything else.
-
+//! A dense file is binary file of seqeuantial training examples (example->label->example->label->etc.) and nothing else.
+//! 
+//! Example labels and datapoints within examples can be stored using from 1 to 8 bytes (`label_bytes` and `data_bytes` respectively).
 use std::{fs::File,io::{Read,Write}};
 
 /// Reads from dense file.
