@@ -25,7 +25,7 @@ use std::{fs::File,io::{Read,Write}};
 /// ```
 pub fn read_dense(path: &str, example_size:usize, data_bytes:usize, label_bytes:usize) -> (ndarray::Array2<usize>,ndarray::Array2<usize>) {
     // Check sizes
-    if data_bytes == 0 || data_bytes > 8 { panic!("All data points become `usize`s. `data)bytes` must be >=1 and <=8"); }
+    if data_bytes == 0 || data_bytes > 8 { panic!("All data points become `usize`s. `data_bytes` must be >=1 and <=8"); }
     if label_bytes == 0 || label_bytes > 8 { panic!("All labels become `usize`s. `label_bytes` must be >=1 and <=8"); }
     // Read file
     let mut file = File::open(path).unwrap();
