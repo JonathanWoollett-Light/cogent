@@ -71,6 +71,7 @@ impl<'a> NeuralNetwork {
     /// ```
     /// use cogent::{NeuralNetwork,Layer,Activation};
     ///
+    /// // net = 2-Sigmoid->3-Sigmoid->2
     /// let mut net = NeuralNetwork::new(2,&[
     ///     Layer::Dense(3,Activation::Sigmoid),
     ///     Layer::Dense(2,Activation::Softmax)
@@ -175,7 +176,7 @@ impl<'a> NeuralNetwork {
     /// ```
     /// use cogent::{NeuralNetwork,Layer,Activation};
     ///
-    /// // Net (2 -Sigmoid-> 3 -Sigmoid-> 2)
+    /// // net = 2-Sigmoid->3-Sigmoid->2
     /// let mut net = NeuralNetwork::new(2,&[
     ///     Layer::Dense(3,Activation::Sigmoid),
     ///     Layer::Dense(2,Activation::Sigmoid)
