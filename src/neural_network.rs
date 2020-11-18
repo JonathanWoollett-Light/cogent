@@ -77,11 +77,11 @@ impl<'a> NeuralNetwork {
     ///     Layer::Dense(2,Activation::Softmax)
     /// ]);
     /// ```
-    pub fn new(mut inputs: u64, layers: &[Layer]) -> NeuralNetwork {
+    pub fn new(inputs: u64, layers: &[Layer]) -> NeuralNetwork {
         NeuralNetwork::new_checks(inputs, layers);
 
-        // Necessary variable to use mutable `inputs` to nicely specify right layer sizes.
-        let net_inputs = inputs;
+        // Inputs into each layer
+        let mut layer_inputs = inputs;
 
         // Sets holder for neural net layers
         let mut inner_layers: Vec<InnerLayer> = Vec::with_capacity(layers.len());
@@ -92,8 +92,8 @@ impl<'a> NeuralNetwork {
 
         // Constructs first non-input layer
         if let &Layer::Dense(size, activation) = layer_1 {
-            inner_layers.push(InnerLayer::Dense(DenseLayer::new(inputs, size, activation)));
-            inputs = size;
+            inner_layers.push(InnerLayer::Dense(DenseLayer::new(layer_inputs, size, activation)));
+            layer_inputs = size;
         } else if let &Layer::Dropout(p) = layer_1 {
             inner_layers.push(InnerLayer::Dropout(DropoutLayer::new(p)));
         }
@@ -101,8 +101,8 @@ impl<'a> NeuralNetwork {
         // Constructs other layers
         for layer in layers_iter {
             if let &Layer::Dense(size, activation) = layer {
-                inner_layers.push(InnerLayer::Dense(DenseLayer::new(inputs, size, activation)));
-                inputs = size;
+                inner_layers.push(InnerLayer::Dense(DenseLayer::new(layer_inputs, size, activation)));
+                layer_inputs = size;
             } else if let &Layer::Dropout(p) = layer {
                 inner_layers.push(InnerLayer::Dropout(DropoutLayer::new(p)));
             }
@@ -110,7 +110,7 @@ impl<'a> NeuralNetwork {
 
         // Constructs and returns neural network
         return NeuralNetwork {
-            inputs: net_inputs,
+            inputs: inputs,
             layers: inner_layers,
         };
     }

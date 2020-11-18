@@ -641,7 +641,7 @@ mod tests {
             net.train(&mut data.clone(), &mut labels.clone())
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data, &labels)) // Use testing data as evaluation data.
-                .early_stopping_condition(MeasuredCondition::Iteration(4000))
+                .early_stopping_condition(MeasuredCondition::Iteration(5000))
                 //.log_interval(MeasuredCondition::Iteration(50))
                 .go();
 
