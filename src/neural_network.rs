@@ -92,7 +92,11 @@ impl<'a> NeuralNetwork {
 
         // Constructs first non-input layer
         if let &Layer::Dense(size, activation) = layer_1 {
-            inner_layers.push(InnerLayer::Dense(DenseLayer::new(layer_inputs, size, activation)));
+            inner_layers.push(InnerLayer::Dense(DenseLayer::new(
+                layer_inputs,
+                size,
+                activation,
+            )));
             layer_inputs = size;
         } else if let &Layer::Dropout(p) = layer_1 {
             inner_layers.push(InnerLayer::Dropout(DropoutLayer::new(p)));
@@ -101,7 +105,11 @@ impl<'a> NeuralNetwork {
         // Constructs other layers
         for layer in layers_iter {
             if let &Layer::Dense(size, activation) = layer {
-                inner_layers.push(InnerLayer::Dense(DenseLayer::new(layer_inputs, size, activation)));
+                inner_layers.push(InnerLayer::Dense(DenseLayer::new(
+                    layer_inputs,
+                    size,
+                    activation,
+                )));
                 layer_inputs = size;
             } else if let &Layer::Dropout(p) = layer {
                 inner_layers.push(InnerLayer::Dropout(DropoutLayer::new(p)));
@@ -1115,7 +1123,7 @@ impl<'a> NeuralNetwork {
     /// let (correct_vector,confusion_matrix) = net.analyze_string(&data,&labels,2,Some(dictionairy));
     ///
     /// let expected_vector:&str =
-    /// "     False True 
+    /// "     False True
     ///   ┌              ┐
     /// % │  1.00  1.00  │
     ///   └              ┘\n";

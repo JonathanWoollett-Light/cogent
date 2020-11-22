@@ -20,5 +20,3 @@ pub use crate::setter_enums::*;
 mod setter_enums;
 
 mod trainer;
-
-pub mod utils;

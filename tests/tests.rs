@@ -7,8 +7,6 @@ mod tests {
     use arrayfire::{Array, Dim4, HasAfEnum};
     use ndarray::{array, Array2, Axis};
 
-    use std::{fs::File, io::Read};
-
     use itertools::izip;
 
     // Run with: `cargo test --release -- --test-threads=1` (You can set 1 higher if you have more VRAM)
@@ -641,7 +639,7 @@ mod tests {
             net.train(&mut data.clone(), &mut labels.clone())
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data, &labels)) // Use testing data as evaluation data.
-                .early_stopping_condition(MeasuredCondition::Iteration(5000))
+                .early_stopping_condition(MeasuredCondition::Iteration(6000))
                 //.log_interval(MeasuredCondition::Iteration(50))
                 .go();
 
@@ -677,7 +675,7 @@ mod tests {
             net.train(&mut data.clone(), &mut labels.clone())
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data, &labels)) // Use testing data as evaluation data.
-                .early_stopping_condition(MeasuredCondition::Iteration(5000))
+                .early_stopping_condition(MeasuredCondition::Iteration(6000))
                 .go();
 
             // Evaluation
@@ -715,7 +713,7 @@ mod tests {
             net.train(&mut data.clone(), &mut labels.clone()) // `clone` required since `data` and `labels` are reused later
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data, &labels)) // Use testing data as evaluation data.
-                .early_stopping_condition(MeasuredCondition::Iteration(5000))
+                .early_stopping_condition(MeasuredCondition::Iteration(6000))
                 //.log_interval(MeasuredCondition::Iteration(100))
                 .go();
 
@@ -871,17 +869,29 @@ mod tests {
     // Gets MNIST dataset.
     fn get_mnist_dataset(testing: bool) -> (ndarray::Array2<f32>, ndarray::Array2<usize>) {
         // Gets testing dataset.
-        let (images, labels) = if testing {
+        let (images, labels): (Vec<f32>, Vec<usize>) = if testing {
             (
-                get_images("t10k-images.idx3-ubyte"),
-                get_labels("t10k-labels.idx1-ubyte"),
+                mnist_read::read_data("tests/mnist/t10k-images.idx3-ubyte")
+                    .into_iter()
+                    .map(|d| d as f32 / 255f32)
+                    .collect(),
+                mnist_read::read_labels("tests/mnist/t10k-labels.idx1-ubyte")
+                    .into_iter()
+                    .map(|l| l as usize)
+                    .collect(),
             )
         }
         // Gets training dataset.
         else {
             (
-                get_images("train-images.idx3-ubyte"),
-                get_labels("train-labels.idx1-ubyte"),
+                mnist_read::read_data("tests/mnist/train-images.idx3-ubyte")
+                    .into_iter()
+                    .map(|d| d as f32 / 255f32)
+                    .collect(),
+                mnist_read::read_labels("tests/mnist/train-labels.idx1-ubyte")
+                    .into_iter()
+                    .map(|l| l as usize)
+                    .collect(),
             )
         };
         let img_size = 28 * 28;
@@ -891,35 +901,5 @@ mod tests {
                 .expect("Data shape wrong"),
             ndarray::Array::from_shape_vec((labels.len(), 1), labels).expect("Label shape wrong"),
         );
-
-        fn get_labels(path: &str) -> Vec<usize> {
-            let mut file = File::open(format!("data/MNIST/{}", path)).unwrap();
-            let mut label_buffer_u8: Vec<u8> = Vec::new();
-            file.read_to_end(&mut label_buffer_u8)
-                .expect("Couldn't read MNIST labels");
-
-            // Remove the 1st 7 elements
-            label_buffer_u8 = label_buffer_u8.drain(8..).collect();
-
-            // Converts from u8 to usize
-            return label_buffer_u8.into_iter().map(|a| a as usize).collect();
-        }
-
-        fn get_images(path: &str) -> Vec<f32> {
-            let mut file = File::open(format!("data/MNIST/{}", path)).unwrap();
-            let mut image_buffer_u8: Vec<u8> = Vec::new();
-            file.read_to_end(&mut image_buffer_u8)
-                .expect("Couldn't read MNIST images");
-            // Removes 1st 16 bytes of meta data
-            image_buffer_u8 = image_buffer_u8.drain(16..).collect();
-
-            // Converts from u8 to f32
-            let image_buffer_f32: Vec<f32> = image_buffer_u8
-                .into_iter()
-                .map(|a| a as f32 / 255f32)
-                .collect();
-
-            return image_buffer_f32;
-        }
     }
 }
