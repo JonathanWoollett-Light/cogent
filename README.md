@@ -14,12 +14,15 @@ Cogent is a very basic library for training basic neural networks for classifica
 It is designed to be as simple as feasible.
 Hyperparameters in neural network training can be set automatically, so why not?
 Ideally you could simply do:
+
 ```rust
 let net = NeuralNetwork::Train(&data);
 ```
+
 This is the most basic and not quite there yet implementation of that idea.
 
 Training a network to classify MNIST:
+
 ```rust
 // Uses
 use cogent::{
@@ -77,17 +80,17 @@ If you find any issues I would really appreciate if you could let me know (and p
 
 ## Features
 
- - GPU compute using [ArrayFire Rust Bindings](https://github.com/arrayfire/arrayfire-rust)
- - Optimisers: Stochastic gradient descent.
- - Layers: Dense, Dropout
- - Activations: Softmax, Sigmoid, Tanh, ReLU.
- - Loss functions: Mean sqaured error, Cross entropy.
- - Misc: L2 regularisation
+- GPU compute using [ArrayFire Rust Bindings](https://github.com/arrayfire/arrayfire-rust)
+- Optimisers: Stochastic gradient descent.
+- Layers: Dense, Dropout
+- Activations: Softmax, Sigmoid, Tanh, ReLU.
+- Loss functions: Mean sqaured error, Cross entropy.
+- Misc: L2 regularisation
 
 ## Installation
 
 1. [Setup ArrayFire Rust bindings](https://github.com/arrayfire/arrayfire-rust#use-from-cratesio--) (Ignore step 4).
-2. Add `cogent = "^0.5"` to `Cargo.toml`.
+2. Add `cogent = "^0.6"` to `Cargo.toml`.
 
 ## TODO
 
