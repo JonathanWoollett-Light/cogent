@@ -149,7 +149,7 @@ impl<'a> Trainer<'a> {
         return self;
     }
     /// Begins training.
-    pub fn go(&mut self) -> () {
+    pub fn go(&mut self) {
         // Shuffles training dataset
         shuffle_dataset(self.training_data, self.training_labels);
 
