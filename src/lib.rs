@@ -13,10 +13,8 @@ mod costs;
 
 mod layer;
 
-pub use crate::neural_network::{Layer, NeuralNetwork};
+pub use crate::neural_network::{Layer, NeuralNetwork, Trainer};
 mod neural_network;
 
 pub use crate::setter_enums::*;
 mod setter_enums;
-
-mod trainer;
