@@ -25,24 +25,6 @@ use std::{
     time::Instant,
 };
 
-// Default percentage of training data to set as evaluation data (0.1=5%).
-const DEFAULT_EVALUTATION_DATA: f32 = 0.05f32;
-// Default percentage of size of training data to set batch size (0.01=1%).
-const DEFAULT_BATCH_SIZE: f32 = 0.01f32;
-// Default learning rate.
-const DEFAULT_LEARNING_RATE: f32 = 0.1f32;
-// Default interval in iterations before early stopping.
-// early stopping = default early stopping * (size of examples / number of examples) Iterations
-const DEFAULT_EARLY_STOPPING: f32 = 500f32;
-// Default percentage minimum positive accuracy change required to prevent early stopping or learning rate decay (0.005=0.5%).
-const DEFAULT_EVALUATION_MIN_CHANGE: f32 = 0.001f32;
-// Default amount to decay learning rate after period of un-notable (what word should I use here?) change.
-// `new learning rate = learning rate decay * old learning rate`
-const DEFAULT_LEARNING_RATE_DECAY: f32 = 0.5f32;
-// Default interval in iterations before learning rate decay.
-// interval = default learning rate interval * (size of examples / number of examples) iterations.
-const DEFAULT_LEARNING_RATE_INTERVAL: f32 = 200f32;
-
 /// Specifies layers to cosntruct neural net.
 pub enum Layer {
     Dropout(f32),
@@ -308,48 +290,73 @@ impl<'a> NeuralNetwork {
         &'a mut self,
         data: &'a mut ndarray::Array2<f32>,
         labels: &'a mut ndarray::Array2<usize>,
-    ) -> Trainer<'a> {
+        trainer: Trainer<'a>
+    ) {
+        // Checks dataset
         self.check_dataset(data, labels);
 
-        let number_of_examples = data.len_of(Axis(1));
-        let data_inputs = data.len_of(Axis(0));
-        let multiplier: f32 = data_inputs as f32 / number_of_examples as f32;
+        // Shuffles dataset
+        shuffle_dataset(data, labels);
 
-        let early_stopping_condition: u32 = (DEFAULT_EARLY_STOPPING * multiplier).ceil() as u32;
-        let learning_rate_interval: u32 =
-            (DEFAULT_LEARNING_RATE_INTERVAL * multiplier).ceil() as u32;
+        let number_of_examples = data.len_of(Axis(0));
 
-        // TODO Do this better
-        let batch_size: usize = if number_of_examples < 100usize {
-            number_of_examples
-        } else {
-            let batch_holder: f32 = DEFAULT_BATCH_SIZE * number_of_examples as f32;
-            if batch_holder < 100f32 {
-                100usize
-            } else {
-                batch_holder.ceil() as usize
+        // Sets batch size
+        let batch_size = match trainer.batch_size.0 {
+            Proportion::Percent(percent) => {
+                (number_of_examples as f32 * percent) as usize
             }
+            Proportion::Scalar(scalar) => scalar as usize,
         };
 
-        return Trainer {
-            training_data: data,
-            training_labels: labels,
-            evaluation_dataset: EvaluationData::Percent(DEFAULT_EVALUTATION_DATA),
-            cost: Cost::Crossentropy,
-            halt_condition: None,
-            log_interval: None,
-            batch_size: Proportion::Scalar(batch_size as u32),
-            learning_rate: DEFAULT_LEARNING_RATE,
-            l2: None,
-            early_stopping_condition: MeasuredCondition::Iteration(early_stopping_condition),
-            evaluation_min_change: Proportion::Percent(DEFAULT_EVALUATION_MIN_CHANGE),
-            learning_rate_decay: DEFAULT_LEARNING_RATE_DECAY,
-            learning_rate_interval: MeasuredCondition::Iteration(learning_rate_interval),
-            checkpoint_interval: None,
-            name: None,
-            tracking: false,
-            neural_network: self,
+        
+
+        // TODO Make this better (remove the `.to_owned()`s and `.clone()`s).
+        //  If `.split_at()` could return an `ArrayView` and an `ArrayViewMut` this would make this easier, maybe put feature request on ndarray github?
+        let ((eval_data, train_data), (eval_labels, train_labels)): (
+            (Array2<f32>, ArrayViewMut2<f32>),
+            (Array2<usize>, ArrayViewMut2<usize>),
+        ) = match trainer.evaluation_dataset {
+            EvaluationData::Scalar(scalar) => {
+                let (e_data, t_data) = data.view_mut().split_at(Axis(0), scalar);
+                let (e_labels, t_labels) =
+                labels.view_mut().split_at(Axis(0), scalar);
+                ((e_data.to_owned(), t_data), (e_labels.to_owned(), t_labels))
+            }
+            EvaluationData::Percent(percent) => {
+                let (e_data, t_data) = data
+                    .view_mut()
+                    .split_at(Axis(0), (number_of_examples as f32 * percent) as usize);
+                let (e_labels, t_labels) = labels
+                    .view_mut()
+                    .split_at(Axis(0), (number_of_examples as f32 * percent) as usize);
+                ((e_data.to_owned(), t_data), (e_labels.to_owned(), t_labels))
+            }
+            EvaluationData::Actual(evaluation_data, evaluation_labels) => (
+                (evaluation_data.clone(), data.view_mut()),
+                (evaluation_labels.clone(), labels.view_mut()),
+            ),
         };
+
+        // Calls `inner_train` starting training.
+        self.inner_train(
+            train_data,
+            train_labels,
+            eval_data.view(),
+            eval_labels.view(),
+            &trainer.cost,
+            trainer.halt_condition,
+            trainer.log_interval,
+            batch_size,
+            trainer.learning_rate.0,
+            trainer.l2,
+            trainer.early_stopping_condition.0,
+            trainer.evaluation_min_change.0,
+            trainer.learning_rate_decay.0,
+            trainer.learning_rate_interval.0,
+            trainer.checkpoint_interval,
+            trainer.name,
+            trainer.tracking,
+        );
     }
     /// Checks a dataset has an equal number of example and labels and fits the network.
     ///
@@ -1379,206 +1386,30 @@ impl<'a> NeuralNetwork {
 
 /// `NeuralNetwork::train(..)` builder. Allows optional setting of training hyperparameters.
 pub struct Trainer<'a> {
-    training_data: &'a mut ndarray::Array2<f32>,
-    training_labels: &'a mut ndarray::Array2<usize>,
     evaluation_dataset: EvaluationData<'a>,
     cost: Cost,
     // Will halt after at a certain iteration, accuracy or duration.
     halt_condition: Option<HaltCondition>,
     // Can log after a certain number of iterations, a certain duration, or not at all.
     log_interval: Option<MeasuredCondition>,
-    batch_size: Proportion,
-    learning_rate: f32,
+    batch_size: BatchSize,
+    learning_rate: LearningRate,
     // Lambda value if using L2
     l2: Option<f32>,
     // Can stop after a lack of cost improvement over a certain number of iterations/durations, or not at all.
-    early_stopping_condition: MeasuredCondition,
+    early_stopping_condition: EarlyStoppingCondition,
     // Minimum change required to log positive evaluation change.
-    evaluation_min_change: Proportion,
+    evaluation_min_change: EvaluationMinChange,
     // Amount to decrease learning rate by (less than 1)(`learning_rate` *= learning_rate_decay`).
-    learning_rate_decay: f32,
+    learning_rate_decay: LearningRateDecay,
     // Time without notable improvement to wait until decreasing learning rate.
-    learning_rate_interval: MeasuredCondition,
+    learning_rate_interval: LearningRateInterval,
     // Duration/iterations between outputting neural network weights and biases to file.
     checkpoint_interval: Option<MeasuredCondition>,
     // Sets what to pretend to checkpoint files. Used to differentiate between nets when checkpointing multiple.
     name: Option<&'a str>,
     // Whether to print percantage progress in each iteration of backpropagation
-    tracking: bool,
-    neural_network: &'a mut NeuralNetwork,
-}
-impl<'a> Trainer<'a> {
-    /// Sets `evaluation_data`.
-    ///
-    /// `evaluation_data` determines how to set the evaluation data.
-    pub fn evaluation_data(&mut self, evaluation_data: EvaluationData<'a>) -> &mut Trainer<'a> {
-        // Checks data fits net
-        if let EvaluationData::Actual(data, labels) = evaluation_data {
-            self.neural_network.check_dataset(data, labels);
-        }
-
-        self.evaluation_dataset = evaluation_data;
-        return self;
-    }
-    /// Sets `cost`.
-    ///
-    /// `cost` determines cost function of network.
-    pub fn cost(&mut self, cost: Cost) -> &mut Trainer<'a> {
-        self.cost = cost;
-        return self;
-    }
-    /// Sets `halt_condition`.
-    ///
-    /// `halt_condition` sets after which Iteration/Duration or reached accuracy to stop training.
-    pub fn halt_condition(&mut self, halt_condition: HaltCondition) -> &mut Trainer<'a> {
-        self.halt_condition = Some(halt_condition);
-        return self;
-    }
-    /// Sets `log_interval`.
-    ///
-    /// `log_interval` sets some amount of Iterations/Duration to print the cost and accuracy of the neural net.
-    pub fn log_interval(&mut self, log_interval: MeasuredCondition) -> &mut Trainer<'a> {
-        self.log_interval = Some(log_interval);
-        return self;
-    }
-    /// Sets `batch_size`.
-    pub fn batch_size(&mut self, batch_size: Proportion) -> &mut Trainer<'a> {
-        self.batch_size = batch_size;
-        return self;
-    }
-    /// Sets `learning_rate`.
-    pub fn learning_rate(&mut self, learning_rate: f32) -> &mut Trainer<'a> {
-        self.learning_rate = learning_rate;
-        return self;
-    }
-    /// Sets lambda ($ \lambda $) for `l2`.
-    ///
-    /// If $ \lambda $ set, implements L2 regularization with $ \lambda $ value.
-    pub fn l2(&mut self, lambda: f32) -> &mut Trainer<'a> {
-        self.l2 = Some(lambda);
-        return self;
-    }
-    /// Sets `early_stopping_condition`.
-    ///
-    /// `early_stopping_condition` sets some amount of Iterations/Duration to stop after without notable cost improvement.
-    pub fn early_stopping_condition(
-        &mut self,
-        early_stopping_condition: MeasuredCondition,
-    ) -> &mut Trainer<'a> {
-        self.early_stopping_condition = early_stopping_condition;
-        return self;
-    }
-    /// Sets `evaluation_min_change`.
-    ///
-    /// Minimum change required to log positive evaluation change.
-    pub fn evaluation_min_change(&mut self, evaluation_min_change: Proportion) -> &mut Trainer<'a> {
-        self.evaluation_min_change = evaluation_min_change;
-        return self;
-    }
-    /// Sets `learning_rate_decay`.
-    ///
-    /// `learning_rate_decay` is the mulipliers by which to decay the learning rate.
-    pub fn learning_rate_decay(&mut self, learning_rate_decay: f32) -> &mut Trainer<'a> {
-        self.learning_rate_decay = learning_rate_decay;
-        return self;
-    }
-    /// Sets `learning_rate_interval`.
-    pub fn learning_rate_interval(
-        &mut self,
-        learning_rate_interval: MeasuredCondition,
-    ) -> &mut Trainer<'a> {
-        self.learning_rate_interval = learning_rate_interval;
-        return self;
-    }
-    /// Sets `checkpoint_interval`.
-    ///
-    /// `checkpoint_interval` sets how often (if at all) to serialize and output neural network to .txt file.
-    pub fn checkpoint_interval(
-        &mut self,
-        checkpoint_interval: MeasuredCondition,
-    ) -> &mut Trainer<'a> {
-        self.checkpoint_interval = Some(checkpoint_interval);
-        return self;
-    }
-    /// Sets `name`
-    ///
-    /// `name` sets what to pretend to checkpoint files. Used to differentiate between nets when checkpointing multiple.
-    pub fn name(&mut self, name: &'a str) -> &mut Trainer<'a> {
-        self.name = Some(name);
-        return self;
-    }
-    /// Sets `tracking`.
-    ///
-    /// `tracking` determines whether to output percentage progress during backpropgation.
-    pub fn tracking(&mut self) -> &mut Trainer<'a> {
-        self.tracking = true;
-        return self;
-    }
-    /// Begins training.
-    pub fn go(&mut self) {
-        // Shuffles training dataset
-        shuffle_dataset(self.training_data, self.training_labels);
-
-        // Sets evaluation data
-        let number_of_examples = self.training_data.len_of(Axis(0));
-
-        let batch_size = match self.batch_size {
-            Proportion::Percent(percent) => {
-                (self.training_data.len_of(Axis(0)) as f32 * percent) as usize
-            }
-            Proportion::Scalar(scalar) => scalar as usize,
-        };
-
-        // TODO Make this better (remove the `.to_owned()`s and `.clone()`s).
-        //  If `.split_at()` could return an `ArrayView` and an `ArrayViewMut` this would make this easier, maybe put feature request on ndarray github?
-        let ((eval_data, train_data), (eval_labels, train_labels)): (
-            (Array2<f32>, ArrayViewMut2<f32>),
-            (Array2<usize>, ArrayViewMut2<usize>),
-        ) = match self.evaluation_dataset {
-            EvaluationData::Scalar(scalar) => {
-                let (e_data, t_data) = self.training_data.view_mut().split_at(Axis(0), scalar);
-                let (e_labels, t_labels) =
-                    self.training_labels.view_mut().split_at(Axis(0), scalar);
-                ((e_data.to_owned(), t_data), (e_labels.to_owned(), t_labels))
-            }
-            EvaluationData::Percent(percent) => {
-                let (e_data, t_data) = self
-                    .training_data
-                    .view_mut()
-                    .split_at(Axis(0), (number_of_examples as f32 * percent) as usize);
-                let (e_labels, t_labels) = self
-                    .training_labels
-                    .view_mut()
-                    .split_at(Axis(0), (number_of_examples as f32 * percent) as usize);
-                ((e_data.to_owned(), t_data), (e_labels.to_owned(), t_labels))
-            }
-            EvaluationData::Actual(evaluation_data, evaluation_labels) => (
-                (evaluation_data.clone(), self.training_data.view_mut()),
-                (evaluation_labels.clone(), self.training_labels.view_mut()),
-            ),
-        };
-
-        // Calls `inner_train` starting training.
-        self.neural_network.inner_train(
-            train_data,
-            train_labels,
-            eval_data.view(),
-            eval_labels.view(),
-            &self.cost,
-            self.halt_condition,
-            self.log_interval,
-            batch_size,
-            self.learning_rate,
-            self.l2,
-            self.early_stopping_condition,
-            self.evaluation_min_change,
-            self.learning_rate_decay,
-            self.learning_rate_interval,
-            self.checkpoint_interval,
-            self.name,
-            self.tracking,
-        );
-    }
+    tracking: bool
 }
 
 /// Strcut used to import/export neural net.

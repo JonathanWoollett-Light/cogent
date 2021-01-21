@@ -60,3 +60,6 @@ impl Cost {
         };
     }
 }
+impl Default for Cost {
+    fn default() -> Self { Cost::Crossentropy }
+}

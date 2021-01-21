@@ -636,7 +636,11 @@ mod tests {
 
             // Execution
             // ------------------------------------------------
-            net.train(&mut data.clone(), &mut labels.clone())
+            net.train(
+                &mut data.clone(), 
+                &mut labels.clone(), 
+                Trainer{ learning_rate: LearningRate(0.5), ..Default::default() }
+            );
                 .learning_rate(2f32)
                 .evaluation_data(EvaluationData::Actual(&data, &labels)) // Use testing data as evaluation data.
                 .early_stopping_condition(MeasuredCondition::Iteration(6000))
