@@ -338,7 +338,7 @@ impl<'a> NeuralNetwork {
             cost: Cost::Crossentropy,
             halt_condition: None,
             log_interval: None,
-            batch_size: batch_size,
+            batch_size: Proportion::Scalar(batch_size as u32),
             learning_rate: DEFAULT_LEARNING_RATE,
             l2: None,
             early_stopping_condition: MeasuredCondition::Iteration(early_stopping_condition),
@@ -1387,7 +1387,7 @@ pub struct Trainer<'a> {
     halt_condition: Option<HaltCondition>,
     // Can log after a certain number of iterations, a certain duration, or not at all.
     log_interval: Option<MeasuredCondition>,
-    batch_size: usize,
+    batch_size: Proportion,
     learning_rate: f32,
     // Lambda value if using L2
     l2: Option<f32>,
@@ -1443,12 +1443,7 @@ impl<'a> Trainer<'a> {
     }
     /// Sets `batch_size`.
     pub fn batch_size(&mut self, batch_size: Proportion) -> &mut Trainer<'a> {
-        self.batch_size = match batch_size {
-            Proportion::Percent(percent) => {
-                (self.training_data.len_of(Axis(0)) as f32 * percent) as usize
-            }
-            Proportion::Scalar(scalar) => scalar as usize,
-        };
+        self.batch_size = batch_size;
         return self;
     }
     /// Sets `learning_rate`.
@@ -1527,6 +1522,13 @@ impl<'a> Trainer<'a> {
         // Sets evaluation data
         let number_of_examples = self.training_data.len_of(Axis(0));
 
+        let batch_size = match self.batch_size {
+            Proportion::Percent(percent) => {
+                (self.training_data.len_of(Axis(0)) as f32 * percent) as usize
+            }
+            Proportion::Scalar(scalar) => scalar as usize,
+        };
+
         // TODO Make this better (remove the `.to_owned()`s and `.clone()`s).
         //  If `.split_at()` could return an `ArrayView` and an `ArrayViewMut` this would make this easier, maybe put feature request on ndarray github?
         let ((eval_data, train_data), (eval_labels, train_labels)): (
@@ -1565,7 +1567,7 @@ impl<'a> Trainer<'a> {
             &self.cost,
             self.halt_condition,
             self.log_interval,
-            self.batch_size,
+            batch_size,
             self.learning_rate,
             self.l2,
             self.early_stopping_condition,
