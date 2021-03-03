@@ -721,21 +721,21 @@ impl<'a> NeuralNetwork {
                 let batch_indx: usize = i * batch_size;
                 let in_batch: Array<f32> = cols(
                     &data.0,
-                    batch_indx as u64,
-                    (batch_indx + batch_size - 1) as u64,
+                    batch_indx as i64,
+                    (batch_indx + batch_size - 1) as i64,
                 );
                 let out_batch: Array<f32> = cols(
                     &data.1,
-                    batch_indx as u64,
-                    (batch_indx + batch_size - 1) as u64,
+                    batch_indx as i64,
+                    (batch_indx + batch_size - 1) as i64,
                 );
 
                 chunks.push((in_batch, out_batch));
             }
             // Since length of final batch may be less than `batch_size`, set final batch out of loop.
             let batch_indx: usize = (batches - 1) * batch_size;
-            let in_batch: Array<f32> = cols(&data.0, batch_indx as u64, examples - 1);
-            let out_batch: Array<f32> = cols(&data.1, batch_indx as u64, examples - 1);
+            let in_batch: Array<f32> = cols(&data.0, batch_indx as i64, (examples - 1) as i64);
+            let out_batch: Array<f32> = cols(&data.1, batch_indx as i64, (examples - 1) as i64);
             chunks.push((in_batch, out_batch));
 
             return chunks;
