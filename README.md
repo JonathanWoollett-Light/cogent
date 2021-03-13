@@ -10,6 +10,8 @@ I continue working on GPU stuff, I've made some interesting things there, but ul
 
 So for now, this project is no longer in active development.
 
+(I still think it's kinda neat so don't let me put you off playing around with it, it's still really fast and easy to use)
+
 ## Introduction
 
 Cogent is a very basic library for training basic neural networks for classification tasks.
