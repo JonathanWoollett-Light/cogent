@@ -96,7 +96,7 @@ If you find any issues I would really appreciate if you could let me know (and p
 1. [Setup ArrayFire Rust bindings](https://github.com/arrayfire/arrayfire-rust#use-from-cratesio--) (Ignore step 4).
 2. Add `cogent = "^0.6"` to `Cargo.toml`.
 
-## TODO (See note)
+## TODO ([See note](https://github.com/JonathanWoollett-Light/cogent/blob/master/README.md#a-note))
 
 1. Convolutional layers.
 2. Meticulous testing (making sure things work).
