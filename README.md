@@ -6,7 +6,7 @@
 
 ## A note
 
-I continue working on GPU stuff, I've made some interesting things there, but ultimately it made me realise this is far too monumental a task, I am not Nvidia, I am not Google, I'm just some random sole dev. Right now I'm working on other things and while I would love to continue this project, I think honestly, it's not a good use of time. I could not feasibly make this project good enough to be worth using.
+I continue working on GPU stuff, I've made some interesting things there, but ultimately it made me realise this is far too monumental a task, I am not Nvidia, I am not Google, I'm just some random sole dev. Right now I'm working on other things and while I would love to continue this project, I think honestly, it's not a good use of time. I could not feasibly make this project good enough to be worth using professionally.
 
 So for now, this project is no longer in active development.
 
