@@ -4,6 +4,10 @@
 [![lib.rs.io](https://img.shields.io/crates/v/cogent?color=blue&label=lib.rs)](https://lib.rs/crates/cogent)
 [![docs](https://img.shields.io/crates/v/cogent?color=yellow&label=docs)](https://docs.rs/cogent)
 
+## 📢 Announcement
+
+I have been developing some auto-differentiation stuff, when that supports ndarray I plan to entirely rework Cogent to be more general purpose like PyTorch and also include all the functionality [simple_optimization](https://github.com/JonathanWoollett-Light/simple_optimization) to make a fully featured optimization library (where ML is a sub-category of optimization).
+
 ## A note
 
 I continue working on GPU stuff, I've made some interesting things there, but ultimately it made me realise this is far too monumental a task, I am not Nvidia, I am not Google, I'm just some random sole dev. Right now I'm working on other things and while I would love to continue this project, I think honestly, it's not a good use of time. I could not feasibly make this project good enough to be worth using professionally.
