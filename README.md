@@ -6,7 +6,7 @@
 
 ## A note
 
-I have been developing some auto-differentiation stuff, when that supports ndarray at the moment Iplan to entirely rework Cogent to be more general purpose like PyTorch and also include all the functionality [simple_optimization](https://github.com/JonathanWoollett-Light/simple_optimization) to make a fully featured optimization library (where ML is a sub-category of optimization).
+I have been developing some auto-differentiation stuff with [rust-ad](https://github.com/JonathanWoollett-Light/rust-ad), when that has full support I plan to entirely rework Cogent to be more general purpose like PyTorch and also include all the functionality of [simple_optimization](https://github.com/JonathanWoollett-Light/simple_optimization) to make a fully featured optimization library (you might consider ML a sub-category of optimization).
 
 ## Introduction
 
